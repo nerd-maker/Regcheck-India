@@ -1,0 +1,177 @@
+{
+    "document_type": "Informed Consent Form",
+    "regulatory_standard": "ICH E6(R3) + NDCTR 2019",
+    "version": "1.0",
+    "description": "Mandatory structure for Informed Consent Form per ICH E6(R3) Section 4.8 and NDCTR 2019 Rule 18",
+    "reading_level": "8th grade (Flesch-Kincaid Grade 8 or below)",
+    "language_style": "Plain language, second person (you), active voice",
+    "sections": [
+        {
+            "section_number": "1",
+            "section_heading": "Study Title and Purpose",
+            "required": true,
+            "subsections": [
+                "Study Title (in plain language)",
+                "Why is this study being done?",
+                "Who is sponsoring this study?"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(a). Must explain purpose in simple terms understandable to layperson.",
+            "word_count_guidance": "150-250 words",
+            "special_instructions": "Avoid medical jargon. Use analogies if helpful. Example: 'This study will test if Medicine X works better than Medicine Y for treating diabetes.'"
+        },
+        {
+            "section_number": "2",
+            "section_heading": "Study Procedures",
+            "required": true,
+            "subsections": [
+                "What will happen if you take part?",
+                "Study visits and tests",
+                "How long will you be in the study?",
+                "Can you stop being in the study?"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(b). Must describe all procedures, including randomization, blinding, and placebo use in plain language.",
+            "word_count_guidance": "400-600 words",
+            "special_instructions": "Use bullet points for visit schedule. Explain randomization as 'like flipping a coin'. Specify total time commitment."
+        },
+        {
+            "section_number": "3",
+            "section_heading": "Risks and Discomforts",
+            "required": true,
+            "subsections": [
+                "What are the risks of being in this study?",
+                "Known side effects of the study medicine",
+                "Unknown risks",
+                "Risks to pregnancy and breastfeeding (if applicable)"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(d) and NDCTR 2019 Rule 18(2)(d). Must list all reasonably foreseeable risks, including reproductive risks.",
+            "word_count_guidance": "300-500 words",
+            "special_instructions": "List common, serious, and unknown risks separately. Use frequency terms: very common (>10%), common (1-10%), uncommon (<1%)."
+        },
+        {
+            "section_number": "4",
+            "section_heading": "Benefits",
+            "required": true,
+            "subsections": [
+                "Will you benefit from being in this study?",
+                "Are there benefits to others?"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(e). Must be realistic. Do NOT promise therapeutic benefit if not expected.",
+            "word_count_guidance": "100-200 words",
+            "special_instructions": "If no direct benefit expected, state clearly: 'You may not receive any direct benefit from being in this study. The information learned may help future patients.'"
+        },
+        {
+            "section_number": "5",
+            "section_heading": "Alternative Treatments",
+            "required": true,
+            "subsections": [
+                "What are your other choices if you do not join this study?"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(f). Must list available alternative treatments, including standard of care.",
+            "word_count_guidance": "100-200 words",
+            "special_instructions": "List standard treatments available in India. Include option of no treatment if medically appropriate."
+        },
+        {
+            "section_number": "6",
+            "section_heading": "Confidentiality",
+            "required": true,
+            "subsections": [
+                "How will your information be protected?",
+                "Who will see your information?",
+                "How long will your information be kept?"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(h) and IT Act 2000. Must explain data protection measures and who has access.",
+            "word_count_guidance": "200-300 words",
+            "special_instructions": "Mention regulatory authorities (CDSCO), ethics committee, and sponsor access. State retention period (minimum 3 years per NDCTR 2019)."
+        },
+        {
+            "section_number": "7",
+            "section_heading": "Compensation for Injury",
+            "required": true,
+            "subsections": [
+                "What happens if you are injured because of the study?",
+                "What compensation will you receive?"
+            ],
+            "regulatory_requirements": "Per NDCTR 2019 Rule 11 and Schedule VI. MANDATORY for India. Must specify insurance coverage and compensation mechanism.",
+            "word_count_guidance": "150-250 words",
+            "special_instructions": "Include insurance policy details. State: 'The sponsor has provided insurance to cover medical treatment for study-related injuries.' Specify no-fault compensation."
+        },
+        {
+            "section_number": "8",
+            "section_heading": "Costs and Payments",
+            "required": true,
+            "subsections": [
+                "Will you have to pay for anything?",
+                "Will you be paid for being in this study?"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(g). Must clearly state what is provided free (study medicine, tests) and any reimbursement for time/travel.",
+            "word_count_guidance": "100-200 words",
+            "special_instructions": "State clearly: 'You will not have to pay for the study medicine or study-related tests.' Specify reimbursement amount if applicable."
+        },
+        {
+            "section_number": "9",
+            "section_heading": "Voluntary Participation",
+            "required": true,
+            "subsections": [
+                "Do you have to be in this study?",
+                "Can you leave the study?",
+                "What happens if you leave?"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(i). CRITICAL: Must emphasize voluntary nature and right to withdraw without penalty.",
+            "word_count_guidance": "150-250 words",
+            "special_instructions": "Use strong language: 'Your participation is completely voluntary. You can refuse to join or leave at any time without giving a reason. This will not affect your medical care.'"
+        },
+        {
+            "section_number": "10",
+            "section_heading": "Contact Information",
+            "required": true,
+            "subsections": [
+                "Who can you contact if you have questions?",
+                "Study doctor contact",
+                "Ethics committee contact",
+                "Sponsor contact"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.10(j) and NDCTR 2019 Rule 18(2)(j). Must provide 24-hour contact for study doctor.",
+            "word_count_guidance": "100-150 words",
+            "special_instructions": "Include: Study doctor name and phone (24-hour), EC name and contact, Sponsor representative. Use placeholder: [SITE TO COMPLETE: investigator contact details]"
+        },
+        {
+            "section_number": "11",
+            "section_heading": "Consent Statement and Signatures",
+            "required": true,
+            "subsections": [
+                "Consent statement",
+                "Subject signature and date",
+                "Legally acceptable representative signature (if applicable)",
+                "Person obtaining consent signature and date",
+                "Witness signature (if applicable)"
+            ],
+            "regulatory_requirements": "Per ICH E6(R3) 4.8.9 and NDCTR 2019 Rule 18(3). Must include statement that subject received copy of ICF.",
+            "word_count_guidance": "200-300 words",
+            "special_instructions": "Include statement: 'I have read this consent form (or it has been read to me). I have had the chance to ask questions. I agree to take part in this study.' Provide signature blocks for all required parties."
+        }
+    ],
+    "mandatory_elements_checklist": [
+        "Study purpose in plain language",
+        "Study duration and procedures",
+        "Reasonably foreseeable risks",
+        "Expected benefits (or statement of no direct benefit)",
+        "Alternative treatments",
+        "Confidentiality protections",
+        "Compensation for injury (MANDATORY for India)",
+        "Costs and payments",
+        "Voluntary participation statement",
+        "Right to withdraw without penalty",
+        "Contact information (24-hour)",
+        "Consent statement and signature blocks"
+    ],
+    "regional_language_variants": [
+        "Hindi (हिन्दी)",
+        "Tamil (தமிழ்)",
+        "Marathi (मराठी)",
+        "Bengali (বাংলা)",
+        "Telugu (తెలుగు)",
+        "Kannada (ಕನ್ನಡ)",
+        "Gujarati (ગુજરાતી)",
+        "Malayalam (മലയാളം)"
+    ]
+}

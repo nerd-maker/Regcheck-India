@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+tests/
+.env
+.env.*
+data/chromadb/
+uploads/
+.git
+.gitignore
+*.md
+.vscode/
+.idea/
+htmlcov/
+.coverage

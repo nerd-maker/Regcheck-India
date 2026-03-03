@@ -1,0 +1,188 @@
+{
+    "document_type": "Clinical Study Protocol",
+    "regulatory_standard": "ICH E6(R3)",
+    "version": "1.0",
+    "description": "Mandatory structure for Clinical Study Protocol per ICH E6(R3) and CDSCO requirements",
+    "sections": [
+        {
+            "section_number": "1",
+            "section_heading": "Synopsis",
+            "required": true,
+            "subsections": [
+                "Study Title",
+                "Protocol Number and Version",
+                "Study Phase",
+                "Study Objectives",
+                "Study Design Overview",
+                "Number of Subjects",
+                "Study Population",
+                "Primary Endpoint",
+                "Secondary Endpoints",
+                "Statistical Methods Summary"
+            ],
+            "regulatory_requirements": "Must include all ICH E6 synopsis elements. Should be standalone summary of 2-3 pages maximum.",
+            "word_count_guidance": "500-1000 words",
+            "special_instructions": "Use present tense for study design, future tense for planned activities. Include key eligibility criteria summary."
+        },
+        {
+            "section_number": "2",
+            "section_heading": "Study Objectives",
+            "required": true,
+            "subsections": [
+                "Primary Objective",
+                "Secondary Objectives",
+                "Exploratory Objectives (if applicable)"
+            ],
+            "regulatory_requirements": "Clearly state primary and secondary objectives. Must align with endpoints in Section 6.",
+            "word_count_guidance": "200-400 words",
+            "special_instructions": "Use specific, measurable language. Avoid vague terms like 'evaluate' without specifying what will be measured."
+        },
+        {
+            "section_number": "3",
+            "section_heading": "Study Design",
+            "required": true,
+            "subsections": [
+                "Overall Design",
+                "Study Diagram",
+                "Randomization and Blinding",
+                "Study Duration",
+                "Study Endpoints"
+            ],
+            "regulatory_requirements": "Per ICH E6 Section 6.1. Must include clear description of design type, blinding, randomization ratio, and study phases.",
+            "word_count_guidance": "800-1200 words",
+            "special_instructions": "Include a study flow diagram placeholder: [STUDY DIAGRAM TO BE INSERTED]. Specify washout periods for crossover designs."
+        },
+        {
+            "section_number": "4",
+            "section_heading": "Selection and Withdrawal of Subjects",
+            "required": true,
+            "subsections": [
+                "Inclusion Criteria",
+                "Exclusion Criteria",
+                "Subject Withdrawal Criteria",
+                "Procedures for Withdrawal"
+            ],
+            "regulatory_requirements": "Per ICH E6 Section 4.1. Must be specific and measurable. Include all safety-related exclusions.",
+            "word_count_guidance": "600-1000 words",
+            "special_instructions": "Number each criterion. Include age ranges, diagnostic criteria, washout requirements, and prohibited medications."
+        },
+        {
+            "section_number": "5",
+            "section_heading": "Treatment of Subjects",
+            "required": true,
+            "subsections": [
+                "Investigational Medicinal Product",
+                "Dosage and Administration",
+                "Concomitant Medications",
+                "Treatment Compliance"
+            ],
+            "regulatory_requirements": "Per ICH E6 Section 4.2. Must specify exact dosing regimen, route, frequency, and duration.",
+            "word_count_guidance": "600-900 words",
+            "special_instructions": "Include IMP formulation details. Specify allowed and prohibited concomitant medications."
+        },
+        {
+            "section_number": "6",
+            "section_heading": "Assessment of Efficacy",
+            "required": true,
+            "subsections": [
+                "Primary Efficacy Endpoint",
+                "Secondary Efficacy Endpoints",
+                "Assessment Schedule",
+                "Procedures and Assessments"
+            ],
+            "regulatory_requirements": "Must align with objectives in Section 2. Specify validated assessment tools and timing.",
+            "word_count_guidance": "700-1000 words",
+            "special_instructions": "Reference validated scales (e.g., RECIST 1.1, CTCAE v5.0). Include assessment windows."
+        },
+        {
+            "section_number": "7",
+            "section_heading": "Assessment of Safety",
+            "required": true,
+            "subsections": [
+                "Safety Parameters",
+                "Adverse Event Definitions",
+                "Serious Adverse Event Reporting",
+                "Safety Monitoring Plan"
+            ],
+            "regulatory_requirements": "Per NDCTR 2019 Rule 16. Must specify SAE reporting timelines (14 days for India). Include DSMB details if applicable.",
+            "word_count_guidance": "800-1200 words",
+            "special_instructions": "Use CTCAE v5.0 for AE grading. Specify causality assessment method (WHO-UMC scale)."
+        },
+        {
+            "section_number": "8",
+            "section_heading": "Statistics",
+            "required": true,
+            "subsections": [
+                "Sample Size Calculation",
+                "Analysis Populations",
+                "Statistical Methods for Primary Endpoint",
+                "Statistical Methods for Secondary Endpoints",
+                "Interim Analyses",
+                "Handling of Missing Data"
+            ],
+            "regulatory_requirements": "Per ICH E9. Must specify alpha level (typically 0.05 two-sided), power (typically 80-90%), and analysis populations (ITT, PP, Safety).",
+            "word_count_guidance": "1000-1500 words",
+            "special_instructions": "For BE studies: state acceptance criteria (80.00-125.00% per CDSCO 2018). Include multiplicity adjustment methods if applicable."
+        },
+        {
+            "section_number": "9",
+            "section_heading": "Data Handling and Record Keeping",
+            "required": true,
+            "subsections": [
+                "Data Collection",
+                "Data Management",
+                "Source Documents",
+                "Record Retention"
+            ],
+            "regulatory_requirements": "Per ICH E6 Section 5.5. Must specify eCRF system, data validation procedures, and retention period (minimum 3 years per NDCTR 2019).",
+            "word_count_guidance": "500-800 words",
+            "special_instructions": "Specify EDC system name. Include ALCOA+ principles reference."
+        },
+        {
+            "section_number": "10",
+            "section_heading": "Ethics",
+            "required": true,
+            "subsections": [
+                "Ethics Committee Approval",
+                "Informed Consent Process",
+                "Subject Confidentiality",
+                "Protocol Amendments"
+            ],
+            "regulatory_requirements": "Per NDCTR 2019 Rule 7 and ICH E6 Section 3. Must specify EC name and reference number. Include CTRI registration number.",
+            "word_count_guidance": "600-900 words",
+            "special_instructions": "Reference ICH E6(R3) consent requirements. Include statement on vulnerable populations if applicable."
+        },
+        {
+            "section_number": "11",
+            "section_heading": "Financing and Insurance",
+            "required": true,
+            "subsections": [
+                "Sponsor",
+                "Funding Source",
+                "Clinical Trial Insurance"
+            ],
+            "regulatory_requirements": "Per NDCTR 2019 Rule 11. Must specify insurance coverage details and compensation for injury.",
+            "word_count_guidance": "300-500 words",
+            "special_instructions": "Include insurance policy number and coverage amount. Specify compensation mechanism."
+        },
+        {
+            "section_number": "12",
+            "section_heading": "Publication Policy",
+            "required": true,
+            "subsections": [
+                "Publication Plan",
+                "Authorship Criteria",
+                "Data Sharing"
+            ],
+            "regulatory_requirements": "Per ICMJE guidelines. Must specify authorship criteria and publication timeline.",
+            "word_count_guidance": "200-400 words",
+            "special_instructions": "Reference CTRI results submission requirement (within 1 year of study completion)."
+        }
+    ],
+    "appendices": [
+        "Schedule of Assessments",
+        "Informed Consent Form",
+        "Case Report Forms",
+        "List of Abbreviations"
+    ]
+}

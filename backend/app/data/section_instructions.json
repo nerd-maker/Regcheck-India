@@ -1,0 +1,161 @@
+{
+    "Informed Consent": {
+        "reading_level": "8th grade (Flesch-Kincaid Grade 8 or below)",
+        "target_reading_level_score": 8.0,
+        "language_style": "Plain language, second person (you), active voice",
+        "sentence_length_max": 20,
+        "mandatory_elements": [
+            "purpose",
+            "duration",
+            "procedures",
+            "risks",
+            "benefits",
+            "alternatives",
+            "confidentiality",
+            "compensation",
+            "contact info",
+            "voluntary participation statement"
+        ],
+        "style_guidelines": [
+            "Use 'you' instead of 'the subject'",
+            "Use active voice: 'The doctor will examine you' not 'You will be examined'",
+            "Avoid medical jargon or define terms in parentheses",
+            "Use bullet points for lists",
+            "Keep paragraphs short (3-4 sentences maximum)"
+        ],
+        "special_flags": [
+            "EC CUSTOMIZATION REQUIRED"
+        ],
+        "prohibited_language": [
+            "waiver of rights",
+            "exculpatory language",
+            "guarantee of benefit",
+            "coercive language"
+        ]
+    },
+    "SAE Narrative": {
+        "format": "WHO narrative format",
+        "required_fields": [
+            "patient description (age, sex, relevant medical history)",
+            "event description",
+            "timeline (date/time of onset, duration)",
+            "causality assessment",
+            "time to onset from last IMP dose",
+            "action taken with IMP (continued, dose reduced, temporarily stopped, permanently stopped)",
+            "outcome (recovered, recovering, not recovered, fatal, unknown)",
+            "investigator causality assessment"
+        ],
+        "causality_scale": "WHO-UMC",
+        "causality_categories": [
+            "Certain",
+            "Probable/Likely",
+            "Possible",
+            "Unlikely",
+            "Conditional/Unclassified",
+            "Unassessable/Unclassifiable"
+        ],
+        "style_guidelines": [
+            "Use past tense",
+            "Be factual and objective",
+            "Include exact dates and times",
+            "Avoid speculation",
+            "Include relevant lab values with units and normal ranges"
+        ]
+    },
+    "Statistical Methods": {
+        "required_components": [
+            "Analysis populations (ITT, PP, Safety)",
+            "Primary analysis test with alpha level",
+            "Sample size justification",
+            "Handling of missing data",
+            "Multiplicity adjustment (if applicable)"
+        ],
+        "default_alpha": 0.05,
+        "default_power": 0.80,
+        "default_two_sided": true,
+        "BE_study_acceptance_criteria": "80.00–125.00% per CDSCO 2018 BA/BE Guidelines",
+        "style_guidelines": [
+            "Define all statistical terms",
+            "Specify software to be used (e.g., SAS 9.4, R 4.0)",
+            "Include references for statistical methods",
+            "Specify interim analysis stopping rules if applicable"
+        ]
+    },
+    "Study Design": {
+        "required_elements": [
+            "Design type (parallel, crossover, factorial, etc.)",
+            "Blinding (open-label, single-blind, double-blind)",
+            "Randomization (yes/no, ratio, stratification)",
+            "Study phases (screening, treatment, follow-up)",
+            "Duration of each phase",
+            "Washout period (if crossover)"
+        ],
+        "diagram_placeholder": "[STUDY DIAGRAM TO BE INSERTED]",
+        "style_guidelines": [
+            "Use present tense for design description",
+            "Include study flow diagram",
+            "Specify visit windows (e.g., Day 7 ± 2 days)",
+            "Define study day numbering convention"
+        ]
+    },
+    "Eligibility Criteria": {
+        "format": "Numbered list",
+        "required_categories": [
+            "Demographic criteria (age, sex)",
+            "Diagnostic criteria",
+            "Laboratory criteria",
+            "Prior/concomitant therapy restrictions",
+            "Exclusions for safety"
+        ],
+        "style_guidelines": [
+            "Use specific, measurable criteria",
+            "Include units for all lab values",
+            "Specify washout periods for prior medications",
+            "Use 'must' for mandatory criteria"
+        ],
+        "common_exclusions": [
+            "Pregnant or breastfeeding women",
+            "Significant hepatic/renal impairment",
+            "Known hypersensitivity to IMP",
+            "Participation in another trial within X days"
+        ]
+    },
+    "Safety Assessment": {
+        "required_elements": [
+            "AE definitions (per CTCAE v5.0)",
+            "SAE definitions (per ICH E2A)",
+            "Reporting timelines (per NDCTR 2019 Rule 16)",
+            "Causality assessment method",
+            "Safety monitoring plan"
+        ],
+        "SAE_reporting_timeline_India": "14 days to CDSCO and EC",
+        "AE_grading_scale": "CTCAE v5.0",
+        "causality_method": "WHO-UMC scale",
+        "style_guidelines": [
+            "Define AE, SAE, SUSAR clearly",
+            "Specify who is responsible for reporting",
+            "Include contact information for safety reporting",
+            "Reference DSMB if applicable"
+        ]
+    },
+    "Synopsis": {
+        "max_length": "2-3 pages",
+        "required_elements": [
+            "Study title",
+            "Protocol number and version",
+            "Phase",
+            "Objectives (primary and secondary)",
+            "Study design summary",
+            "Number of subjects",
+            "Key eligibility criteria",
+            "Primary endpoint",
+            "Statistical methods summary"
+        ],
+        "style_guidelines": [
+            "Use present tense for design",
+            "Use future tense for planned activities",
+            "Be concise but complete",
+            "Standalone document (readable without full protocol)"
+        ]
+    }
+}

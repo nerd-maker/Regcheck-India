@@ -1,0 +1,389 @@
+{
+    "categories": [
+        {
+            "id": "CAT-01",
+            "name": "Protocol Design",
+            "description": "Endpoints, sample size, statistical methods, study design issues",
+            "common_queries": [
+                "Sample size justification unclear or inadequate",
+                "Primary endpoint not adequately defined",
+                "Statistical analysis plan incomplete or missing",
+                "Study design does not support objectives",
+                "Randomization method not specified"
+            ],
+            "response_template_id": "TMPL-PROTOCOL-DESIGN",
+            "typical_regulatory_refs": [
+                "ICH E9 - Statistical Principles for Clinical Trials",
+                "ICH E6(R3) Section 6 - Protocol and Protocol Amendment(s)",
+                "Schedule Y Part II - Requirements for Clinical Trials"
+            ],
+            "keywords": [
+                "endpoint",
+                "sample size",
+                "statistical",
+                "power",
+                "randomization",
+                "design"
+            ]
+        },
+        {
+            "id": "CAT-02",
+            "name": "Patient Population",
+            "description": "Inclusion/exclusion criteria, vulnerable subjects, patient selection",
+            "common_queries": [
+                "Inclusion criteria too broad or not specific",
+                "Vulnerable population protection inadequate",
+                "Age range not justified",
+                "Exclusion criteria insufficient for safety",
+                "Pregnant women inclusion not justified"
+            ],
+            "response_template_id": "TMPL-PATIENT-POP",
+            "typical_regulatory_refs": [
+                "ICH E6(R3) Section 4.8 - Informed Consent",
+                "NDCTR 2019 Rule 18 - Informed Consent",
+                "ICH E8 - General Considerations for Clinical Trials"
+            ],
+            "keywords": [
+                "inclusion",
+                "exclusion",
+                "vulnerable",
+                "age",
+                "population",
+                "criteria"
+            ]
+        },
+        {
+            "id": "CAT-03",
+            "name": "Safety Monitoring",
+            "description": "DSMB, SAE reporting, stopping rules, safety oversight",
+            "common_queries": [
+                "DSMB composition or charter not provided",
+                "SAE reporting timeline unclear",
+                "Stopping rules not defined",
+                "Safety monitoring plan inadequate",
+                "Causality assessment method not specified"
+            ],
+            "response_template_id": "TMPL-SAFETY-MONITORING",
+            "typical_regulatory_refs": [
+                "NDCTR 2019 Rule 16 - Serious Adverse Event Reporting",
+                "ICH E6(R3) Section 5.17 - Safety Reporting",
+                "ICH E2A - Clinical Safety Data Management"
+            ],
+            "keywords": [
+                "DSMB",
+                "SAE",
+                "safety",
+                "adverse event",
+                "stopping",
+                "monitoring"
+            ]
+        },
+        {
+            "id": "CAT-04",
+            "name": "Informed Consent",
+            "description": "ICF content, process, language adequacy, consent procedures",
+            "common_queries": [
+                "ICF language too technical",
+                "Compensation for injury not clearly stated",
+                "Voluntary participation not emphasized",
+                "Regional language ICF not provided",
+                "Witness requirement not addressed"
+            ],
+            "response_template_id": "TMPL-ICF",
+            "typical_regulatory_refs": [
+                "ICH E6(R3) Section 4.8 - Informed Consent",
+                "NDCTR 2019 Rule 18 - Informed Consent Process",
+                "Schedule Y Appendix VIII - Informed Consent Form"
+            ],
+            "keywords": [
+                "consent",
+                "ICF",
+                "language",
+                "voluntary",
+                "compensation",
+                "witness"
+            ]
+        },
+        {
+            "id": "CAT-05",
+            "name": "Investigator Qualification",
+            "description": "PI credentials, site capability, training, delegation log",
+            "common_queries": [
+                "PI CV not current or incomplete",
+                "Site capability not demonstrated",
+                "Training records not provided",
+                "Delegation of authority log missing",
+                "Co-investigator qualifications inadequate"
+            ],
+            "response_template_id": "TMPL-INVESTIGATOR-QUAL",
+            "typical_regulatory_refs": [
+                "ICH E6(R3) Section 4.1 - Investigator's Qualifications",
+                "NDCTR 2019 Rule 8 - Investigator Responsibilities",
+                "Schedule Y Part III - Investigator Requirements"
+            ],
+            "keywords": [
+                "investigator",
+                "PI",
+                "qualification",
+                "CV",
+                "training",
+                "site"
+            ]
+        },
+        {
+            "id": "CAT-06",
+            "name": "IMP Quality",
+            "description": "Drug substance, formulation, manufacturing, stability",
+            "common_queries": [
+                "IMP manufacturing details incomplete",
+                "Stability data not provided",
+                "Certificate of analysis missing",
+                "Formulation composition not clear",
+                "GMP certification not current"
+            ],
+            "response_template_id": "TMPL-IMP-QUALITY",
+            "typical_regulatory_refs": [
+                "ICH Q7 - Good Manufacturing Practice",
+                "Schedule M - Good Manufacturing Practices",
+                "ICH Q1A - Stability Testing"
+            ],
+            "keywords": [
+                "IMP",
+                "manufacturing",
+                "stability",
+                "GMP",
+                "formulation",
+                "quality"
+            ]
+        },
+        {
+            "id": "CAT-07",
+            "name": "Pharmacovigilance",
+            "description": "Safety reporting, causality, expedited reports, SUSAR",
+            "common_queries": [
+                "Pharmacovigilance plan not detailed",
+                "SUSAR reporting timeline unclear",
+                "Causality assessment criteria not defined",
+                "Safety database not described",
+                "Expedited reporting procedures missing"
+            ],
+            "response_template_id": "TMPL-PHARMACOVIGILANCE",
+            "typical_regulatory_refs": [
+                "NDCTR 2019 Rule 16 - SAE Reporting",
+                "ICH E2A - Clinical Safety Data Management",
+                "ICH E2B - Clinical Safety Data Management: Data Elements"
+            ],
+            "keywords": [
+                "pharmacovigilance",
+                "SUSAR",
+                "causality",
+                "safety reporting",
+                "expedited"
+            ]
+        },
+        {
+            "id": "CAT-08",
+            "name": "Data Management",
+            "description": "EDC, data quality, audit trails, data validation",
+            "common_queries": [
+                "EDC system validation not documented",
+                "Data validation plan missing",
+                "Audit trail procedures not described",
+                "Data management plan incomplete",
+                "Query resolution process not defined"
+            ],
+            "response_template_id": "TMPL-DATA-MGMT",
+            "typical_regulatory_refs": [
+                "ICH E6(R3) Section 5.5 - Data Handling and Record Keeping",
+                "ALCOA+ Principles",
+                "21 CFR Part 11 - Electronic Records"
+            ],
+            "keywords": [
+                "EDC",
+                "data",
+                "validation",
+                "audit trail",
+                "ALCOA",
+                "query"
+            ]
+        },
+        {
+            "id": "CAT-09",
+            "name": "Regulatory Compliance",
+            "description": "NDCTR, Schedule Y, GCP violations, regulatory deviations",
+            "common_queries": [
+                "GCP compliance not demonstrated",
+                "NDCTR requirements not addressed",
+                "Schedule Y deviations not justified",
+                "Regulatory submissions incomplete",
+                "Compliance monitoring plan missing"
+            ],
+            "response_template_id": "TMPL-REGULATORY-COMPLIANCE",
+            "typical_regulatory_refs": [
+                "NDCTR 2019 - New Drugs and Clinical Trials Rules",
+                "Schedule Y - Requirements for Clinical Trials",
+                "ICH E6(R3) - Good Clinical Practice"
+            ],
+            "keywords": [
+                "NDCTR",
+                "Schedule Y",
+                "GCP",
+                "compliance",
+                "regulatory",
+                "deviation"
+            ]
+        },
+        {
+            "id": "CAT-10",
+            "name": "Ethics & Patient Rights",
+            "description": "Benefits/risks, compensation, coercion risk, patient protection",
+            "common_queries": [
+                "Risk-benefit analysis inadequate",
+                "Compensation for participation unclear",
+                "Coercion risk not addressed",
+                "Patient rights not clearly stated",
+                "Withdrawal procedures not defined"
+            ],
+            "response_template_id": "TMPL-ETHICS",
+            "typical_regulatory_refs": [
+                "NDCTR 2019 Rule 7 - Ethics Committee",
+                "ICH E6(R3) Section 3 - Institutional Review Board/Ethics Committee",
+                "Declaration of Helsinki"
+            ],
+            "keywords": [
+                "ethics",
+                "risk",
+                "benefit",
+                "compensation",
+                "coercion",
+                "rights"
+            ]
+        },
+        {
+            "id": "CAT-11",
+            "name": "CTRI Registration",
+            "description": "Missing fields, discrepancies, updates required in CTRI",
+            "common_queries": [
+                "CTRI registration incomplete",
+                "Discrepancy between CTRI and protocol",
+                "CTRI updates not submitted",
+                "Primary outcome not matching CTRI",
+                "Trial status not updated in CTRI"
+            ],
+            "response_template_id": "TMPL-CTRI",
+            "typical_regulatory_refs": [
+                "NDCTR 2019 Rule 19 - Clinical Trial Registry",
+                "CTRI Registration Guidelines",
+                "WHO Trial Registration Data Set"
+            ],
+            "keywords": [
+                "CTRI",
+                "registration",
+                "discrepancy",
+                "update",
+                "trial registry"
+            ]
+        },
+        {
+            "id": "CAT-12",
+            "name": "Insurance & Compensation",
+            "description": "Indemnity, injury compensation per NDCTR, insurance coverage",
+            "common_queries": [
+                "Insurance policy details not provided",
+                "Compensation for injury not per NDCTR Schedule VI",
+                "Insurance coverage amount inadequate",
+                "No-fault compensation not addressed",
+                "Insurance validity period unclear"
+            ],
+            "response_template_id": "TMPL-INSURANCE",
+            "typical_regulatory_refs": [
+                "NDCTR 2019 Rule 11 - Insurance",
+                "NDCTR 2019 Schedule VI - Compensation for Injury",
+                "ICH E6(R3) Section 4.8.10(g) - Compensation"
+            ],
+            "keywords": [
+                "insurance",
+                "compensation",
+                "injury",
+                "indemnity",
+                "Schedule VI"
+            ]
+        },
+        {
+            "id": "CAT-13",
+            "name": "Timeline & Milestones",
+            "description": "Progress reports, deviation from approved plan, study delays",
+            "common_queries": [
+                "Study progress not as per approved timeline",
+                "Milestone deviations not explained",
+                "Progress report overdue",
+                "Enrollment slower than planned",
+                "Study completion date extension not justified"
+            ],
+            "response_template_id": "TMPL-TIMELINE",
+            "typical_regulatory_refs": [
+                "NDCTR 2019 Rule 21 - Progress Reports",
+                "ICH E6(R3) Section 8 - Essential Documents"
+            ],
+            "keywords": [
+                "timeline",
+                "milestone",
+                "progress",
+                "delay",
+                "enrollment",
+                "completion"
+            ]
+        },
+        {
+            "id": "CAT-14",
+            "name": "Amendment",
+            "description": "Protocol, IB, ICF changes requiring approval",
+            "common_queries": [
+                "Amendment justification inadequate",
+                "Impact on enrolled subjects not addressed",
+                "Re-consent plan not provided",
+                "Amendment implementation timeline unclear",
+                "Changes not tracked in protocol"
+            ],
+            "response_template_id": "TMPL-AMENDMENT",
+            "typical_regulatory_refs": [
+                "ICH E6(R3) Section 4.5 - Protocol Amendments",
+                "NDCTR 2019 Rule 15 - Protocol Amendments",
+                "ICH E6(R3) Section 4.8.11 - Re-consent"
+            ],
+            "keywords": [
+                "amendment",
+                "change",
+                "modification",
+                "re-consent",
+                "update"
+            ]
+        },
+        {
+            "id": "CAT-15",
+            "name": "Bioequivalence Specific",
+            "description": "BE study design, acceptance criteria, reference product",
+            "common_queries": [
+                "BE acceptance criteria not per CDSCO guidelines",
+                "Reference product not adequately characterized",
+                "Crossover washout period not justified",
+                "Analytical method validation incomplete",
+                "90% confidence interval calculation not clear"
+            ],
+            "response_template_id": "TMPL-BIOEQUIVALENCE",
+            "typical_regulatory_refs": [
+                "CDSCO 2018 BA/BE Guidelines",
+                "ICH E6(R3) - GCP for BE Studies",
+                "Schedule Y Appendix IX - BA/BE Requirements"
+            ],
+            "keywords": [
+                "bioequivalence",
+                "BE",
+                "acceptance criteria",
+                "reference",
+                "washout",
+                "90% CI"
+            ]
+        }
+    ]
+}
