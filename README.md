@@ -67,13 +67,14 @@ RegCheck-India/
 ### Prerequisites
 
 - Docker and Docker Compose
-- Anthropic API Key (for Claude)
+- NVIDIA API Key (OpenAI-compatible)
 
 ### Setup
 
-1. **Clone the repository** (or navigate to the project directory):
+1. **Clone the repository**:
    ```bash
-   cd "c:\Users\Utkarsh\Desktop\pharma project"
+   git clone https://github.com/nerd-maker/Regcheck-India.git
+   cd Regcheck-India
    ```
 
 2. **Create environment file**:
@@ -81,9 +82,9 @@ RegCheck-India/
    copy .env.example .env
    ```
 
-3. **Add your Anthropic API key** to `.env`:
+3. **Add your NVIDIA API key** to `.env`:
    ```
-   ANTHROPIC_API_KEY=your_claude_api_key_here
+   LLM_API_KEY=your_nvidia_api_key_here
    ```
 
 4. **Start the application**:
@@ -116,7 +117,7 @@ venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 
 # Set environment variables
-set ANTHROPIC_API_KEY=your_key_here
+set LLM_API_KEY=your_nvidia_api_key_here
 
 # Run the server
 uvicorn app.main:app --reload --port 8000
@@ -211,9 +212,9 @@ The system includes sample regulatory data for testing. For production use:
 Key configuration options in `.env`:
 
 ```bash
-# Claude AI
-ANTHROPIC_API_KEY=your_key_here
-CLAUDE_MODEL=claude-3-5-sonnet-20241022
+# LLM (NVIDIA OpenAI-compatible)
+LLM_API_KEY=your_nvidia_api_key_here
+LLM_MODEL=openai/gpt-oss-120b
 
 # Server
 BACKEND_PORT=8000
@@ -248,7 +249,7 @@ Edit `backend/app/data/sample_regulations.py` or create a new data ingestion scr
 
 **Backend:**
 - FastAPI (Python web framework)
-- Anthropic Claude 3.5 Sonnet (LLM)
+- NVIDIA OpenAI-compatible API (openai/gpt-oss-120b)
 - ChromaDB (Vector database)
 - PyPDF2 & python-docx (Document parsing)
 - Pydantic (Data validation)
