@@ -18,7 +18,7 @@
     "rewrites": [
         {
             "source": "/api/:path*",
-            "destination": "https://regcheck-india-api.onrender.com/api/:path*"
+            "destination": "https://regcheck-india.onrender.com/api/:path*"
         }
     ]
 }
