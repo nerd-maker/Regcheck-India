@@ -1,8 +1,0 @@
-frontend/
-.git/
-**/__pycache__/
-**/*.pyc
-backend/tests/
-backend/data/chromadb/
-*.env
-.env*
