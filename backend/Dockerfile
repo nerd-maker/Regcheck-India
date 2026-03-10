@@ -39,11 +39,14 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
+# Default port (Render overrides via $PORT env var)
+ENV PORT=8000
+
 # Run with gunicorn for production
-CMD ["gunicorn", "app.main:app", \
-    "--bind", "0.0.0.0:8000", \
-    "--workers", "2", \
-    "--worker-class", "uvicorn.workers.UvicornWorker", \
-    "--timeout", "120", \
-    "--access-logfile", "-", \
-    "--error-logfile", "-"]
+CMD gunicorn app.main:app \
+    --bind 0.0.0.0:$PORT \
+    --workers 2 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile -

@@ -1,0 +1,33 @@
+# render.yaml — Render Blueprint for backend deployment
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: regcheck-india-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: free
+    envVars:
+      - key: LLM_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: LLM_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: CHROMADB_PATH
+        value: /app/data/chromadb
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ALLOWED_ORIGINS
+        value: https://regcheck-india.vercel.app
+      - key: UPLOAD_DIR
+        value: /app/uploads
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "50"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "30"
+    healthCheckPath: /health
