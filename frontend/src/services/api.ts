@@ -2,6 +2,7 @@
  * API client for RegCheck-India backend
  */
 import axios from 'axios';
+import { getSessionId } from '../utils/session';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -10,6 +11,12 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+});
+
+// Inject X-Session-ID header on every request
+apiClient.interceptors.request.use((config) => {
+    config.headers['X-Session-ID'] = getSessionId();
+    return config;
 });
 
 // ─── Type Definitions ───────────────────────────────────────────────────────

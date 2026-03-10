@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import axios from 'axios';
+import { getSessionId } from '../utils/session';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface StudyData {
     study_title: string;
@@ -63,21 +67,15 @@ export default function DocumentGenerator() {
         setGeneratedSections([]);
 
         try {
-            const response = await fetch('http://localhost:8000/api/generate/document', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    document_type: documentType,
-                    study_data: studyData,
-                    generate_all_sections: true
-                })
+            const response = await axios.post(`${API_URL}/api/generate/document`, {
+                document_type: documentType,
+                study_data: studyData,
+                generate_all_sections: true
+            }, {
+                headers: { 'X-Session-ID': getSessionId() }
             });
 
-            if (!response.ok) {
-                throw new Error(`Generation failed: ${response.statusText}`);
-            }
-
-            const result = await response.json();
+            const result = response.data;
 
             if (result.status === 'success') {
                 setGeneratedSections(result.sections);
@@ -116,8 +114,8 @@ export default function DocumentGenerator() {
                                     key={type}
                                     onClick={() => setDocumentType(type)}
                                     className={`px-4 py-3 rounded-lg font-medium transition-all ${documentType === type
-                                            ? 'bg-indigo-600 text-white shadow-lg scale-105'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        ? 'bg-indigo-600 text-white shadow-lg scale-105'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                         }`}
                                 >
                                     {type.toUpperCase()}
@@ -449,8 +447,8 @@ export default function DocumentGenerator() {
                                             </h3>
                                             <div className="flex items-center gap-3">
                                                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${section.review_priority === 'HIGH' ? 'bg-red-100 text-red-800' :
-                                                        section.review_priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                                                            'bg-green-100 text-green-800'
+                                                    section.review_priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                                                        'bg-green-100 text-green-800'
                                                     }`}>
                                                     {section.review_priority}
                                                 </span>

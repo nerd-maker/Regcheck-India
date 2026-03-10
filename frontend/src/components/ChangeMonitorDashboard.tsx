@@ -7,6 +7,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { getSessionId } from '../utils/session';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Types
 interface RegulatoryChange {
@@ -68,10 +72,12 @@ export default function ChangeMonitorDashboard() {
             if (startDate) params.append('start_date', startDate);
             if (endDate) params.append('end_date', endDate);
 
-            const response = await fetch(`http://localhost:8000/api/regulatory/changes?${params}`);
-            if (!response.ok) throw new Error('Failed to fetch changes');
+            const response = await axios.get(`${API_URL}/api/regulatory/changes`, {
+                params: Object.fromEntries(params),
+                headers: { 'X-Session-ID': getSessionId() }
+            });
 
-            const data: ChangeListResponse = await response.json();
+            const data: ChangeListResponse = response.data;
             setChanges(data.changes);
         } catch (err: any) {
             setError(err.message);
@@ -83,10 +89,11 @@ export default function ChangeMonitorDashboard() {
     // Fetch stats
     const fetchStats = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/regulatory/stats');
-            if (!response.ok) throw new Error('Failed to fetch stats');
+            const response = await axios.get(`${API_URL}/api/regulatory/stats`, {
+                headers: { 'X-Session-ID': getSessionId() }
+            });
 
-            const data = await response.json();
+            const data = response.data;
             setStats(data);
         } catch (err: any) {
             console.error('Failed to fetch stats:', err);
@@ -240,9 +247,9 @@ export default function ChangeMonitorDashboard() {
                         <div
                             key={change.change_id}
                             className={`bg-white p-6 rounded-lg shadow border-l-4 cursor-pointer hover:shadow-lg transition-shadow ${change.urgency === 'CRITICAL' ? 'border-red-500' :
-                                    change.urgency === 'HIGH' ? 'border-orange-500' :
-                                        change.urgency === 'MEDIUM' ? 'border-yellow-500' :
-                                            'border-green-500'
+                                change.urgency === 'HIGH' ? 'border-orange-500' :
+                                    change.urgency === 'MEDIUM' ? 'border-yellow-500' :
+                                        'border-green-500'
                                 }`}
                             onClick={() => setSelectedChange(change)}
                         >

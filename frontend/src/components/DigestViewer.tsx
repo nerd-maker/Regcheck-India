@@ -7,6 +7,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import axios from 'axios';
+import { getSessionId } from '../utils/session';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Types
 interface CriticalAction {
@@ -63,22 +67,15 @@ export default function DigestViewer() {
         setDigest(null);
 
         try {
-            const response = await fetch('http://localhost:8000/api/regulatory/generate-digest', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    start_date: startDate,
-                    end_date: endDate,
-                    include_low_urgency: includeLowUrgency
-                })
+            const response = await axios.post(`${API_URL}/api/regulatory/generate-digest`, {
+                start_date: startDate,
+                end_date: endDate,
+                include_low_urgency: includeLowUrgency
+            }, {
+                headers: { 'X-Session-ID': getSessionId() }
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Digest generation failed');
-            }
-
-            const data = await response.json();
+            const data = response.data;
             setDigest(data.digest);
             setTextExport(data.exports.text);
             setMarkdownExport(data.exports.markdown);
@@ -210,8 +207,8 @@ export default function DigestViewer() {
                                 <button
                                     onClick={() => setActiveTab('formatted')}
                                     className={`px-6 py-3 font-medium ${activeTab === 'formatted'
-                                            ? 'border-b-2 border-blue-600 text-blue-600'
-                                            : 'text-gray-600 hover:text-gray-800'
+                                        ? 'border-b-2 border-blue-600 text-blue-600'
+                                        : 'text-gray-600 hover:text-gray-800'
                                         }`}
                                 >
                                     Formatted View
@@ -219,8 +216,8 @@ export default function DigestViewer() {
                                 <button
                                     onClick={() => setActiveTab('text')}
                                     className={`px-6 py-3 font-medium ${activeTab === 'text'
-                                            ? 'border-b-2 border-blue-600 text-blue-600'
-                                            : 'text-gray-600 hover:text-gray-800'
+                                        ? 'border-b-2 border-blue-600 text-blue-600'
+                                        : 'text-gray-600 hover:text-gray-800'
                                         }`}
                                 >
                                     Text Export
@@ -228,8 +225,8 @@ export default function DigestViewer() {
                                 <button
                                     onClick={() => setActiveTab('markdown')}
                                     className={`px-6 py-3 font-medium ${activeTab === 'markdown'
-                                            ? 'border-b-2 border-blue-600 text-blue-600'
-                                            : 'text-gray-600 hover:text-gray-800'
+                                        ? 'border-b-2 border-blue-600 text-blue-600'
+                                        : 'text-gray-600 hover:text-gray-800'
                                         }`}
                                 >
                                     Markdown Export
@@ -277,9 +274,9 @@ export default function DigestViewer() {
                                                         <div className="flex justify-between items-start mb-2">
                                                             <h4 className="font-semibold text-lg">{change.change_title}</h4>
                                                             <span className={`px-2 py-1 rounded text-xs font-semibold ${change.urgency === 'CRITICAL' ? 'bg-red-100 text-red-800' :
-                                                                    change.urgency === 'HIGH' ? 'bg-orange-100 text-orange-800' :
-                                                                        change.urgency === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
-                                                                            'bg-green-100 text-green-800'
+                                                                change.urgency === 'HIGH' ? 'bg-orange-100 text-orange-800' :
+                                                                    change.urgency === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                                                                        'bg-green-100 text-green-800'
                                                                 }`}>
                                                                 {change.urgency}
                                                             </span>

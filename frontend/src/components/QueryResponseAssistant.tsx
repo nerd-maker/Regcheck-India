@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import axios from 'axios';
+import { getSessionId } from '../utils/session';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface QueryClassification {
     primary_category: string;
@@ -48,21 +52,15 @@ export default function QueryResponseAssistant() {
         setError('');
 
         try {
-            const res = await fetch('http://localhost:8000/api/query/classify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query_text: queryText,
-                    query_reference: queryReference,
-                    response_deadline: responseDeadline
-                })
+            const res = await axios.post(`${API_URL}/api/query/classify`, {
+                query_text: queryText,
+                query_reference: queryReference,
+                response_deadline: responseDeadline
+            }, {
+                headers: { 'X-Session-ID': getSessionId() }
             });
 
-            if (!res.ok) {
-                throw new Error(`Classification failed: ${res.statusText}`);
-            }
-
-            const data = await res.json();
+            const data = res.data;
             setClassification(data);
             setActiveView('classification');
         } catch (err) {
@@ -82,29 +80,23 @@ export default function QueryResponseAssistant() {
         setError('');
 
         try {
-            const res = await fetch('http://localhost:8000/api/query/generate-response', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query: {
-                        query_text: queryText,
-                        query_reference: queryReference,
-                        query_date: queryDate,
-                        response_deadline: responseDeadline,
-                        submission_type: submissionType,
-                        submission_date: submissionDate,
-                        submission_documents: []
-                    },
-                    classification: classification,
-                    auto_classify: false
-                })
+            const res = await axios.post(`${API_URL}/api/query/generate-response`, {
+                query: {
+                    query_text: queryText,
+                    query_reference: queryReference,
+                    query_date: queryDate,
+                    response_deadline: responseDeadline,
+                    submission_type: submissionType,
+                    submission_date: submissionDate,
+                    submission_documents: []
+                },
+                classification: classification,
+                auto_classify: false
+            }, {
+                headers: { 'X-Session-ID': getSessionId() }
             });
 
-            if (!res.ok) {
-                throw new Error(`Response generation failed: ${res.statusText}`);
-            }
-
-            const data = await res.json();
+            const data = res.data;
             setResponse(data);
             setActiveView('response');
         } catch (err) {
@@ -133,8 +125,8 @@ export default function QueryResponseAssistant() {
                         <button
                             onClick={() => setActiveView('input')}
                             className={`px-6 py-3 font-semibold transition-all ${activeView === 'input'
-                                    ? 'border-b-2 border-green-600 text-green-600'
-                                    : 'text-gray-500 hover:text-gray-700'
+                                ? 'border-b-2 border-green-600 text-green-600'
+                                : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
                             Query Input
@@ -143,8 +135,8 @@ export default function QueryResponseAssistant() {
                             onClick={() => setActiveView('classification')}
                             disabled={!classification}
                             className={`px-6 py-3 font-semibold transition-all ${activeView === 'classification'
-                                    ? 'border-b-2 border-green-600 text-green-600'
-                                    : 'text-gray-500 hover:text-gray-700 disabled:text-gray-300'
+                                ? 'border-b-2 border-green-600 text-green-600'
+                                : 'text-gray-500 hover:text-gray-700 disabled:text-gray-300'
                                 }`}
                         >
                             Classification
@@ -153,8 +145,8 @@ export default function QueryResponseAssistant() {
                             onClick={() => setActiveView('response')}
                             disabled={!response}
                             className={`px-6 py-3 font-semibold transition-all ${activeView === 'response'
-                                    ? 'border-b-2 border-green-600 text-green-600'
-                                    : 'text-gray-500 hover:text-gray-700 disabled:text-gray-300'
+                                ? 'border-b-2 border-green-600 text-green-600'
+                                : 'text-gray-500 hover:text-gray-700 disabled:text-gray-300'
                                 }`}
                         >
                             Generated Response
@@ -298,8 +290,8 @@ export default function QueryResponseAssistant() {
                                 <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
                                     <h3 className="text-sm font-semibold text-purple-900 mb-2">Complexity</h3>
                                     <p className={`text-lg font-bold ${classification.complexity === 'COMPLEX' ? 'text-red-700' :
-                                            classification.complexity === 'MODERATE' ? 'text-yellow-700' :
-                                                'text-green-700'
+                                        classification.complexity === 'MODERATE' ? 'text-yellow-700' :
+                                            'text-green-700'
                                         }`}>
                                         {classification.complexity}
                                     </p>
@@ -308,8 +300,8 @@ export default function QueryResponseAssistant() {
                                 <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
                                     <h3 className="text-sm font-semibold text-orange-900 mb-2">Urgency</h3>
                                     <p className={`text-lg font-bold ${classification.urgency === 'HIGH' ? 'text-red-700' :
-                                            classification.urgency === 'MEDIUM' ? 'text-yellow-700' :
-                                                'text-green-700'
+                                        classification.urgency === 'MEDIUM' ? 'text-yellow-700' :
+                                            'text-green-700'
                                         }`}>
                                         {classification.urgency}
                                     </p>
@@ -318,8 +310,8 @@ export default function QueryResponseAssistant() {
                                 <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                                     <h3 className="text-sm font-semibold text-green-900 mb-2">Data Gap</h3>
                                     <p className={`text-lg font-bold ${classification.data_gap === 'NO' ? 'text-red-700' :
-                                            classification.data_gap === 'PARTIAL' ? 'text-yellow-700' :
-                                                'text-green-700'
+                                        classification.data_gap === 'PARTIAL' ? 'text-yellow-700' :
+                                            'text-green-700'
                                         }`}>
                                         {classification.data_gap}
                                     </p>
@@ -377,8 +369,8 @@ export default function QueryResponseAssistant() {
                             {/* Response Metadata */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className={`rounded-lg p-4 border ${response.confidence === 'HIGH' ? 'bg-green-50 border-green-200' :
-                                        response.confidence === 'MEDIUM' ? 'bg-yellow-50 border-yellow-200' :
-                                            'bg-red-50 border-red-200'
+                                    response.confidence === 'MEDIUM' ? 'bg-yellow-50 border-yellow-200' :
+                                        'bg-red-50 border-red-200'
                                     }`}>
                                     <h3 className="text-sm font-semibold mb-2">Response Confidence</h3>
                                     <p className="text-lg font-bold">{response.confidence}</p>

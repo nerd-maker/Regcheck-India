@@ -7,6 +7,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { getSessionId } from '../utils/session';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Types
 interface DocumentChange {
@@ -63,10 +67,11 @@ export default function ImpactAssessmentViewer() {
 
     const fetchSubmissions = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/regulatory/submissions');
-            if (!response.ok) throw new Error('Failed to fetch submissions');
+            const response = await axios.get(`${API_URL}/api/regulatory/submissions`, {
+                headers: { 'X-Session-ID': getSessionId() }
+            });
 
-            const data = await response.json();
+            const data = response.data;
             setSubmissions(data.submissions || []);
         } catch (err: any) {
             console.error('Failed to fetch submissions:', err);
@@ -85,22 +90,15 @@ export default function ImpactAssessmentViewer() {
         setAssessment(null);
 
         try {
-            const response = await fetch('http://localhost:8000/api/regulatory/assess-impact', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    change_id: changeId,
-                    submission_id: selectedSubmission,
-                    auto_generate_actions: true
-                })
+            const response = await axios.post(`${API_URL}/api/regulatory/assess-impact`, {
+                change_id: changeId,
+                submission_id: selectedSubmission,
+                auto_generate_actions: true
+            }, {
+                headers: { 'X-Session-ID': getSessionId() }
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Impact assessment failed');
-            }
-
-            const data = await response.json();
+            const data = response.data;
             setAssessment(data.assessment);
         } catch (err: any) {
             setError(err.message);
@@ -255,8 +253,8 @@ export default function ImpactAssessmentViewer() {
                                         <div className="flex justify-between items-start mb-2">
                                             <h4 className="font-semibold text-gray-800">{doc.document}</h4>
                                             <span className={`px-2 py-1 rounded text-xs font-semibold ${doc.change_urgency === 'BEFORE_NEXT_SUBMISSION' ? 'bg-red-100 text-red-800' :
-                                                    doc.change_urgency === 'WITHIN_30_DAYS' ? 'bg-orange-100 text-orange-800' :
-                                                        'bg-yellow-100 text-yellow-800'
+                                                doc.change_urgency === 'WITHIN_30_DAYS' ? 'bg-orange-100 text-orange-800' :
+                                                    'bg-yellow-100 text-yellow-800'
                                                 }`}>
                                                 {doc.change_urgency.replace(/_/g, ' ')}
                                             </span>
