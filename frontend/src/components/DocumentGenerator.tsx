@@ -45,7 +45,10 @@ export default function DocumentGenerator() {
         countries: ['India'],
         secondary_endpoints: [],
         inclusion_criteria: [],
-        exclusion_criteria: []
+        exclusion_criteria: [],
+        randomization: '1:1 ratio',
+        site_count: 1,
+        age_range: '18-65 years',
     });
     const [generatedSections, setGeneratedSections] = useState<GeneratedSection[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -67,9 +70,34 @@ export default function DocumentGenerator() {
         setGeneratedSections([]);
 
         try {
+            // Build complete payload with defaults for any missing required fields
+            const completeStudyData = {
+                study_title: studyData.study_title || 'Untitled Study',
+                protocol_number: studyData.protocol_number || 'DRAFT-001',
+                phase: studyData.phase || 'III',
+                indication: studyData.indication || '',
+                imp_name: studyData.imp_name || '',
+                imp_dose: studyData.imp_dose || '',
+                imp_route: studyData.imp_route || 'oral',
+                design_type: studyData.design_type || 'Parallel group',
+                blinding: studyData.blinding || 'Double-blind',
+                randomization: studyData.randomization || '1:1 ratio',
+                sample_size: studyData.sample_size || 100,
+                duration: studyData.duration || '12 weeks',
+                site_count: studyData.site_count || 1,
+                countries: studyData.countries?.length ? studyData.countries : ['India'],
+                primary_endpoint: studyData.primary_endpoint || '',
+                secondary_endpoints: studyData.secondary_endpoints?.length ? studyData.secondary_endpoints : [],
+                inclusion_criteria: studyData.inclusion_criteria?.length ? studyData.inclusion_criteria : ['Adults'],
+                exclusion_criteria: studyData.exclusion_criteria?.length ? studyData.exclusion_criteria : ['None specified'],
+                age_range: studyData.age_range || '18-65 years',
+                sponsor_name: studyData.sponsor_name || '',
+                ...(studyData.comparator_name ? { comparator_name: studyData.comparator_name } : {}),
+            };
+
             const response = await axios.post(`${API_URL}/api/generate/document`, {
                 document_type: documentType,
-                study_data: studyData,
+                study_data: completeStudyData,
                 generate_all_sections: true
             }, {
                 headers: { 'X-Session-ID': getSessionId() }
@@ -82,8 +110,17 @@ export default function DocumentGenerator() {
             } else {
                 setError(result.message || 'Generation failed');
             }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Unknown error');
+        } catch (err: any) {
+            // Show detailed validation errors from the 422 handler
+            if (err?.response?.status === 422 && err?.response?.data?.detail) {
+                const details = err.response.data.detail;
+                const fieldErrors = Array.isArray(details)
+                    ? details.map((d: any) => `${d.loc?.join('.')}: ${d.msg}`).join('; ')
+                    : String(details);
+                setError(`Validation error: ${fieldErrors}`);
+            } else {
+                setError(err instanceof Error ? err.message : err?.response?.data?.detail || 'Unknown error');
+            }
         } finally {
             setIsGenerating(false);
         }
@@ -322,6 +359,32 @@ export default function DocumentGenerator() {
                                             placeholder="24 weeks"
                                         />
                                     </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Randomization *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={studyData.randomization || ''}
+                                            onChange={(e) => handleInputChange('randomization', e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                            placeholder="1:1 ratio, stratified by age"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Number of Sites *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={studyData.site_count || ''}
+                                            onChange={(e) => handleInputChange('site_count', parseInt(e.target.value) || 1)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                            placeholder="10"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="flex gap-4 mt-6">
@@ -345,6 +408,21 @@ export default function DocumentGenerator() {
                         {currentStep === 3 && (
                             <div className="space-y-4">
                                 <h3 className="text-xl font-semibold text-gray-800 mb-4">Endpoints & Eligibility</h3>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Age Range *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={studyData.age_range || ''}
+                                            onChange={(e) => handleInputChange('age_range', e.target.value)}
+                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                            placeholder="18-65 years"
+                                        />
+                                    </div>
+                                </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">

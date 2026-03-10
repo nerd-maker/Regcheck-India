@@ -4,6 +4,7 @@ FastAPI main application for RegCheck-India.
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 import shutil
 from uuid import uuid4
@@ -102,6 +103,19 @@ async def preflight_handler(rest_of_path: str, request: Request):
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "*",
         }
+    )
+
+
+# =============================================================================
+# VALIDATION ERROR HANDLER — returns detailed field-level errors for 422s
+# =============================================================================
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.warning(f"Validation error on {request.url}: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(exc.body)[:500]}
     )
 
 
