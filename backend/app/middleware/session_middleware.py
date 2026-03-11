@@ -26,6 +26,10 @@ class SessionTrackingMiddleware(BaseHTTPMiddleware):
         if request.url.path in ["/", "/health", "/ready", "/docs", "/openapi.json", "/redoc"]:
             return await call_next(request)
         
+        # Skip OPTIONS preflight requests — browsers don't send custom headers
+        if request.method == "OPTIONS":
+            return await call_next(request)
+        
         # Require session ID for all API endpoints (both /api/ and /api/v1/)
         if request.url.path.startswith("/api/"):
             session_id = request.headers.get("X-Session-ID")

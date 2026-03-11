@@ -54,18 +54,12 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Add request ID tracking (outermost = runs first)
-from app.middleware.request_id_middleware import RequestIDMiddleware
-app.add_middleware(RequestIDMiddleware)
+# ── Middleware registration order ──────────────────────────────────────────
+# FastAPI processes middleware in REVERSE registration order.
+# CORS registered FIRST = innermost wrapper = sees every response last,
+# guaranteeing CORS headers are added to EVERY response including errors.
 
-# Add production safety middleware
-app.add_middleware(PIIDetectionMiddleware)
-app.add_middleware(SessionTrackingMiddleware)
-
-# Configure CORS — MUST be the LAST middleware added
-# (FastAPI processes middleware in REVERSE registration order,
-#  so the last-added middleware runs first on every request)
-allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", settings.allowed_origins)
+allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
 allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",")]
 logger.info(f"CORS allowed origins: {allowed_origins}")
 
@@ -73,10 +67,17 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,
 )
+
+# Other middleware (registered AFTER CORS)
+from app.middleware.request_id_middleware import RequestIDMiddleware
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(PIIDetectionMiddleware)
+app.add_middleware(SessionTrackingMiddleware)
 
 # Register critical gap solution endpoints (Gaps 2-16)
 from app.gap_endpoints import router as gap_router
@@ -88,23 +89,6 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # In-memory storage for uploaded files (in production, use database)
 uploaded_files = {}
-
-
-# =============================================================================
-# OPTIONS PREFLIGHT HANDLER — explicit catch-all for CORS preflight requests
-# =============================================================================
-
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(rest_of_path: str, request: Request):
-    return JSONResponse(
-        content={},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
-
 
 # =============================================================================
 # VALIDATION ERROR HANDLER — returns detailed field-level errors for 422s
