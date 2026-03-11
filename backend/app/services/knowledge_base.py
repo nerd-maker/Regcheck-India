@@ -1,13 +1,21 @@
 """
 Regulatory knowledge base management using ChromaDB.
 """
+import os
 import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Optional
 from pathlib import Path
 import json
+import logging
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Force-disable ChromaDB telemetry via env vars (belt-and-suspenders)
+os.environ["ANONYMIZED_TELEMETRY"] = "false"
+os.environ["CHROMA_TELEMETRY"] = "false"
 
 
 class KnowledgeBase:
@@ -18,7 +26,7 @@ class KnowledgeBase:
         # Create ChromaDB directory if it doesn't exist
         Path(settings.chromadb_path).mkdir(parents=True, exist_ok=True)
         
-        # Initialize ChromaDB client
+        # Initialize ChromaDB client with telemetry disabled
         self.client = chromadb.PersistentClient(
             path=settings.chromadb_path,
             settings=Settings(
@@ -27,11 +35,27 @@ class KnowledgeBase:
             )
         )
         
+        # CPU-only embedding function (Render has no GPU)
+        try:
+            from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+            self.embedding_fn = SentenceTransformerEmbeddingFunction(
+                model_name="all-MiniLM-L6-v2",
+                device="cpu"
+            )
+            logger.info("Using SentenceTransformer embedding function (CPU)")
+        except Exception as e:
+            logger.warning(f"SentenceTransformer not available, using ChromaDB default: {e}")
+            self.embedding_fn = None
+        
         # Get or create collection
-        self.collection = self.client.get_or_create_collection(
-            name=settings.chromadb_collection_name,
-            metadata={"description": "Indian pharmaceutical regulatory requirements"}
-        )
+        collection_kwargs = {
+            "name": settings.chromadb_collection_name,
+            "metadata": {"description": "Indian pharmaceutical regulatory requirements"}
+        }
+        if self.embedding_fn:
+            collection_kwargs["embedding_function"] = self.embedding_fn
+        
+        self.collection = self.client.get_or_create_collection(**collection_kwargs)
     
     def add_regulatory_document(
         self,

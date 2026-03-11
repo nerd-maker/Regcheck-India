@@ -8,7 +8,8 @@ gunicorn==21.1.0
 openai>=1.0.0
 
 # Vector database
-chromadb==0.4.22
+chromadb==0.4.24
+sentence-transformers>=2.2.0
 
 # Document parsing
 PyPDF2==3.0.1

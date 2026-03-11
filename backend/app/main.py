@@ -446,6 +446,7 @@ async def classify_query(request: QueryClassificationRequest):
         return JSONResponse(content=classification.model_dump())
     
     except Exception as e:
+        logger.error(f"Classification failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
 
 
