@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List, Optional, Dict
 import logging
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 class KBVersion(BaseModel):
     """Knowledge base version metadata"""
     version: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     change_summary: str
     source_documents: List[str] = Field(default_factory=list)
     deprecated_at: Optional[datetime] = None
@@ -26,7 +27,7 @@ class RevalidationTask(BaseModel):
     old_kb_version: str
     new_kb_version: str
     priority: str = "HIGH"  # HIGH, MEDIUM, LOW
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     status: str = "PENDING"  # PENDING, IN_PROGRESS, COMPLETED, FAILED
 
 
@@ -83,7 +84,7 @@ class KBVersionManager:
         # Deprecate current version
         current = self.get_version_metadata(self.current_version)
         if current:
-            current.deprecated_at = datetime.utcnow()
+            current.deprecated_at = utc_now()
         
         # Create new version
         new_kb_version = KBVersion(

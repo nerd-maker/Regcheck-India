@@ -25,6 +25,23 @@ export default function DocumentUpload({ onFileSelect, selectedFile }: DocumentU
         maxSize: 50 * 1024 * 1024, // 50MB
     });
 
+    const [loadingSample, setLoadingSample] = React.useState(false);
+
+    const handleTrySample = async () => {
+        setLoadingSample(true);
+        try {
+            const response = await fetch('/sample/sample-protocol.pdf');
+            if (!response.ok) throw new Error('Sample file not found');
+            const blob = await response.blob();
+            const file = new File([blob], 'sample-clinical-protocol.pdf', { type: 'application/pdf' });
+            onFileSelect(file);
+        } catch {
+            alert('Sample document is not available yet. Please upload your own document.');
+        } finally {
+            setLoadingSample(false);
+        }
+    };
+
     return (
         <div className="w-full">
             <div
@@ -74,6 +91,30 @@ export default function DocumentUpload({ onFileSelect, selectedFile }: DocumentU
                     )}
                 </div>
             </div>
+
+            {/* Sample Document Button */}
+            {!selectedFile && (
+                <div className="text-center mt-4">
+                    <p className="text-sm text-gray-400 mb-2">or</p>
+                    <button
+                        onClick={handleTrySample}
+                        disabled={loadingSample}
+                        className="px-5 py-2.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {loadingSample ? (
+                            <span className="flex items-center gap-2">
+                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                Loading Sample...
+                            </span>
+                        ) : (
+                            'Try with Sample Clinical Protocol →'
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

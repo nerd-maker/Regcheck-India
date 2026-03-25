@@ -24,6 +24,7 @@ import uuid
 import hashlib
 import json
 import logging
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class OperationAttempt(BaseModel):
     metadata: Dict = Field(default_factory=dict)
     
     # Immutability tracking
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class SessionRecord(BaseModel):
@@ -104,7 +105,7 @@ class SessionRecord(BaseModel):
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     submission_id: str
     user_id: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     kb_version: str
     
     # Final outputs (updated as operations complete)
@@ -192,7 +193,7 @@ class AttemptManager:
             temperature=temperature,
             max_tokens=max_tokens,
             kb_version=session.kb_version,
-            initiated_at=datetime.utcnow()
+            initiated_at=utc_now()
         )
         
         # INSERT only (never UPDATE)
@@ -223,9 +224,9 @@ class AttemptManager:
             "status": AttemptStatus.PROCESSING,
             "metadata": {
                 **current.metadata,
-                "processing_started_at": datetime.utcnow().isoformat()
+                "processing_started_at": utc_now().isoformat()
             },
-            "created_at": datetime.utcnow()
+            "created_at": utc_now()
         })
         
         # INSERT new record (append-only)
@@ -259,8 +260,8 @@ class AttemptManager:
             "actual_tokens": actual_tokens,
             "confidence_score": confidence_assessment.get("overall_confidence"),
             "confidence_signals": confidence_assessment.get("all_signals"),
-            "completed_at": datetime.utcnow(),
-            "created_at": datetime.utcnow()
+            "completed_at": utc_now(),
+            "created_at": utc_now()
         })
         
         # INSERT completed record
@@ -295,8 +296,8 @@ class AttemptManager:
             "status": AttemptStatus.FAILED,
             "error_message": error_message,
             "error_type": error_type,
-            "failed_at": datetime.utcnow(),
-            "created_at": datetime.utcnow()
+            "failed_at": utc_now(),
+            "created_at": utc_now()
         })
         
         self._insert_attempt(failed)
@@ -336,8 +337,8 @@ class AttemptManager:
             "status": AttemptStatus.RETRIED,
             "error_message": error_message,
             "error_type": error_type,
-            "failed_at": datetime.utcnow(),
-            "created_at": datetime.utcnow()
+            "failed_at": utc_now(),
+            "created_at": utc_now()
         })
         
         self._insert_attempt(retried)
@@ -356,7 +357,7 @@ class AttemptManager:
             temperature=original.temperature,
             max_tokens=original.max_tokens,
             kb_version=original.kb_version,
-            initiated_at=datetime.utcnow(),
+            initiated_at=utc_now(),
             metadata={
                 "retry_of": original_attempt_id,
                 "retry_reason": error_message
@@ -369,7 +370,7 @@ class AttemptManager:
         superseded = retried.copy(update={
             "status": AttemptStatus.SUPERSEDED,
             "superseded_by_attempt_id": new_attempt.attempt_id,
-            "created_at": datetime.utcnow()
+            "created_at": utc_now()
         })
         
         self._insert_attempt(superseded)

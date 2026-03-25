@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from app.config.llm_config import LLMConfig
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class ConfirmationRequest(BaseModel):
     query: str
     top_candidates: List[ClassificationCandidate]
     reason: str  # "high_stakes_category" or "low_confidence"
-    requested_at: datetime = Field(default_factory=datetime.utcnow)
+    requested_at: datetime = Field(default_factory=utc_now)
     status: str = "PENDING"  # PENDING, CONFIRMED, EXPIRED
     selected_category: Optional[str] = None
     confirmed_by: Optional[str] = None
@@ -62,7 +63,7 @@ class FeedbackEntry(BaseModel):
     query: str
     category: str
     edit_similarity: float
-    flagged_at: datetime = Field(default_factory=datetime.utcnow)
+    flagged_at: datetime = Field(default_factory=utc_now)
     status: str = "NEEDS_REVIEW"
 
 
@@ -204,7 +205,7 @@ class ClassificationConfidenceManager:
         request.status = "CONFIRMED"
         request.selected_category = selected_category
         request.confirmed_by = user_id
-        request.confirmed_at = datetime.utcnow()
+        request.confirmed_at = utc_now()
 
         # Check if user overrode prediction
         predicted = request.top_candidates[0].category_id if request.top_candidates else None

@@ -15,8 +15,9 @@ Covers all 11 new service files introduced during critical-gap implementation:
 """
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch
+from app.core.datetime_utils import utc_now
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -771,11 +772,11 @@ class TestDeadlineReviewQueue:
         mgr = self._make_manager()
         # Add item due in 30 days first
         mgr.add_to_queue("s1", "compliance", "M1",
-                         deadline_date=datetime.utcnow() + timedelta(days=30),
+                         deadline_date=utc_now() + timedelta(days=30),
                          deadline_type="CDSCO submission")
         # Add item due in 2 days second
         mgr.add_to_queue("s2", "compliance", "M1",
-                         deadline_date=datetime.utcnow() + timedelta(days=2),
+                         deadline_date=utc_now() + timedelta(days=2),
                          deadline_type="CDSCO submission")
 
         items = mgr.get_queue_items()
@@ -787,7 +788,7 @@ class TestDeadlineReviewQueue:
         """Items due in ≤3 days get CRITICAL priority"""
         mgr = self._make_manager()
         queue_id = mgr.add_to_queue("s1", "compliance", "M1",
-                                    deadline_date=datetime.utcnow() + timedelta(days=2),
+                                    deadline_date=utc_now() + timedelta(days=2),
                                     deadline_type="CDSCO")
         # add_to_queue returns queue_id string; verify via queue
         assert isinstance(queue_id, str)
@@ -799,7 +800,7 @@ class TestDeadlineReviewQueue:
         """Items due in 4-7 days get HIGH priority"""
         mgr = self._make_manager()
         queue_id = mgr.add_to_queue("s1", "compliance", "M1",
-                                    deadline_date=datetime.utcnow() + timedelta(days=5),
+                                    deadline_date=utc_now() + timedelta(days=5),
                                     deadline_type="CDSCO")
         items = mgr.get_queue_items()
         assert items[0].priority == "HIGH"
@@ -809,7 +810,7 @@ class TestDeadlineReviewQueue:
         """Approved items change to APPROVED status"""
         mgr = self._make_manager()
         queue_id = mgr.add_to_queue("s1", "compliance", "M1",
-                                    deadline_date=datetime.utcnow() + timedelta(days=10),
+                                    deadline_date=utc_now() + timedelta(days=10),
                                     deadline_type="submission")
         ok = mgr.approve_item(queue_id, "reviewer1")
         assert ok is True
@@ -819,10 +820,10 @@ class TestDeadlineReviewQueue:
         """Dashboard returns queue summary data"""
         mgr = self._make_manager()
         mgr.add_to_queue("s1", "comp", "M1",
-                         deadline_date=datetime.utcnow() + timedelta(days=5),
+                         deadline_date=utc_now() + timedelta(days=5),
                          deadline_type="sub")
         mgr.add_to_queue("s2", "comp", "M1",
-                         deadline_date=datetime.utcnow() + timedelta(days=20),
+                         deadline_date=utc_now() + timedelta(days=20),
                          deadline_type="sub")
 
         dash = mgr.get_dashboard_data()
@@ -834,7 +835,7 @@ class TestDeadlineReviewQueue:
         mgr = self._make_manager()
         # Item due in 20 days should trigger T-14 but not others
         mgr.add_to_queue("s1", "comp", "M1",
-                         deadline_date=datetime.utcnow() + timedelta(days=12),
+                         deadline_date=utc_now() + timedelta(days=12),
                          deadline_type="sub")
         alerts = mgr.check_and_generate_alerts()
         # Should have at least one alert (T-14)
@@ -1045,7 +1046,7 @@ class TestCommitmentTracker:
             submission_id="SUB001", query_id="Q1"
         )
         if extracted:  # Pattern-dependent
-            days_until = (extracted[0].commitment_deadline - datetime.utcnow()).days
+            days_until = (extracted[0].commitment_deadline - utc_now()).days
             assert 28 <= days_until <= 31
 
     # ── Lifecycle management ──
@@ -1057,7 +1058,7 @@ class TestCommitmentTracker:
         c = Commitment(
             session_id="s1", submission_id="SUB1", query_id="Q1",
             commitment_text="Test", action_required="Test",
-            commitment_deadline=datetime.utcnow() + timedelta(days=7)
+            commitment_deadline=utc_now() + timedelta(days=7)
         )
         cid = mgr.add_commitment(c)
         ok = mgr.mark_complete(cid, "user1", "document", "")  # empty evidence
@@ -1070,7 +1071,7 @@ class TestCommitmentTracker:
         c = Commitment(
             session_id="s1", submission_id="SUB1", query_id="Q1",
             commitment_text="Submit IB", action_required="Submit IB",
-            commitment_deadline=datetime.utcnow() + timedelta(days=7)
+            commitment_deadline=utc_now() + timedelta(days=7)
         )
         cid = mgr.add_commitment(c)
         ok = mgr.mark_complete(cid, "user1", "document", "IB submitted via email")
@@ -1083,7 +1084,7 @@ class TestCommitmentTracker:
         c = Commitment(
             session_id="s1", submission_id="SUB1", query_id="Q1",
             commitment_text="Test", action_required="Test",
-            commitment_deadline=datetime.utcnow() + timedelta(days=7)
+            commitment_deadline=utc_now() + timedelta(days=7)
         )
         cid = mgr.add_commitment(c)
         ok = mgr.mark_in_progress(cid, "dr_jones")
@@ -1099,7 +1100,7 @@ class TestCommitmentTracker:
             mgr.add_commitment(Commitment(
                 session_id="s1", submission_id="SUB1", query_id=f"Q{i}",
                 commitment_text=f"Item {i}", action_required=f"Do {i}",
-                commitment_deadline=datetime.utcnow() + timedelta(days=10)
+                commitment_deadline=utc_now() + timedelta(days=10)
             ))
         dash = mgr.get_dashboard()
         assert dash.pending >= 3
@@ -1111,7 +1112,7 @@ class TestCommitmentTracker:
         mgr.add_commitment(Commitment(
             session_id="s1", submission_id="SUB1", query_id="Q1",
             commitment_text="Overdue", action_required="Test",
-            commitment_deadline=datetime.utcnow() - timedelta(days=2)  # 2 days ago
+            commitment_deadline=utc_now() - timedelta(days=2)  # 2 days ago
         ))
         dash = mgr.get_dashboard()
         assert dash.overdue >= 1
@@ -1125,7 +1126,7 @@ class TestCommitmentTracker:
         mgr.add_commitment(Commitment(
             session_id="s1", submission_id="SUB1", query_id="Q1",
             commitment_text="Due soon", action_required="Act",
-            commitment_deadline=datetime.utcnow() + timedelta(days=5)
+            commitment_deadline=utc_now() + timedelta(days=5)
         ))
         alerts = mgr.check_and_generate_alerts()
         # Should generate T-7 alert (5 days remaining <= 7)
@@ -1141,7 +1142,7 @@ class TestCommitmentTracker:
         mgr.add_commitment(Commitment(
             session_id="sess42", submission_id="SUB1", query_id="Q1",
             commitment_text="Will provide data", action_required="Provide data",
-            commitment_deadline=datetime.utcnow() + timedelta(days=7)
+            commitment_deadline=utc_now() + timedelta(days=7)
         ))
         panel = mgr.get_commitments_made_panel("sess42")
         assert panel["count"] == 1
@@ -1163,7 +1164,7 @@ class TestCommitmentTracker:
         c = Commitment(
             session_id="s1", submission_id="SUB1", query_id="Q1",
             commitment_text="Submit protocol", action_required="Submit",
-            commitment_deadline=datetime.utcnow() + timedelta(days=7)
+            commitment_deadline=utc_now() + timedelta(days=7)
         )
         payload = mgr.build_webhook_payload(c)
         assert "title" in payload

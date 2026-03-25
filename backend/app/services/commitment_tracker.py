@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Literal
 from pydantic import BaseModel, Field
 
 from app.config.llm_config import LLMConfig
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class CommitmentEvidence(BaseModel):
     evidence_type: str  # document, email, note
     content: str
     file_url: Optional[str] = None
-    recorded_at: datetime = Field(default_factory=datetime.utcnow)
+    recorded_at: datetime = Field(default_factory=utc_now)
     recorded_by: str = ""
 
 
@@ -67,7 +68,7 @@ class Commitment(BaseModel):
 
     # Metadata
     customer_id: str = ""
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     urgency: str = "MEDIUM"  # HIGH, MEDIUM, LOW
 
 
@@ -136,7 +137,7 @@ class CommitmentExtractor:
                         response_text_snippet=sentence[:200],
                         commitment_text=sentence[:300],
                         action_required=sentence[:200],
-                        commitment_deadline=datetime.utcnow() + timedelta(days=days),
+                        commitment_deadline=utc_now() + timedelta(days=days),
                         customer_id=customer_id
                     )
                     commitments.append(commitment)
@@ -224,7 +225,7 @@ class CommitmentManager:
             return False
 
         commitment.status = "COMPLETE"
-        commitment.completed_at = datetime.utcnow()
+        commitment.completed_at = utc_now()
         commitment.completed_by = completed_by
         commitment.completion_evidence = CommitmentEvidence(
             evidence_type=evidence_type,
@@ -246,7 +247,7 @@ class CommitmentManager:
             return False
         commitment.status = "IN_PROGRESS"
         commitment.assigned_owner = owner
-        commitment.assigned_at = datetime.utcnow()
+        commitment.assigned_at = utc_now()
         return True
 
     # ── Dashboard ──
@@ -269,7 +270,7 @@ class CommitmentManager:
 
         # Refresh overdue status
         for c in items:
-            if c.status not in ("COMPLETE",) and c.commitment_deadline < datetime.utcnow():
+            if c.status not in ("COMPLETE",) and c.commitment_deadline < utc_now():
                 c.status = "OVERDUE"
 
         # Sort: OVERDUE first, then by deadline
@@ -293,7 +294,7 @@ class CommitmentManager:
                     "commitment_text": c.commitment_text[:100],
                     "submission_id": c.submission_id,
                     "deadline": c.commitment_deadline.isoformat(),
-                    "days_remaining": (c.commitment_deadline - datetime.utcnow()).days,
+                    "days_remaining": (c.commitment_deadline - utc_now()).days,
                     "assigned_owner": c.assigned_owner,
                     "status": c.status
                 }
@@ -311,7 +312,7 @@ class CommitmentManager:
             if commitment.status == "COMPLETE":
                 continue
 
-            days_remaining = (commitment.commitment_deadline - datetime.utcnow()).days
+            days_remaining = (commitment.commitment_deadline - utc_now()).days
             sent_types = {a.get("alert_type") for a in commitment.alerts_sent}
 
             for alert_day in LLMConfig.COMMITMENT_ALERT_DAYS:
@@ -323,7 +324,7 @@ class CommitmentManager:
                         "commitment_text": commitment.commitment_text[:100],
                         "submission_id": commitment.submission_id,
                         "days_remaining": days_remaining,
-                        "sent_at": datetime.utcnow().isoformat(),
+                        "sent_at": utc_now().isoformat(),
                         "message": (
                             f"{'URGENT: ' if days_remaining <= 2 else ''}"
                             f"Commitment due in {days_remaining} days: "
@@ -370,7 +371,7 @@ class CommitmentManager:
                     "commitment_text": c.commitment_text,
                     "action_required": c.action_required,
                     "deadline": c.commitment_deadline.isoformat(),
-                    "days_until": (c.commitment_deadline - datetime.utcnow()).days,
+                    "days_until": (c.commitment_deadline - utc_now()).days,
                     "status": c.status
                 }
                 for c in session_commitments

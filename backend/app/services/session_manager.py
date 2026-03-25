@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 import uuid
 import logging
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class SessionContext(BaseModel):
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     submission_id: str
     user_id: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     kb_version: str  # Rule 4: Version locking
     metadata: Dict = Field(default_factory=dict)
 
@@ -27,7 +28,7 @@ class AuditLogEntry(BaseModel):
     session_id: str
     module: str  # M1, M2, M3, M4
     operation: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     input_hash: str
     output_hash: str
     confidence_score: Optional[float] = None

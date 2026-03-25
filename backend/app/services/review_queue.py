@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 import logging
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ class ReviewQueueItem(BaseModel):
     content: dict
     confidence: ConfidenceResult
     reason: str
-    queued_at: datetime = Field(default_factory=datetime.utcnow)
+    queued_at: datetime = Field(default_factory=utc_now)
     status: str = "PENDING"  # PENDING, IN_REVIEW, APPROVED, REJECTED
     reviewer_id: Optional[str] = None
     reviewed_at: Optional[datetime] = None
@@ -108,7 +109,7 @@ class ReviewQueue:
         
         item.status = "APPROVED"
         item.reviewer_id = reviewer_id
-        item.reviewed_at = datetime.utcnow()
+        item.reviewed_at = utc_now()
         item.reviewer_notes = notes
         
         logger.info(
@@ -131,7 +132,7 @@ class ReviewQueue:
         
         item.status = "REJECTED"
         item.reviewer_id = reviewer_id
-        item.reviewed_at = datetime.utcnow()
+        item.reviewed_at = utc_now()
         item.reviewer_notes = notes
         
         logger.info(

@@ -2,11 +2,12 @@
 Regulatory knowledge base management using ChromaDB.
 """
 import os
+import shutil
+import sqlite3
 import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Optional
 from pathlib import Path
-import json
 import logging
 
 from app.core.config import settings
@@ -23,39 +24,71 @@ class KnowledgeBase:
     
     def __init__(self):
         """Initialize ChromaDB client and collection."""
-        # Create ChromaDB directory if it doesn't exist
-        Path(settings.chromadb_path).mkdir(parents=True, exist_ok=True)
-        
-        # Initialize ChromaDB client with telemetry disabled
-        self.client = chromadb.PersistentClient(
-            path=settings.chromadb_path,
+        self._storage_path = Path(settings.chromadb_path)
+        self._storage_path.mkdir(parents=True, exist_ok=True)
+        self.client = self._create_client()
+        self.embedding_fn = self._create_embedding_function()
+        self.collection = self._create_collection_with_recovery()
+
+    def _create_client(self):
+        """Create a ChromaDB client with telemetry disabled."""
+        return chromadb.PersistentClient(
+            path=str(self._storage_path),
             settings=Settings(
                 anonymized_telemetry=False,
                 allow_reset=True
             )
         )
-        
-        # CPU-only embedding function (Render has no GPU)
+
+    def _create_ephemeral_client(self):
+        """Create an in-memory ChromaDB client as a recovery fallback."""
+        return chromadb.EphemeralClient(
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True
+            )
+        )
+
+    def _create_embedding_function(self):
+        """Create the embedding function used by the collection."""
         try:
             from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
-            self.embedding_fn = SentenceTransformerEmbeddingFunction(
+            embedding_fn = SentenceTransformerEmbeddingFunction(
                 model_name="all-MiniLM-L6-v2",
                 device="cpu"
             )
             logger.info("Using SentenceTransformer embedding function (CPU)")
+            return embedding_fn
         except Exception as e:
             logger.warning(f"SentenceTransformer not available, using ChromaDB default: {e}")
-            self.embedding_fn = None
-        
-        # Get or create collection
+            return None
+
+    def _collection_kwargs(self) -> Dict:
+        """Build collection creation arguments."""
         collection_kwargs = {
             "name": settings.chromadb_collection_name,
             "metadata": {"description": "Indian pharmaceutical regulatory requirements"}
         }
         if self.embedding_fn:
             collection_kwargs["embedding_function"] = self.embedding_fn
-        
-        self.collection = self.client.get_or_create_collection(**collection_kwargs)
+        return collection_kwargs
+
+    def _create_collection_with_recovery(self):
+        """Create the collection and recover from stale Chroma schema state."""
+        try:
+            return self.client.get_or_create_collection(**self._collection_kwargs())
+        except sqlite3.OperationalError as exc:
+            if "collections.topic" not in str(exc):
+                raise
+
+            logger.warning(
+                "Detected stale ChromaDB schema at %s. Resetting persisted data.",
+                self._storage_path,
+            )
+            shutil.rmtree(self._storage_path, ignore_errors=True)
+            self._storage_path.mkdir(parents=True, exist_ok=True)
+            self.client = self._create_ephemeral_client()
+            return self.client.get_or_create_collection(**self._collection_kwargs())
     
     def add_regulatory_document(
         self,

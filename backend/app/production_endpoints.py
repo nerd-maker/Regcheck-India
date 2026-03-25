@@ -5,11 +5,11 @@ Session management, review queue, and KB version management
 """
 
 from fastapi import APIRouter, HTTPException
-from datetime import datetime
 from app.services.session_manager import session_manager
 from app.services.review_queue import review_queue
 from app.services.kb_version_manager import kb_version_manager
 from app.config.llm_config import LLMConfig
+from app.core.datetime_utils import utc_now
 
 router = APIRouter(prefix="/api/v1", tags=["Production Safety"])
 
@@ -36,7 +36,7 @@ async def create_session(
         "session_id": session_id,
         "submission_id": submission_id,
         "kb_version": session_manager.kb_version,
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": utc_now().isoformat()
     }
 
 

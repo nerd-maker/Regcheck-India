@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class CachedOutput(BaseModel):
     prompt_version: str
     module: str
     output_data: Dict
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     human_reviewed: bool = False
     human_review_at: Optional[datetime] = None
     human_reviewer: Optional[str] = None
@@ -43,7 +44,7 @@ class ImmutableFinding(BaseModel):
     session_id: str
     module: str
     content: Dict
-    shown_at: datetime = Field(default_factory=datetime.utcnow)
+    shown_at: datetime = Field(default_factory=utc_now)
     input_hash: str
     kb_version: str
     prompt_version: str = ""
@@ -151,7 +152,7 @@ class OutputDeterminismManager:
             return False
 
         cached.human_reviewed = True
-        cached.human_review_at = datetime.utcnow()
+        cached.human_review_at = utc_now()
         cached.human_reviewer = reviewer
         cached.is_definitive = True
 

@@ -15,6 +15,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class PromptVersion(BaseModel):
 
     # Lifecycle
     status: str = "ACTIVE"  # ACTIVE, SUPERSEDED, FROZEN
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     superseded_at: Optional[datetime] = None
     superseded_by: Optional[str] = None  # version_id of replacement
 
@@ -103,7 +104,7 @@ class PromptVersionManager:
         if prev_id and prev_id in self.versions:
             prev = self.versions[prev_id]
             prev.status = "SUPERSEDED"
-            prev.superseded_at = datetime.utcnow()
+            prev.superseded_at = utc_now()
             prev.superseded_by = version.version_id
 
         # Store new version
@@ -165,7 +166,7 @@ class PromptVersionManager:
         version.frozen_for_submissions.append(submission_id)
         if version.status != "FROZEN":
             version.status = "FROZEN"
-            version.frozen_at = datetime.utcnow()
+            version.frozen_at = utc_now()
 
         self.frozen_prompts[submission_id] = version.version_id
 

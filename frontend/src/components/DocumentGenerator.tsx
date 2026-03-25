@@ -55,6 +55,17 @@ export default function DocumentGenerator() {
     const [error, setError] = useState<string>('');
     const [currentStep, setCurrentStep] = useState<number>(1);
 
+    // Progress indicator state
+    const [progressSection, setProgressSection] = useState(0);
+    const [progressLabel, setProgressLabel] = useState('');
+    const totalSections = 16;
+    const sectionNames = [
+        'Title Page', 'Synopsis', 'Table of Contents', 'Study Design',
+        'Objectives', 'Study Population', 'Treatment Plan', 'Efficacy Assessment',
+        'Safety Monitoring', 'Statistics', 'Ethics', 'Data Management',
+        'Quality Assurance', 'References', 'Appendices', 'Final Review'
+    ];
+
     const handleInputChange = (field: keyof StudyData, value: any) => {
         setStudyData(prev => ({ ...prev, [field]: value }));
     };
@@ -68,6 +79,21 @@ export default function DocumentGenerator() {
         setIsGenerating(true);
         setError('');
         setGeneratedSections([]);
+        setProgressSection(0);
+        setProgressLabel(sectionNames[0]);
+
+        // Simulated progress — advances every ~2s
+        const progressInterval = setInterval(() => {
+            setProgressSection(prev => {
+                const next = prev + 1;
+                if (next >= totalSections) {
+                    clearInterval(progressInterval);
+                    return prev;
+                }
+                setProgressLabel(sectionNames[next] || `Section ${next + 1}`);
+                return next;
+            });
+        }, 2000);
 
         try {
             // Build complete payload with defaults for any missing required fields
@@ -105,12 +131,17 @@ export default function DocumentGenerator() {
 
             const result = response.data;
 
+            clearInterval(progressInterval);
+            setProgressSection(totalSections);
+            setProgressLabel('Complete');
+
             if (result.status === 'success') {
                 setGeneratedSections(result.sections);
             } else {
                 setError(result.message || 'Generation failed');
             }
         } catch (err: any) {
+            clearInterval(progressInterval);
             // Show detailed validation errors from the 422 handler
             if (err?.response?.status === 422 && err?.response?.data?.detail) {
                 const details = err.response.data.detail;
@@ -505,7 +536,31 @@ export default function DocumentGenerator() {
                         )}
                     </div>
 
-                    {/* Error Display */}
+                    {/* Progress Indicator */}
+                    {isGenerating && (
+                        <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                    <svg className="animate-spin h-5 w-5 text-indigo-600" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                    <span className="text-sm font-semibold text-indigo-900">
+                                        Generating Section {progressSection + 1} of {totalSections}: {progressLabel}...
+                                    </span>
+                                </div>
+                                <span className="text-sm font-bold text-indigo-700">
+                                    {Math.round(((progressSection + 1) / totalSections) * 100)}%
+                                </span>
+                            </div>
+                            <div className="w-full bg-indigo-200 rounded-full h-3 overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-out"
+                                    style={{ width: `${((progressSection + 1) / totalSections) * 100}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
                     {error && (
                         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
                             <p className="text-red-800 font-medium">Error: {error}</p>

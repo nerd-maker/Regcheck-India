@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 from datetime import datetime
 from uuid import uuid4
+from app.core.datetime_utils import utc_now
 
 
 # Document Types
@@ -96,7 +97,7 @@ class EvaluationResponse(BaseModel):
     evaluator_notes: Optional[str] = None
     confidence_level: ConfidenceLevel
     confidence_rationale: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
 
 
 class EvaluationRequest(BaseModel):
@@ -110,7 +111,7 @@ class UploadResponse(BaseModel):
     file_id: str
     filename: str
     file_size: int
-    upload_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    upload_timestamp: datetime = Field(default_factory=utc_now)
 
 
 class HealthResponse(BaseModel):
@@ -118,4 +119,4 @@ class HealthResponse(BaseModel):
     status: str
     app_name: str
     version: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)

@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
+from app.core.datetime_utils import utc_now
 
 from app.config.llm_config import LLMConfig
 
@@ -63,7 +64,7 @@ class ContextEntry(BaseModel):
     """Single extracted term in the context store"""
     value: Any
     defined_in: str  # Section name where term was defined
-    defined_at: datetime = Field(default_factory=datetime.utcnow)
+    defined_at: datetime = Field(default_factory=utc_now)
 
 
 class ExtractionLog(BaseModel):
@@ -71,7 +72,7 @@ class ExtractionLog(BaseModel):
     section: str
     terms_extracted: List[str] = Field(default_factory=list)
     new_terms: List[str] = Field(default_factory=list)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
 
 
 class CrossRefCheck(BaseModel):

@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from app.config.llm_config import LLMConfig
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class GroundTruthDocument(BaseModel):
     therapeutic_area: str = ""
     trial_phase: str = ""
     annotated_by: str = ""
-    annotated_at: datetime = Field(default_factory=datetime.utcnow)
+    annotated_at: datetime = Field(default_factory=utc_now)
 
 
 class EvaluationPrediction(BaseModel):
@@ -91,7 +92,7 @@ class EvaluationMetrics(BaseModel):
 class EvaluationReport(BaseModel):
     """Full evaluation run report"""
     report_id: str
-    evaluation_date: datetime = Field(default_factory=datetime.utcnow)
+    evaluation_date: datetime = Field(default_factory=utc_now)
     kb_version: str = ""
     prompt_version: str = ""
     dataset_size: int = 0
@@ -144,7 +145,7 @@ class GroundTruthEvaluator:
         metrics = self._calculate_metrics(parsed)
 
         report = EvaluationReport(
-            report_id=f"eval-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
+            report_id=f"eval-{utc_now().strftime('%Y%m%d-%H%M%S')}",
             kb_version=kb_version,
             prompt_version=prompt_version,
             dataset_size=len(set(p.document_id for p in parsed)),

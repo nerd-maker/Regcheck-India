@@ -7,7 +7,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 import json
 from app.services.query_response_generator import QueryResponseGenerator as ResponseGeneratorService
-from app.models.query_schemas import QueryResponse, QueryInput, QueryClassification
+from app.models.query_schemas import QueryResponse
 
 
 # =============================================================================
@@ -16,7 +16,7 @@ from app.models.query_schemas import QueryResponse, QueryInput, QueryClassificat
 
 def _mock_query_input(query_text="Test query", query_reference="CDSCO/CT/2024/001"):
     """Create a mock QueryInput object"""
-    qi = MagicMock(spec=QueryInput)
+    qi = Mock()
     qi.query_text = query_text
     qi.query_reference = query_reference
     qi.query_date = "2024-01-01"
@@ -31,7 +31,7 @@ def _mock_query_input(query_text="Test query", query_reference="CDSCO/CT/2024/00
 def _mock_classification(primary_category="safety_reporting", complexity="HIGH",
                           urgency="HIGH", recommended_template="TMPL-SAFETY"):
     """Create a mock QueryClassification object"""
-    cls = MagicMock(spec=QueryClassification)
+    cls = Mock()
     cls.primary_category = primary_category
     cls.secondary_categories = []
     cls.complexity = complexity

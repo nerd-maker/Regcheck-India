@@ -17,6 +17,7 @@ from app.config.llm_config import LLMConfig
 # Gap service integrations
 from app.services.revision_loop_manager import revision_loop_manager  # Gap 6
 from app.services.confidence_assessor import confidence_assessor       # Gap 2
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ class WorkflowOrchestrator:
         Returns:
             WorkflowResult with sections and compliance status
         """
-        start_time = datetime.utcnow()
+        start_time = utc_now()
         revision_count = 0
         
         logger.info(
@@ -183,7 +184,7 @@ class WorkflowOrchestrator:
                 reason=f"Workflow confidence below threshold: {final_confidence:.2f}"
             )
         
-        duration = (datetime.utcnow() - start_time).total_seconds()
+        duration = (utc_now() - start_time).total_seconds()
         
         result = WorkflowResult(
             session_id=session_id,

@@ -49,6 +49,87 @@ export default function ResultsViewer({ evaluation }: ResultsViewerProps) {
         link.click();
     };
 
+    const exportToHTML = () => {
+        const date = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+        const statusColor = (status: string) => {
+            switch (status) {
+                case 'PASS': return '#16a34a';
+                case 'PARTIAL': return '#d97706';
+                case 'FAIL': return '#dc2626';
+                default: return '#6b7280';
+            }
+        };
+
+        const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>RegCheck-India Compliance Report</title>
+<style>
+body { font-family: 'Inter', -apple-system, sans-serif; margin: 0; padding: 40px; color: #1f2937; background: #fff; }
+.header { text-align: center; border-bottom: 3px solid #2563EB; padding-bottom: 20px; margin-bottom: 30px; }
+.header h1 { color: #0A1628; margin: 0 0 8px 0; font-size: 24px; }
+.header p { color: #6b7280; margin: 4px 0; font-size: 13px; }
+.summary { display: flex; gap: 16px; margin-bottom: 24px; }
+.summary-card { flex: 1; padding: 16px; border-radius: 8px; text-align: center; }
+.summary-card h3 { font-size: 12px; text-transform: uppercase; color: #6b7280; margin: 0 0 8px 0; letter-spacing: 0.5px; }
+.summary-card .value { font-size: 18px; font-weight: 700; }
+.findings-count { display: flex; gap: 12px; margin-bottom: 24px; justify-content: center; }
+.count-badge { padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+.finding { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.finding-header { padding: 12px 16px; display: flex; align-items: center; gap: 12px; background: #f9fafb; }
+.finding-badge { padding: 3px 10px; border-radius: 12px; color: white; font-size: 11px; font-weight: 700; }
+.finding-body { padding: 16px; font-size: 13px; line-height: 1.6; }
+.finding-body strong { display: block; font-size: 11px; text-transform: uppercase; color: #6b7280; margin: 12px 0 4px 0; letter-spacing: 0.3px; }
+.finding-body strong:first-child { margin-top: 0; }
+.remediation { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px; border-radius: 6px; color: #166534; }
+.blockers { background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; border-radius: 4px; margin-bottom: 24px; }
+.blockers h3 { color: #991b1b; margin: 0 0 8px 0; font-size: 14px; }
+.blockers li { color: #dc2626; font-size: 13px; margin-bottom: 4px; }
+.footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; }
+@media print { body { padding: 20px; } }
+</style></head><body>
+<div class="header">
+<h1>RegCheck-India Compliance Report</h1>
+<p>Evaluation ID: ${evaluation.evaluation_id} | Generated: ${date}</p>
+</div>
+<div class="summary">
+<div class="summary-card" style="background:#f0f9ff"><h3>Overall Status</h3><div class="value" style="color:${statusColor(evaluation.overall_status)}">${evaluation.overall_status}</div></div>
+<div class="summary-card" style="background:#fef3c7"><h3>Risk Level</h3><div class="value">${evaluation.overall_risk}</div></div>
+<div class="summary-card" style="background:#f0fdf4"><h3>Confidence</h3><div class="value">${evaluation.confidence_level}</div></div>
+</div>
+<div class="findings-count">
+<span class="count-badge" style="background:#dc2626;color:white">${evaluation.findings_by_status.FAIL} Failed</span>
+<span class="count-badge" style="background:#d97706;color:white">${evaluation.findings_by_status.PARTIAL} Partial</span>
+<span class="count-badge" style="background:#16a34a;color:white">${evaluation.findings_by_status.PASS} Passed</span>
+<span class="count-badge" style="background:#6b7280;color:white">${evaluation.findings_by_status.UNVERIFIED} Unverified</span>
+</div>
+${evaluation.critical_blockers.length > 0 ? `<div class="blockers"><h3>⚠ Critical Blockers</h3><ul>${evaluation.critical_blockers.map(b => `<li>${b}</li>`).join('')}</ul></div>` : ''}
+<h2 style="font-size:16px;margin-bottom:16px">Detailed Findings (${evaluation.total_findings})</h2>
+${evaluation.findings.map(f => `
+<div class="finding">
+<div class="finding-header">
+<span class="finding-badge" style="background:${statusColor(f.status)}">${f.status}</span>
+<span style="font-size:13px;font-weight:600;color:#374151">${f.finding_id}</span>
+<span style="font-size:13px;color:#6b7280">${f.section}</span>
+</div>
+<div class="finding-body">
+<strong>Requirement</strong>${f.requirement}
+<strong>Citation</strong><span style="color:#2563EB;font-family:monospace;font-size:12px">${f.citation}</span>
+${f.gap ? `<strong>Gap Analysis</strong><span style="color:#dc2626">${f.gap}</span>` : ''}
+${f.recommended_language ? `<strong>Recommended Language</strong><div class="remediation">${f.recommended_language}</div>` : ''}
+</div></div>`).join('')}
+<div class="footer">
+<p>RegCheck-India v1.0.0 | AI-Powered Pharmaceutical Regulatory Compliance</p>
+<p>⚠ This is a pilot tool. All outputs must be reviewed by qualified regulatory professionals.</p>
+</div>
+</body></html>`;
+
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `compliance_report_${evaluation.evaluation_id}.html`;
+        link.click();
+    };
+
     return (
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             {/* Header */}
@@ -59,12 +140,23 @@ export default function ResultsViewer({ evaluation }: ResultsViewerProps) {
                         Evaluation ID: {evaluation.evaluation_id}
                     </p>
                 </div>
-                <button
-                    onClick={exportToJSON}
-                    className="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-600 transition-colors"
-                >
-                    Export JSON
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={exportToHTML}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-1.5 text-sm font-medium"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Download Report
+                    </button>
+                    <button
+                        onClick={exportToJSON}
+                        className="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-600 transition-colors text-sm font-medium"
+                    >
+                        Export JSON
+                    </button>
+                </div>
             </div>
 
             {/* Overall Status */}

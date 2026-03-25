@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class RevisionAttempt(BaseModel):
     section_name: str
     issues_addressed: List[str] = Field(default_factory=list)
     issues_remaining: List[str] = Field(default_factory=list)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     outcome: str = "PENDING"  # RESOLVED, PARTIAL, STUCK, ESCALATED
 
 
@@ -70,7 +71,7 @@ class EscalationRecord(BaseModel):
     unresolved_issues: List[RevisionIssue] = Field(default_factory=list)
     attempts_made: int = 0
     placeholder: str = ""
-    escalated_at: datetime = Field(default_factory=datetime.utcnow)
+    escalated_at: datetime = Field(default_factory=utc_now)
 
 
 # ──────────────────────────────────────────────────────

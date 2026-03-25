@@ -6,7 +6,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { getSessionId } from '../utils/session';
 
@@ -41,6 +41,13 @@ interface ChangeListResponse {
     filters_applied: Record<string, any>;
 }
 
+interface ChangeFilters {
+    domain?: string;
+    urgency?: string;
+    startDate?: string;
+    endDate?: string;
+}
+
 export default function ChangeMonitorDashboard() {
     const [changes, setChanges] = useState<RegulatoryChange[]>([]);
     const [loading, setLoading] = useState(false);
@@ -61,16 +68,21 @@ export default function ChangeMonitorDashboard() {
     });
 
     // Fetch changes
-    const fetchChanges = async () => {
+    const fetchChanges = useCallback(async (filters?: ChangeFilters) => {
         setLoading(true);
         setError('');
 
         try {
             const params = new URLSearchParams();
-            if (domainFilter) params.append('domain', domainFilter);
-            if (urgencyFilter) params.append('urgency', urgencyFilter);
-            if (startDate) params.append('start_date', startDate);
-            if (endDate) params.append('end_date', endDate);
+            const domain = filters?.domain ?? domainFilter;
+            const urgency = filters?.urgency ?? urgencyFilter;
+            const start = filters?.startDate ?? startDate;
+            const end = filters?.endDate ?? endDate;
+
+            if (domain) params.append('domain', domain);
+            if (urgency) params.append('urgency', urgency);
+            if (start) params.append('start_date', start);
+            if (end) params.append('end_date', end);
 
             const response = await axios.get(`${API_URL}/api/regulatory/changes`, {
                 params: Object.fromEntries(params),
@@ -84,7 +96,7 @@ export default function ChangeMonitorDashboard() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [domainFilter, urgencyFilter, startDate, endDate]);
 
     // Fetch stats
     const fetchStats = async () => {
@@ -104,7 +116,7 @@ export default function ChangeMonitorDashboard() {
     useEffect(() => {
         fetchChanges();
         fetchStats();
-    }, []);
+    }, [fetchChanges]);
 
     // Urgency color mapping
     const getUrgencyColor = (urgency: string) => {
@@ -204,7 +216,9 @@ export default function ChangeMonitorDashboard() {
                 </div>
                 <div className="mt-4 flex gap-2">
                     <button
-                        onClick={fetchChanges}
+                        onClick={() => {
+                            fetchChanges();
+                        }}
                         className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors"
                     >
                         Apply Filters
@@ -215,7 +229,12 @@ export default function ChangeMonitorDashboard() {
                             setUrgencyFilter('');
                             setStartDate('');
                             setEndDate('');
-                            fetchChanges();
+                            fetchChanges({
+                                domain: '',
+                                urgency: '',
+                                startDate: '',
+                                endDate: '',
+                            });
                         }}
                         className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
                     >

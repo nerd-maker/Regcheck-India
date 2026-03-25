@@ -8,7 +8,6 @@ from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 import shutil
 from uuid import uuid4
-from datetime import datetime
 import json
 import logging
 import traceback
@@ -37,6 +36,7 @@ from app.services.session_manager import session_manager
 from app.services.review_queue import review_queue
 from app.services.kb_version_manager import kb_version_manager
 from app.config.llm_config import LLMConfig
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -247,7 +247,7 @@ async def upload_document(file: UploadFile = File(...)):
             "file_path": str(file_path),
             "file_size": file_size,
             "parsed_document": parsed_doc,
-            "upload_timestamp": datetime.utcnow().isoformat()
+            "upload_timestamp": utc_now().isoformat()
         }
         
         return UploadResponse(

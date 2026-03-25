@@ -4,12 +4,10 @@ Tests impact assessment and action item generation
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import json
 from app.services.submission_impact_assessor import SubmissionImpactAssessor
-from app.models.regulatory_change_schemas import (
-    RegulatoryChange, ActiveSubmission, SubmissionImpactAssessment
-)
+from app.models.regulatory_change_schemas import SubmissionImpactAssessment
 
 
 # =============================================================================
@@ -18,7 +16,7 @@ from app.models.regulatory_change_schemas import (
 
 def _mock_change(change_id="CHG-001", urgency="CRITICAL"):
     """Create a mock RegulatoryChange object"""
-    change = MagicMock(spec=RegulatoryChange)
+    change = Mock()
     change.change_id = change_id
     change.domain = "Safety Reporting"
     change.change_type = "NEW_REQUIREMENT"
@@ -32,7 +30,7 @@ def _mock_change(change_id="CHG-001", urgency="CRITICAL"):
 
 def _mock_submission(submission_id="SUB-001"):
     """Create a mock ActiveSubmission object"""
-    sub = MagicMock(spec=ActiveSubmission)
+    sub = Mock()
     sub.submission_id = submission_id
     sub.submission_type = "CT-04"
     sub.drug_name = "TestDrug"

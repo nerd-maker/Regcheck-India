@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Literal
 from pydantic import BaseModel, Field
 
 from app.config.llm_config import LLMConfig
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class DeadlineReviewItem(BaseModel):
     assigned_at: Optional[datetime] = None
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
     flagged_to_customer_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
 
@@ -70,7 +71,7 @@ class DeadlineReviewItem(BaseModel):
 class AlertRecord(BaseModel):
     """Record of an alert sent"""
     alert_type: str  # T_14, T_7, T_3, T_0
-    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    sent_at: datetime = Field(default_factory=utc_now)
     recipients: List[str] = Field(default_factory=list)
     channels: List[str] = Field(default_factory=list)  # email, in_app_banner
 
@@ -107,7 +108,7 @@ class DeadlineReviewQueueManager:
         submission_id: Optional[str] = None
     ) -> str:
         """Add item with deadline to review queue."""
-        days_until = (deadline_date - datetime.utcnow()).days
+        days_until = (deadline_date - utc_now()).days
         priority = LLMConfig.compute_review_priority(days_until)
 
         item = DeadlineReviewItem(
@@ -157,7 +158,7 @@ class DeadlineReviewQueueManager:
         for item in self.queue:
             if item.status in ("APPROVED", "REJECTED"):
                 continue
-            days_until = (item.deadline_date - datetime.utcnow()).days
+            days_until = (item.deadline_date - utc_now()).days
             item.days_until_deadline = days_until
             item.priority = LLMConfig.compute_review_priority(days_until)
             if days_until <= 0 and item.status != "ESCALATED":
@@ -181,7 +182,7 @@ class DeadlineReviewQueueManager:
             if item.status in ("APPROVED", "REJECTED"):
                 continue
 
-            days_until = (item.deadline_date - datetime.utcnow()).days
+            days_until = (item.deadline_date - utc_now()).days
             sent_types = {a.get("alert_type") for a in item.alerts_sent}
 
             # T-14: Email to RA team lead
@@ -222,7 +223,7 @@ class DeadlineReviewQueueManager:
         """Create an alert record and attach to item."""
         record = {
             "alert_type": alert_type,
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": utc_now().isoformat(),
             "channels": channels,
             "message": message,
             "queue_id": item.queue_id
@@ -251,7 +252,7 @@ class DeadlineReviewQueueManager:
         if not item:
             return False
 
-        item.flagged_to_customer_at = datetime.utcnow()
+        item.flagged_to_customer_at = utc_now()
         hours_elapsed = (item.flagged_to_customer_at - item.created_at).total_seconds() / 3600
 
         if hours_elapsed <= self.sla_hours:
@@ -315,7 +316,7 @@ class DeadlineReviewQueueManager:
         if not item:
             return False
         item.status = "APPROVED"
-        item.reviewed_at = datetime.utcnow()
+        item.reviewed_at = utc_now()
         item.assigned_to = reviewer_id
         logger.info(f"Review item approved: {queue_id}", extra={"reviewer_id": reviewer_id})
         return True
@@ -328,7 +329,7 @@ class DeadlineReviewQueueManager:
         item.status = "IN_REVIEW"
         item.alerts_sent.append({
             "alert_type": "OVERRIDE",
-            "sent_at": datetime.utcnow().isoformat(),
+            "sent_at": utc_now().isoformat(),
             "override_by": override_by,
             "reason": reason
         })

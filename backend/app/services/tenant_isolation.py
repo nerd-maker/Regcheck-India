@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
+from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ class TenantContext(BaseModel):
 class IsolationAuditEntry(BaseModel):
     """Audit log entry for tenant data access"""
     entry_id: str = Field(default_factory=lambda: f"iso-{uuid.uuid4()}")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
     tenant_id: str
     user_id: str
     action: str  # READ, WRITE, QUERY, DENIED

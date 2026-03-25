@@ -14,8 +14,7 @@ Tests all 8 production safety rules:
 
 import pytest
 import uuid
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 
 from app.config.llm_config import LLMConfig
 from app.services.session_manager import session_manager, SessionContext
@@ -28,24 +27,29 @@ from app.services.workflow_orchestrator import WorkflowOrchestrator
 class TestRule1_ModuleSequencing:
     """Test Rule 1: M2 → M1 → M2 workflow enforcement"""
     
-    def test_workflow_enforces_m2_m1_m2_sequence(self):
+    @pytest.mark.asyncio
+    async def test_workflow_enforces_m2_m1_m2_sequence(self):
         """Verify that workflow orchestrator enforces M2→M1→M2 sequence"""
         session_id = f"test_seq_{uuid.uuid4().hex[:8]}"
         
         # Create mock dependencies
-        mock_gen = MagicMock()
-        mock_eval = MagicMock()
+        mock_gen = AsyncMock()
+        mock_eval = AsyncMock()
         
         # Setup mocks - generate_document returns sections
-        mock_gen.generate_document.return_value = {
-            "status": "success",
-            "sections": [{"section_number": "1", "generated_content": "Test content"}]
-        }
+        mock_gen.generate_full_document.return_value = [
+            {"section_number": "1", "generated_content": "Test content"}
+        ]
+        mock_gen.revise_sections.return_value = [
+            {"section_number": "1", "generated_content": "Test content"}
+        ]
         
-        mock_eval.evaluate_document.return_value = Mock(
-            overall_status="PASS",
-            confidence_level="HIGH"
-        )
+        mock_eval.evaluate_compliance.return_value = {
+            "overall_compliance": "COMPLIANT",
+            "confidence_score": 0.95,
+            "sections": [{"confidence_score": 0.95}],
+            "gaps": []
+        }
         
         # Create orchestrator with mock dependencies
         orchestrator = WorkflowOrchestrator(
@@ -53,16 +57,13 @@ class TestRule1_ModuleSequencing:
             compliance_checker=mock_eval
         )
         
-        # Execute workflow
-        try:
-            result = orchestrator.generate_and_validate_document(
-                study_data={"study_title": "Test Study"},
-                session_id=session_id,
-            )
-        except Exception:
-            pass  # May fail due to mocking, that's OK
+        result = await orchestrator.generate_and_validate_document(
+            study_data={"study_title": "Test Study"},
+            session_id=session_id,
+        )
         
-        # Verify orchestrator exists and has the method
+        assert result.session_id == session_id
+        assert result.revision_count == 0
         assert hasattr(orchestrator, 'generate_and_validate_document')
     
     def test_workflow_blocks_unchecked_content(self):

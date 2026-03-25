@@ -4,12 +4,10 @@ Tests digest generation and export formats
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import json
 from app.services.weekly_digest_generator import WeeklyDigestGenerator
-from app.models.regulatory_change_schemas import (
-    WeeklyDigest, RegulatoryChange, SubmissionImpactAssessment
-)
+from app.models.regulatory_change_schemas import WeeklyDigest, SubmissionImpactAssessment
 
 
 # =============================================================================
@@ -18,7 +16,7 @@ from app.models.regulatory_change_schemas import (
 
 def _mock_change(change_id="CHG-001", urgency="CRITICAL", source_citation="CDSCO Circular 001/2026"):
     """Create mock RegulatoryChange for digest tests"""
-    c = MagicMock(spec=RegulatoryChange)
+    c = Mock()
     c.change_id = change_id
     c.urgency = urgency
     c.source_citation = source_citation

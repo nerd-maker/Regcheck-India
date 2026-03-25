@@ -317,9 +317,31 @@ export default function QueryResponseAssistant() {
                                     </p>
                                 </div>
 
-                                <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
-                                    <h3 className="text-sm font-semibold text-indigo-900 mb-2">Confidence</h3>
-                                    <p className="text-lg font-bold text-indigo-700">{classification.classification_confidence}</p>
+                                <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200 md:col-span-2 lg:col-span-3">
+                                    <h3 className="text-sm font-semibold text-indigo-900 mb-3">Classification Confidence</h3>
+                                    {(() => {
+                                        const conf = typeof classification.classification_confidence === 'number'
+                                            ? classification.classification_confidence
+                                            : parseFloat(String(classification.classification_confidence)) || 0;
+                                        const pct = Math.round(conf * 100);
+                                        const isHigh = conf >= 0.85;
+                                        const isMedium = conf >= 0.75 && conf < 0.85;
+                                        const barColor = isHigh ? 'bg-green-500' : isMedium ? 'bg-amber-500' : 'bg-red-500';
+                                        const label = isHigh ? 'High Confidence' : isMedium ? 'Review Recommended' : 'Human Confirmation Required';
+                                        const textColor = isHigh ? 'text-green-700' : isMedium ? 'text-amber-700' : 'text-red-700';
+                                        const bgColor = isHigh ? 'bg-green-100' : isMedium ? 'bg-amber-100' : 'bg-red-100';
+                                        return (
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className={`text-sm font-semibold px-3 py-1 rounded-full ${textColor} ${bgColor}`}>{label}</span>
+                                                    <span className="text-lg font-bold text-indigo-700">{pct}%</span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                                                    <div className={`h-full rounded-full ${barColor} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">

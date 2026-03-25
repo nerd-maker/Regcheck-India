@@ -33,7 +33,7 @@ export default function MetadataForm({ metadata, onChange }: MetadataFormProps) 
                         <option value="Clinical Study Protocol">Clinical Study Protocol</option>
                         <option value="Informed Consent Form">Informed Consent Form</option>
                         <option value="Clinical Study Report">Clinical Study Report</option>
-                        <option value="Investigator's Brochure">Investigator's Brochure</option>
+                        <option value="Investigator's Brochure">Investigator&apos;s Brochure</option>
                         <option value="CTRI Registration Form">CTRI Registration Form</option>
                         <option value="CT-04 Form">CT-04 Form</option>
                         <option value="Other">Other</option>
