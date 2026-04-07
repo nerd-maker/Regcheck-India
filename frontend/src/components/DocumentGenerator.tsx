@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { getSessionId } from '../utils/session';
+import ModelAttributionBadge, { ModelAttribution } from './ModelAttributionBadge';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -54,6 +55,7 @@ export default function DocumentGenerator() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string>('');
     const [currentStep, setCurrentStep] = useState<number>(1);
+    const [modelAttribution, setModelAttribution] = useState<ModelAttribution | null>(null);
 
     // Progress indicator state
     const [progressSection, setProgressSection] = useState(0);
@@ -130,6 +132,7 @@ export default function DocumentGenerator() {
             });
 
             const result = response.data;
+            setModelAttribution(result.model_attribution || null);
 
             clearInterval(progressInterval);
             setProgressSection(totalSections);
@@ -169,6 +172,9 @@ export default function DocumentGenerator() {
                         <p className="text-gray-600">
                             Generate regulatory documents section-by-section with inline validation
                         </p>
+                        <div className="mt-2">
+                            <ModelAttributionBadge attribution={modelAttribution} />
+                        </div>
                     </div>
 
                     {/* Document Type Selection */}

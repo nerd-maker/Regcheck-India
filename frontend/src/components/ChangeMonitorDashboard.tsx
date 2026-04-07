@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { getSessionId } from '../utils/session';
+import ModelAttributionBadge, { ModelAttribution } from './ModelAttributionBadge';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -53,6 +54,7 @@ export default function ChangeMonitorDashboard() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [selectedChange, setSelectedChange] = useState<RegulatoryChange | null>(null);
+    const [modelAttribution, setModelAttribution] = useState<ModelAttribution | null>(null);
 
     // Filters
     const [domainFilter, setDomainFilter] = useState('');
@@ -91,6 +93,7 @@ export default function ChangeMonitorDashboard() {
 
             const data: ChangeListResponse = response.data;
             setChanges(data.changes);
+            setModelAttribution((response.data && response.data.model_attribution) || null);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -107,6 +110,7 @@ export default function ChangeMonitorDashboard() {
 
             const data = response.data;
             setStats(data);
+            setModelAttribution((response.data && response.data.model_attribution) || null);
         } catch (err: any) {
             console.error('Failed to fetch stats:', err);
         }
@@ -149,6 +153,9 @@ export default function ChangeMonitorDashboard() {
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-bold mb-2">📊 Regulatory Intelligence Monitor</h2>
                 <p className="text-emerald-100">Track CDSCO/MOHFW regulatory changes and assess impact</p>
+                <div className="mt-2">
+                    <ModelAttributionBadge attribution={modelAttribution} />
+                </div>
             </div>
 
             {/* Stats Cards */}

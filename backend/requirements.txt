@@ -1,11 +1,14 @@
 # FastAPI and server
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+python-multipart==0.0.9
 gunicorn==21.1.0
 
 # LLM API (NVIDIA OpenAI-compatible)
-openai>=1.0.0
+openai==1.30.0
+httpx==0.27.0
+huggingface-hub==0.23.0
+ffmpeg-python==0.2.0
 
 # Vector database
 chromadb==0.4.24
@@ -26,6 +29,10 @@ pydantic-settings==2.1.0
 # Utilities
 python-dotenv==1.0.0
 aiofiles==23.2.1
+spacy==3.7.4
+openai-whisper==20231117
+pandas==2.1.0
+psutil==5.9.8
 
 # CORS
 python-jose[cryptography]==3.3.0
@@ -37,5 +44,4 @@ slowapi==0.1.9
 pytest==7.4.4
 pytest-asyncio==0.23.3
 pytest-mock==3.12.0
-httpx==0.26.0
 

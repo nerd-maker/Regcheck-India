@@ -6,6 +6,7 @@ Analyzes new CDSCO/MOHFW documents and extracts structured regulatory changes.
 
 import json
 import logging
+import os
 from datetime import datetime
 from typing import List, Dict, Any
 from openai import OpenAI
@@ -20,6 +21,7 @@ from app.prompts.regulatory_intelligence_prompts import (
     SYSTEM_PROMPT,
     INGESTION_PROMPT
 )
+from app.services.aikosh_client import IndicTrans2Client, orchestrator, run_async
 
 logger = logging.getLogger(__name__)
 
@@ -59,28 +61,44 @@ class RegulatoryChangeAnalyzer:
         Returns:
             Tuple of (classification, list of changes)
         """
+        translator = IndicTrans2Client()
+        input_text = document_request.full_text
+        detected_lang = run_async(translator.detect_language(input_text))
+        if detected_lang == "hin_Deva":
+            input_text = run_async(translator.translate(input_text, source_lang="hin_Deva", target_lang="eng_Latn"))
+
         # Format the ingestion prompt
         prompt = INGESTION_PROMPT.format(
             source_url=document_request.source_url,
             document_title=document_request.document_title,
             publication_date=document_request.publication_date,
             document_type=document_request.document_type,
-            full_text=document_request.full_text,
+            full_text=input_text,
             kb_summary=kb_summary or "No existing requirements found for comparison."
         )
-        
-        # Call LLM API
-        response = self.client.chat.completions.create(
-            model=self.model,
-            max_tokens=8000,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        # Parse response
-        response_text = response.choices[0].message.content
+
+        if os.getenv("SARVAM_API_KEY"):
+            ai_result = run_async(
+                orchestrator.call(
+                    group_name="regulatory_intelligence",
+                    role="extractor",
+                    system_prompt=SYSTEM_PROMPT,
+                    prompt=prompt,
+                    temperature=0.0,
+                    max_tokens=3000,
+                )
+            )
+            response_text = ai_result.get("content", "")
+        else:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=8000,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            response_text = response.choices[0].message.content
         
         # Extract JSON from response (handle markdown code blocks)
         if "```json" in response_text:

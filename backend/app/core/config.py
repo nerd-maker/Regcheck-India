@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 50
     upload_dir: str = "./uploads"
     allowed_extensions: List[str] = [".pdf", ".docx"]
+    runtime_state_db: str = "./data/runtime/runtime_state.db"
+    audit_log_retention_days: int = 30
+    audit_log_encryption_key: str = ""
     
     # RAG Configuration
     rag_top_k: int = 10

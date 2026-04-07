@@ -4,6 +4,7 @@ Document Generator Service - Pipeline Orchestrator
 Generates regulatory documents section-by-section with inline validation
 """
 import json
+import os
 from typing import Dict, List, Optional
 from openai import OpenAI
 import logging
@@ -29,6 +30,7 @@ from app.services.pii_detector import pii_detector
 # Gap service integrations
 from app.services.section_context_store import SectionContextStore     # Gap 15
 from app.services.prompt_version_manager import prompt_version_manager # Gap 8
+from app.services.aikosh_client import orchestrator, run_async
 
 logger = logging.getLogger(__name__)
 
@@ -208,18 +210,34 @@ class DocumentGenerator:
         temperature = LLMConfig.get_temperature("M2_GENERATION")
         max_tokens = LLMConfig.get_max_tokens("M2_SECTION_GEN")
         
-        response = self.client.chat.completions.create(
-            model=LLMConfig.LLM_MODEL,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_DOCGEN},
-                {"role": "user", "content": full_prompt}
-            ]
-        )
-        
-        # Parse response with robust JSON parser (Rule 7)
-        response_text = response.choices[0].message.content
+        use_ensemble = bool(os.getenv("SARVAM_API_KEY"))
+        if use_ensemble:
+            response = run_async(
+                orchestrator.call(
+                    group_name="document_generation",
+                    role="primary",
+                    system_prompt=SYSTEM_PROMPT_DOCGEN,
+                    prompt=full_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            )
+            response_text = response.get("content", "")
+            model_used = response.get("model_used", "nvidia-fallback")
+            usage_tokens = response.get("usage", {}).get("completion_tokens", 0)
+        else:
+            raw = self.client.chat.completions.create(
+                model=LLMConfig.LLM_MODEL,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT_DOCGEN},
+                    {"role": "user", "content": full_prompt}
+                ]
+            )
+            response_text = raw.choices[0].message.content
+            model_used = "nvidia-fallback"
+            usage_tokens = getattr(raw.usage, "output_tokens", getattr(raw.usage, "completion_tokens", 0))
         
         try:
             # Use robust JSON parser with retry
@@ -239,11 +257,16 @@ class DocumentGenerator:
                     output_hash=hashlib.sha256(response_text.encode()).hexdigest()[:16],
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    actual_tokens=response.usage.output_tokens,
+                    actual_tokens=usage_tokens,
                     metadata={
                         "section_number": section_schema.section_number,
                         "section_heading": section_schema.section_heading,
-                        "document_type": document_type
+                        "document_type": document_type,
+                        "model_attribution": {
+                            "primary_model": model_used,
+                            "provider": "AIKosh India Sovereign AI Stack",
+                            "sovereign": model_used.startswith(("sarvam", "bharatgen")),
+                        },
                     }
                 )
             

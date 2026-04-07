@@ -4,6 +4,7 @@ Query Response Generator Service
 Generates structured responses to regulatory queries with commitment tracking
 """
 import json
+import os
 from typing import Dict, List, Optional
 from openai import OpenAI
 import logging
@@ -32,6 +33,7 @@ from app.services.session_manager import session_manager
 # Gap service integrations
 from app.services.commitment_tracker import commitment_manager         # Gap 16
 from app.services.prompt_version_manager import prompt_version_manager # Gap 8
+from app.services.aikosh_client import orchestrator, run_async
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +127,46 @@ class QueryResponseGenerator:
             reviewer_flags=metadata.get('reviewer_flags', []),
             supporting_documents_referenced=metadata.get('supporting_documents_referenced', [])
         )
+
+    def classify_and_respond(self, query: QueryInput) -> dict:
+        classification = run_async(
+            orchestrator.call(
+                group_name="query_intelligence",
+                role="classifier",
+                prompt=f"Classify this CDSCO query into one of 16 categories: {query.query_text}",
+                temperature=0.0,
+                max_tokens=500,
+            )
+        )
+        response_draft = run_async(
+            orchestrator.call(
+                group_name="query_intelligence",
+                role="responder",
+                system_prompt="You are a regulatory affairs expert drafting CDSCO query responses.",
+                prompt=f"Query Category: {classification.get('content', '')}\nQuery Text: {query.query_text}",
+                temperature=0.2,
+                max_tokens=3000,
+            )
+        )
+        out = {
+            "classification": classification.get("content", ""),
+            "response": response_draft.get("content", ""),
+            "models_used": [classification.get("model_used"), response_draft.get("model_used")],
+        }
+        ctext = classification.get("content", "").lower()
+        if "pharmacovigilance" in ctext or "cat-07" in ctext:
+            validation = run_async(
+                orchestrator.call(
+                    group_name="query_intelligence",
+                    role="validator",
+                    prompt=f"Validate this pharmacovigilance response for ICH E2A compliance: {response_draft.get('content', '')}",
+                    temperature=0.0,
+                    max_tokens=1000,
+                )
+            )
+            out["validation"] = validation.get("content", "")
+            out["models_used"].append(validation.get("model_used"))
+        return out
     
     def _retrieve_regulatory_context(self, query_text: str, category: str) -> str:
         """Retrieve relevant regulatory chunks from knowledge base"""
@@ -221,17 +263,34 @@ class QueryResponseGenerator:
         temperature = LLMConfig.get_temperature("M3_QUERY")
         max_tokens = LLMConfig.get_max_tokens("M3_QUERY_RESPONSE")
         
-        response = self.client.chat.completions.create(
-            model=LLMConfig.LLM_MODEL,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_QUERYREPLY},
-                {"role": "user", "content": context}
-            ]
-        )
-        
-        response_text = response.choices[0].message.content
+        use_ensemble = bool(os.getenv("SARVAM_API_KEY"))
+        if use_ensemble:
+            response = run_async(
+                orchestrator.call(
+                    group_name="query_intelligence",
+                    role="responder",
+                    system_prompt=SYSTEM_PROMPT_QUERYREPLY,
+                    prompt=context,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            )
+            response_text = response.get("content", "")
+            model_used = response.get("model_used", "nvidia-fallback")
+            usage_tokens = response.get("usage", {}).get("completion_tokens", 0)
+        else:
+            raw = self.client.chat.completions.create(
+                model=LLMConfig.LLM_MODEL,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT_QUERYREPLY},
+                    {"role": "user", "content": context}
+                ]
+            )
+            response_text = raw.choices[0].message.content
+            model_used = "nvidia-fallback"
+            usage_tokens = raw.usage.completion_tokens if raw.usage else 0
         
         # Rule 2: Log to audit trail
         if session_id:
@@ -243,10 +302,15 @@ class QueryResponseGenerator:
                 output_hash=hashlib.sha256(response_text.encode()).hexdigest()[:16],
                 temperature=temperature,
                 max_tokens=max_tokens,
-                actual_tokens=response.usage.completion_tokens if response.usage else 0,
+                actual_tokens=usage_tokens,
                 metadata={
                     "query_reference": query_reference,
-                    "classification": classification.primary_category
+                    "classification": classification.primary_category,
+                    "model_attribution": {
+                        "primary_model": model_used,
+                        "provider": "AIKosh India Sovereign AI Stack",
+                        "sovereign": model_used.startswith(("sarvam", "bharatgen")),
+                    },
                 }
             )
         

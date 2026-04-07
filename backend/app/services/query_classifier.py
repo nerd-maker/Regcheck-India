@@ -4,6 +4,7 @@ Query Classifier Service
 Classifies regulatory queries into categories for targeted response generation
 """
 import json
+import os
 from pathlib import Path
 from typing import Dict, List, Optional
 from openai import OpenAI
@@ -24,6 +25,7 @@ from app.services.review_queue import review_queue, assess_confidence
 
 # Gap service integrations
 from app.services.classification_confidence import classification_confidence_manager  # Gap 11
+from app.services.aikosh_client import orchestrator, run_async
 
 logger = logging.getLogger(__name__)
 
@@ -88,17 +90,30 @@ class QueryClassifier:
         temperature = LLMConfig.get_temperature("M3_QUERY")
         max_tokens = LLMConfig.get_max_tokens("M3_QUERY_RESPONSE")
         
-        # Call LLM API with production safety settings
-        response = self.client.chat.completions.create(
-            model=LLMConfig.LLM_MODEL,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        response_text = response.choices[0].message.content
+        use_ensemble = bool(settings.__dict__.get("sarvam_api_key", os.getenv("SARVAM_API_KEY")))
+        if use_ensemble:
+            response = run_async(
+                orchestrator.call(
+                    group_name="query_intelligence",
+                    role="classifier",
+                    prompt=prompt,
+                    temperature=0.0,
+                    max_tokens=500,
+                )
+            )
+            response_text = response.get("content", "")
+            model_used = response.get("model_used", "nvidia-fallback")
+            usage_tokens = response.get("usage", {}).get("completion_tokens", 0)
+        else:
+            raw = self.client.chat.completions.create(
+                model=LLMConfig.LLM_MODEL,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            response_text = raw.choices[0].message.content
+            model_used = "nvidia-fallback"
+            usage_tokens = getattr(raw.usage, "output_tokens", getattr(raw.usage, "completion_tokens", 0))
         
         # Parse response
         try:
@@ -137,13 +152,18 @@ class QueryClassifier:
                     confidence_score=confidence_score,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    actual_tokens=response.usage.output_tokens,
+                    actual_tokens=usage_tokens,
                     metadata={
                         "primary_category": result.get('primary_category'),
                         "complexity": result.get('complexity'),
                         "urgency": result.get('urgency'),
                         "classification_routing": routing.get("action"),
-                        "is_high_stakes": routing.get("is_high_stakes", False)
+                        "is_high_stakes": routing.get("is_high_stakes", False),
+                        "model_attribution": {
+                            "primary_model": model_used,
+                            "provider": "AIKosh India Sovereign AI Stack",
+                            "sovereign": model_used.startswith(("sarvam", "bharatgen")),
+                        },
                     }
                 )
             

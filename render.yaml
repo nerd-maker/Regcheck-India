@@ -18,6 +18,12 @@ services:
         value: openai/gpt-oss-120b
       - key: CHROMADB_PATH
         value: /app/data/chromadb
+      - key: REGCHECK_RUNTIME_STATE_DB
+        value: /app/data/runtime/runtime_state.db
+      - key: AUDIT_LOG_RETENTION_DAYS
+        value: "30"
+      - key: AUDIT_LOG_ENCRYPTION_KEY
+        sync: false
       - key: ENVIRONMENT
         value: production
       - key: LOG_LEVEL

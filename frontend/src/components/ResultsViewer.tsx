@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { EvaluationResponse, Finding } from '@/services/api';
+import ModelAttributionBadge from './ModelAttributionBadge';
 
 interface ResultsViewerProps {
     evaluation: EvaluationResponse;
@@ -139,6 +140,9 @@ ${f.recommended_language ? `<strong>Recommended Language</strong><div class="rem
                     <p className="text-sm text-gray-500 mt-1">
                         Evaluation ID: {evaluation.evaluation_id}
                     </p>
+                    <div className="mt-2">
+                        <ModelAttributionBadge attribution={evaluation.model_attribution} />
+                    </div>
                 </div>
                 <div className="flex gap-2">
                     <button

@@ -71,6 +71,13 @@ export interface EvaluationResponse {
     confidence_level: 'HIGH' | 'MEDIUM' | 'LOW';
     confidence_rationale: string;
     timestamp: string;
+    model_attribution?: {
+        primary_model?: string;
+        validator_model?: string;
+        ner_model?: string;
+        provider?: string;
+        sovereign?: boolean;
+    };
 }
 
 export interface GeneratedSection {
@@ -291,6 +298,59 @@ export const api = {
      */
     readinessCheck: async (): Promise<Record<string, unknown>> => {
         const response = await apiClient.get('/ready');
+        return response.data;
+    },
+
+    anonymiseText: async (text: string, fullAnonymisation: boolean): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post('/api/anonymise/text', {
+            text,
+            full_anonymisation: fullAnonymisation,
+        });
+        return response.data;
+    },
+
+    summariseSugamApplication: async (documentText: string, checklistType: string = 'ct04'): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post('/api/summarise/sugam-application', {
+            document_text: documentText,
+            checklist_type: checklistType,
+        });
+        return response.data;
+    },
+
+    summariseSAECase: async (saeText: string): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post('/api/summarise/sae-case', {
+            sae_text: saeText,
+        });
+        return response.data;
+    },
+
+    summariseMeeting: async (transcriptText: string): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post('/api/summarise/meeting', {
+            transcript_text: transcriptText,
+        });
+        return response.data;
+    },
+
+    compareVersions: async (v1: string, v2: string, docType: string = 'general'): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post('/api/compare/versions', {
+            doc_v1_text: v1,
+            doc_v2_text: v2,
+            doc_type: docType,
+        });
+        return response.data;
+    },
+
+    classifySAE: async (saeText: string): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post('/api/classify/sae', {
+            sae_text: saeText,
+        });
+        return response.data;
+    },
+
+    checkSAEDuplicate: async (saeCase: Record<string, unknown>): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post('/api/classify/duplicate-check', {
+            sae_case: saeCase,
+        });
         return response.data;
     },
 };

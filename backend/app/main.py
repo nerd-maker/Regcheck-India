@@ -13,6 +13,7 @@ import logging
 import traceback
 import os
 
+import httpx
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -35,10 +36,43 @@ from app.middleware.pii_middleware import PIIDetectionMiddleware
 from app.services.session_manager import session_manager
 from app.services.review_queue import review_queue
 from app.services.kb_version_manager import kb_version_manager
+from app.services.runtime_state_store import runtime_state_store
 from app.config.llm_config import LLMConfig
 from app.core.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
+
+
+def with_model_attribution(payload: dict, primary_model: str = "nvidia-fallback", validator_model: str = None, ner_model: str = None):
+    payload["model_attribution"] = {
+        "primary_model": primary_model,
+        "validator_model": validator_model,
+        "ner_model": ner_model,
+        "provider": "AIKosh India Sovereign AI Stack",
+        "sovereign": primary_model != "nvidia-fallback",
+    }
+    return payload
+
+
+async def _probe_http_endpoint(url: str, enabled: bool) -> dict:
+    if not enabled:
+        return {"reachable": False, "status": "disabled"}
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            response = await client.get(url)
+        reachable = response.status_code < 500
+        return {
+            "reachable": reachable,
+            "status": "ok" if reachable else "error",
+            "http_status": response.status_code,
+        }
+    except Exception as exc:
+        return {
+            "reachable": False,
+            "status": "error",
+            "error": str(exc),
+        }
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -82,6 +116,16 @@ app.add_middleware(SessionTrackingMiddleware)
 # Register critical gap solution endpoints (Gaps 2-16)
 from app.gap_endpoints import router as gap_router
 app.include_router(gap_router)
+from app.api import (
+    anonymisation_endpoints,
+    summarisation_endpoints,
+    comparison_endpoints,
+    classification_endpoints,
+)
+app.include_router(anonymisation_endpoints.router, prefix="/api/anonymise", tags=["Anonymisation"])
+app.include_router(summarisation_endpoints.router, prefix="/api/summarise", tags=["Summarisation"])
+app.include_router(comparison_endpoints.router, prefix="/api/compare", tags=["Comparison"])
+app.include_router(classification_endpoints.router, prefix="/api/classify", tags=["Classification"])
 
 # Create upload directory
 UPLOAD_DIR = Path(settings.upload_dir)
@@ -170,6 +214,17 @@ async def readiness_check():
         checks["chromadb"] = f"error: {str(e)}"
         all_ok = False
 
+    # Check runtime state store
+    try:
+        runtime_state_store.put("system", "readiness", "ping", {"ok": True})
+        ping = runtime_state_store.get("system", "readiness", "ping", default={})
+        checks["runtime_state_store"] = "connected" if ping.get("ok") else "error"
+        if not ping.get("ok"):
+            all_ok = False
+    except Exception as e:
+        checks["runtime_state_store"] = f"error: {str(e)}"
+        all_ok = False
+
     status_code = 200 if all_ok else 503
     return JSONResponse(
         status_code=status_code,
@@ -178,6 +233,89 @@ async def readiness_check():
             "checks": checks,
         }
     )
+
+
+@app.get("/api/models/status")
+async def model_status():
+    """Shows which AIKosh models are active and healthy."""
+    sarvam_probe = await _probe_http_endpoint("https://api.sarvam.ai/v1", bool(os.getenv("SARVAM_API_KEY")))
+    bharatgen_probe = await _probe_http_endpoint(
+        os.getenv("BHARATGEN_API_BASE", "https://api.bharatgen.ai/v1"),
+        bool(os.getenv("BHARATGEN_API_KEY")),
+    )
+    indicbert_probe = await _probe_http_endpoint(
+        "https://api-inference.huggingface.co/models/ai4bharat/indic-bert",
+        bool(os.getenv("HF_API_KEY")),
+    )
+    indictrans_probe = await _probe_http_endpoint(
+        "https://api-inference.huggingface.co/models/ai4bharat/indictrans2-indic-en-1B",
+        bool(os.getenv("HF_API_KEY")),
+    )
+    indicwav2vec_probe = await _probe_http_endpoint(
+        "https://api-inference.huggingface.co/models/ai4bharat/indicwav2vec_v1_hindi",
+        bool(os.getenv("HF_API_KEY")),
+    )
+    nvidia_probe = await _probe_http_endpoint(
+        os.getenv("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+        bool(os.getenv("LLM_API_KEY")),
+    )
+
+    status = {}
+    status["sarvam-105b"] = {
+        "active": bool(os.getenv("SARVAM_API_KEY")),
+        "provider": "Sarvam AI / AIKosh",
+        "used_for": ["M1 Compliance", "M2 Generation", "M3 Response", "M4 Intelligence"],
+        "sovereign": True,
+        **sarvam_probe,
+    }
+    status["bharatgen"] = {
+        "active": bool(os.getenv("BHARATGEN_API_KEY")),
+        "provider": "BharatGen / IIT Bombay / AIKosh",
+        "used_for": ["M1 Validation", "M5 Summarisation", "M7 SAE Classification"],
+        "sovereign": True,
+        **bharatgen_probe,
+    }
+    status["indicbert"] = {
+        "active": bool(os.getenv("HF_API_KEY")),
+        "provider": "AI4Bharat / AIKosh / HuggingFace",
+        "used_for": ["PII Detection NER", "M7 Entity Extraction"],
+        "sovereign": True,
+        **indicbert_probe,
+    }
+    status["indicTrans2"] = {
+        "active": bool(os.getenv("HF_API_KEY")),
+        "provider": "AI4Bharat / AIKosh",
+        "used_for": ["M4 Hindi Circular Translation", "M5 Multilingual Input"],
+        "sovereign": True,
+        **indictrans_probe,
+    }
+    status["indicWav2Vec"] = {
+        "active": bool(os.getenv("HF_API_KEY")),
+        "provider": "AI4Bharat / AIKosh",
+        "used_for": ["M5 Meeting Audio Transcription"],
+        "sovereign": True,
+        **indicwav2vec_probe,
+    }
+    status["nvidia-fallback"] = {
+        "active": bool(os.getenv("LLM_API_KEY")),
+        "provider": "NVIDIA (fallback only)",
+        "used_for": ["Fallback when sovereign models unavailable"],
+        "sovereign": False,
+        **nvidia_probe,
+    }
+    sovereign_count = sum(1 for m in status.values() if m["active"] and m["sovereign"])
+    return {
+        "models": status,
+        "sovereign_models_active": sovereign_count,
+        "total_models": len(status),
+        "aikosh_integrated": True,
+        "platform_stack": "India Sovereign AI — AIKosh + Sarvam + BharatGen + AI4Bharat",
+        "model_attribution": {
+            "primary_model": "system",
+            "provider": "AIKosh India Sovereign AI Stack",
+            "sovereign": True,
+        },
+    }
 
 
 @app.get("/", response_model=HealthResponse)
@@ -195,7 +333,7 @@ async def get_kb_stats():
     """Get knowledge base statistics."""
     try:
         stats = knowledge_base.get_collection_stats()
-        return JSONResponse(content=stats)
+        return JSONResponse(content=with_model_attribution(stats, "nvidia-fallback"))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -253,7 +391,8 @@ async def upload_document(file: UploadFile = File(...)):
         return UploadResponse(
             file_id=file_id,
             filename=file.filename,
-            file_size=file_size
+            file_size=file_size,
+            model_attribution=with_model_attribution({}, "nvidia-fallback")["model_attribution"],
         )
     
     except Exception as e:
@@ -295,7 +434,7 @@ async def evaluate_document(
             parsed_document=parsed_document,
             metadata=doc_metadata
         )
-        
+        evaluation.model_attribution = with_model_attribution({}, os.getenv("SARVAM_API_KEY") and "sarvam-105b" or "nvidia-fallback")["model_attribution"]
         return evaluation
     
     except Exception as e:
@@ -316,7 +455,7 @@ async def populate_sample_kb():
         return JSONResponse(content={
             "message": "Sample regulatory data added successfully",
             "stats": stats
-        })
+        } | {"model_attribution": with_model_attribution({}, "nvidia-fallback")["model_attribution"]})
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to populate KB: {str(e)}")
@@ -351,7 +490,7 @@ async def generate_document(request: DocumentGenerationRequest):
             study_data=request.study_data,
             validate_inline=True
         )
-        return JSONResponse(content=result)
+        return JSONResponse(content=with_model_attribution(result, os.getenv("SARVAM_API_KEY") and "sarvam-105b" or "nvidia-fallback"))
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -373,7 +512,7 @@ async def generate_section(request: SectionGenerationRequest):
             study_data=request.study_data,
             previous_sections=request.previous_sections
         )
-        return JSONResponse(content=section.model_dump())
+        return JSONResponse(content=with_model_attribution(section.model_dump(), os.getenv("SARVAM_API_KEY") and "sarvam-105b" or "nvidia-fallback"))
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -393,7 +532,7 @@ async def get_document_schema(document_type: str):
     """
     try:
         schema = schema_engine.get_schema(document_type)
-        return JSONResponse(content=schema.model_dump())
+        return JSONResponse(content=with_model_attribution(schema.model_dump(), "nvidia-fallback"))
     
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -406,9 +545,9 @@ async def list_available_schemas():
     """List all available document types with schemas."""
     try:
         document_types = schema_engine.get_available_document_types()
-        return JSONResponse(content={
+        return JSONResponse(content=with_model_attribution({
             "available_document_types": document_types
-        })
+        }, "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -443,7 +582,7 @@ async def classify_query(request: QueryClassificationRequest):
             query_reference=request.query_reference,
             response_deadline=request.response_deadline
         )
-        return JSONResponse(content=classification.model_dump())
+        return JSONResponse(content=with_model_attribution(classification.model_dump(), os.getenv("SARVAM_API_KEY") and "sarvam-1" or "nvidia-fallback"))
     
     except Exception as e:
         logger.error(f"Classification failed: {str(e)}", exc_info=True)
@@ -463,7 +602,7 @@ async def generate_query_response(request: QueryResponseRequest):
             query=request.query,
             classification=request.classification
         )
-        return JSONResponse(content=response.model_dump())
+        return JSONResponse(content=with_model_attribution(response.model_dump(), os.getenv("SARVAM_API_KEY") and "sarvam-105b" or "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Response generation failed: {str(e)}")
@@ -474,7 +613,7 @@ async def get_query_categories():
     """List all available query categories with descriptions."""
     try:
         categories = query_classifier.get_all_categories()
-        return JSONResponse(content={"categories": categories})
+        return JSONResponse(content=with_model_attribution({"categories": categories}, "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -487,7 +626,7 @@ async def get_category_info(category_id: str):
         category_info = query_classifier.get_category_info(category_id)
         if not category_info:
             raise HTTPException(status_code=404, detail=f"Category {category_id} not found")
-        return JSONResponse(content=category_info)
+        return JSONResponse(content=with_model_attribution(category_info, "nvidia-fallback"))
     
     except HTTPException:
         raise
@@ -562,13 +701,13 @@ async def ingest_regulatory_document(request: NewDocumentRequest):
                 for assessment in assessments:
                     regulatory_change_store.save_impact_assessment(assessment)
         
-        return JSONResponse(content={
+        return JSONResponse(content=with_model_attribution({
             "status": "success",
             "classification": classification.model_dump(),
             "changes_extracted": len(changes),
             "changes": [c.model_dump() for c in changes],
             "critical_high_count": len(critical_high_changes)
-        })
+        }, os.getenv("SARVAM_API_KEY") and "sarvam-105b" or "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Document ingestion failed: {str(e)}")
@@ -611,11 +750,11 @@ async def assess_regulatory_impact(request: ImpactAssessmentRequest):
         # Generate alert
         alert = impact_assessor.create_alert(assessment, change)
         
-        return JSONResponse(content={
+        return JSONResponse(content=with_model_attribution({
             "status": "success",
             "assessment": assessment.model_dump(),
             "alert": alert
-        })
+        }, "sarvam-105b" if os.getenv("SARVAM_API_KEY") else "nvidia-fallback"))
     
     except HTTPException:
         raise
@@ -659,14 +798,14 @@ async def generate_weekly_digest(request: DigestGenerationRequest):
         text_export = digest_generator.export_digest(digest, format="text")
         markdown_export = digest_generator.export_digest(digest, format="markdown")
         
-        return JSONResponse(content={
+        return JSONResponse(content=with_model_attribution({
             "status": "success",
             "digest": digest.model_dump(),
             "exports": {
                 "text": text_export,
                 "markdown": markdown_export
             }
-        })
+        }, "sarvam-105b" if os.getenv("SARVAM_API_KEY") else "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Digest generation failed: {str(e)}")
@@ -710,7 +849,7 @@ async def list_regulatory_changes(
             }
         )
         
-        return JSONResponse(content=response.model_dump())
+        return JSONResponse(content=with_model_attribution(response.model_dump(), "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -727,10 +866,10 @@ async def get_regulatory_change(change_id: str):
         # Get impact assessments for this change
         impacted_submissions = regulatory_change_store.get_impacted_submissions(change_id)
         
-        return JSONResponse(content={
+        return JSONResponse(content=with_model_attribution({
             "change": change.model_dump(),
             "impact_assessments": [ia.model_dump() for ia in impacted_submissions]
-        })
+        }, "nvidia-fallback"))
     
     except HTTPException:
         raise
@@ -743,10 +882,10 @@ async def create_active_submission(submission: ActiveSubmission):
     """Register a new active submission for impact monitoring."""
     try:
         regulatory_change_store.save_submission(submission)
-        return JSONResponse(content={
+        return JSONResponse(content=with_model_attribution({
             "status": "success",
             "submission_id": submission.submission_id
-        })
+        }, "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -766,10 +905,10 @@ async def list_active_submissions(
             limit=limit
         )
         
-        return JSONResponse(content={
+        return JSONResponse(content=with_model_attribution({
             "total_submissions": len(submissions),
             "submissions": [s.model_dump() for s in submissions]
-        })
+        }, "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -780,7 +919,7 @@ async def get_regulatory_stats():
     """Get regulatory intelligence statistics."""
     try:
         stats = regulatory_change_store.get_stats()
-        return JSONResponse(content=stats)
+        return JSONResponse(content=with_model_attribution(stats, "nvidia-fallback"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,7 +1,7 @@
 """
 Pydantic schemas for RegCheck-India API.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Literal
 from datetime import datetime
 from uuid import uuid4
@@ -85,6 +85,7 @@ class FindingsBySatus(BaseModel):
 
 class EvaluationResponse(BaseModel):
     """Complete evaluation response."""
+    model_config = ConfigDict(protected_namespaces=())
     evaluation_id: str = Field(default_factory=lambda: str(uuid4()))
     document_type: DocumentType
     overall_status: ComplianceStatus
@@ -98,6 +99,7 @@ class EvaluationResponse(BaseModel):
     confidence_level: ConfidenceLevel
     confidence_rationale: str
     timestamp: datetime = Field(default_factory=utc_now)
+    model_attribution: Optional[dict] = None
 
 
 class EvaluationRequest(BaseModel):
@@ -108,10 +110,12 @@ class EvaluationRequest(BaseModel):
 
 class UploadResponse(BaseModel):
     """Response after file upload."""
+    model_config = ConfigDict(protected_namespaces=())
     file_id: str
     filename: str
     file_size: int
     upload_timestamp: datetime = Field(default_factory=utc_now)
+    model_attribution: Optional[dict] = None
 
 
 class HealthResponse(BaseModel):

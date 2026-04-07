@@ -7,11 +7,13 @@ import ResultsViewer from '@/components/ResultsViewer';
 import DocumentGenerator from '@/components/DocumentGenerator';
 import QueryResponseAssistant from '@/components/QueryResponseAssistant';
 import ChangeMonitorDashboard from '@/components/ChangeMonitorDashboard';
-import ImpactAssessmentViewer from '@/components/ImpactAssessmentViewer';
-import DigestViewer from '@/components/DigestViewer';
+import AnonymisationTool from '@/components/AnonymisationTool';
+import DocumentSummariser from '@/components/DocumentSummariser';
+import DocumentComparator from '@/components/DocumentComparator';
+import SAEClassifier from '@/components/SAEClassifier';
 import { api, DocumentMetadata, EvaluationResponse } from '@/services/api';
 
-type Module = 'compliance' | 'generator' | 'query' | 'regulatory';
+type Module = 'compliance' | 'generator' | 'query' | 'regulatory' | 'anonymise' | 'summarise' | 'comparator' | 'classifier';
 
 export default function Home() {
     const [activeModule, setActiveModule] = useState<Module>('compliance');
@@ -124,6 +126,34 @@ export default function Home() {
             icon: '📊',
             description: 'Monitor CDSCO changes and assess impact',
             color: 'emerald'
+        },
+        {
+            id: 'anonymise' as Module,
+            name: 'M5: Anonymisation',
+            icon: '🛡️',
+            description: 'DPDP/NDHM anonymisation workflows',
+            color: 'purple'
+        },
+        {
+            id: 'summarise' as Module,
+            name: 'M6: Summarisation',
+            icon: '🧠',
+            description: 'SUGAM/SAE/Meeting summarisation',
+            color: 'indigo'
+        },
+        {
+            id: 'comparator' as Module,
+            name: 'M7: Comparator',
+            icon: '🔍',
+            description: 'Version diff and completeness checks',
+            color: 'amber'
+        },
+        {
+            id: 'classifier' as Module,
+            name: 'M8: SAE Classifier',
+            icon: '🚨',
+            description: 'Severity, duplicates, and queue priority',
+            color: 'rose'
         }
     ];
 
@@ -169,6 +199,8 @@ export default function Home() {
                                     backgroundColor: module.color === 'blue' ? '#2563eb' :
                                         module.color === 'indigo' ? '#4f46e5' :
                                             module.color === 'purple' ? '#9333ea' :
+                                                module.color === 'amber' ? '#d97706' :
+                                                    module.color === 'rose' ? '#e11d48' :
                                                 '#059669'
                                 } : {}}
                             >
@@ -325,6 +357,11 @@ export default function Home() {
                         </div>
                     </div>
                 )}
+
+                {activeModule === 'anonymise' && <AnonymisationTool />}
+                {activeModule === 'summarise' && <DocumentSummariser />}
+                {activeModule === 'comparator' && <DocumentComparator />}
+                {activeModule === 'classifier' && <SAEClassifier />}
             </main>
 
             {/* Footer */}

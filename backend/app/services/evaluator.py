@@ -2,6 +2,7 @@
 Claude-powered compliance evaluator for pharmaceutical documents.
 """
 import json
+import os
 from typing import Dict, Optional
 from openai import OpenAI
 import logging
@@ -20,6 +21,7 @@ from app.services.review_queue import review_queue, assess_confidence
 from app.services.confidence_assessor import confidence_assessor       # Gap 2
 from app.services.output_determinism import output_determinism         # Gap 9
 from app.services.prompt_version_manager import prompt_version_manager # Gap 8
+from app.services.aikosh_client import orchestrator, run_async
 
 logger = logging.getLogger(__name__)
 
@@ -79,19 +81,33 @@ class ComplianceEvaluator:
         temperature = LLMConfig.get_temperature("M1_COMPLIANCE")
         max_tokens = LLMConfig.get_max_tokens("M1_SECTION_EVAL")
         
-        # Call LLM API with production safety settings
-        response = self.client.chat.completions.create(
-            model=LLMConfig.LLM_MODEL,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ]
-        )
-        
-        # Parse response
-        response_text = response.choices[0].message.content
+        if os.getenv("SARVAM_API_KEY"):
+            result = run_async(
+                orchestrator.call(
+                    group_name="regulatory_compliance",
+                    role="primary",
+                    system_prompt=system_prompt,
+                    prompt=user_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            )
+            response_text = result.get("content", "")
+            model_used = result.get("model_used", "nvidia-fallback")
+            usage_tokens = result.get("usage", {}).get("completion_tokens", 0)
+        else:
+            response = self.client.chat.completions.create(
+                model=LLMConfig.LLM_MODEL,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            response_text = response.choices[0].message.content
+            model_used = "nvidia-fallback"
+            usage_tokens = response.usage.output_tokens
         
         # Gap 9: Check output cache first (before expensive parsing)
         input_hash = hashlib.sha256(user_prompt.encode()).hexdigest()[:16]
@@ -149,13 +165,18 @@ class ComplianceEvaluator:
                 confidence_score=confidence_numeric,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                actual_tokens=response.usage.output_tokens,
+                actual_tokens=usage_tokens,
                 metadata={
                     "document_type": metadata.document_type,
                     "overall_status": evaluation_json.get("overall_status"),
                     "total_findings": evaluation_json.get("total_findings"),
                     "prompt_version": prompt_version.get("version", "1.0.0") if prompt_version else "1.0.0",
                     "confidence_signals": multi_signal_confidence.get("signals", {}),
+                    "model_attribution": {
+                        "primary_model": model_used,
+                        "provider": "AIKosh India Sovereign AI Stack",
+                        "sovereign": model_used.startswith(("sarvam", "bharatgen")),
+                    },
                 }
             )
             
@@ -333,3 +354,88 @@ Respond with ONLY the JSON object, nothing else."""
 
 # Global evaluator instance
 compliance_evaluator = ComplianceEvaluator()
+
+
+class SUGAMChecklistEvaluator:
+    """Checklist mapping evaluator for SUGAM CT-04 and SAE completeness."""
+
+    FORM_CT04_CHECKLIST = {
+        "section_A": {
+            "name": "Administrative Information",
+            "mandatory_fields": [
+                "sponsor_name", "sponsor_address", "CRO_name",
+                "principal_investigator", "site_address", "IEC_name",
+                "IEC_registration_number", "IEC_approval_date",
+            ],
+        },
+        "section_B": {
+            "name": "Protocol Information",
+            "mandatory_fields": [
+                "protocol_title", "protocol_number", "protocol_version",
+                "phase", "therapeutic_area", "ICD_code", "sample_size_justification",
+                "primary_endpoint", "randomisation_method", "blinding",
+            ],
+        },
+        "section_C": {
+            "name": "Investigational Product",
+            "mandatory_fields": [
+                "INN_name", "dosage_form", "strength", "route_of_administration",
+                "manufacturer_name", "manufacturing_site_address",
+                "shelf_life", "storage_conditions",
+            ],
+        },
+        "section_D": {
+            "name": "Regulatory History",
+            "mandatory_fields": [
+                "previous_approvals", "countries_approved", "IND_status",
+                "clinical_trial_phase_globally", "bridging_study_requirement",
+            ],
+        },
+    }
+
+    SAE_REPORT_CHECKLIST = {
+        "mandatory_fields": [
+            "case_id", "report_date", "sponsor_name", "product_name",
+            "patient_initials", "age", "gender", "weight",
+            "event_description", "onset_date", "outcome",
+            "causality_assessment", "seriousness_criteria",
+            "concomitant_medications", "medical_history",
+            "dechallenge_result", "rechallenge_result",
+            "reporter_name", "reporter_qualification",
+        ],
+        "timeline_requirements": {
+            "fatal_or_life_threatening": "7_calendar_days",
+            "other_serious": "15_calendar_days",
+            "annual_safety_report": "60_days_from_data_lock",
+        },
+    }
+
+    def evaluate_ct04_completeness(self, payload: Dict) -> Dict:
+        result = {"sections": {}, "missing_fields": [], "completeness_score": 1.0}
+        total_required = 0
+        total_missing = 0
+        for section_id, section in self.FORM_CT04_CHECKLIST.items():
+            missing = [f for f in section["mandatory_fields"] if not payload.get(f)]
+            total_required += len(section["mandatory_fields"])
+            total_missing += len(missing)
+            result["sections"][section_id] = {
+                "name": section["name"],
+                "missing_fields": missing,
+                "status": "COMPLETE" if not missing else "INCOMPLETE",
+            }
+        result["missing_fields"] = [m for sec in result["sections"].values() for m in sec["missing_fields"]]
+        result["completeness_score"] = 0.0 if total_required == 0 else round((total_required - total_missing) / total_required, 3)
+        return result
+
+    def evaluate_sae_completeness(self, payload: Dict) -> Dict:
+        mandatory = self.SAE_REPORT_CHECKLIST["mandatory_fields"]
+        missing = [field for field in mandatory if not payload.get(field)]
+        return {
+            "missing_fields": missing,
+            "timeline_requirements": self.SAE_REPORT_CHECKLIST["timeline_requirements"],
+            "status": "COMPLETE" if not missing else "INCOMPLETE",
+            "completeness_score": round((len(mandatory) - len(missing)) / len(mandatory), 3),
+        }
+
+
+sugam_checklist_evaluator = SUGAMChecklistEvaluator()

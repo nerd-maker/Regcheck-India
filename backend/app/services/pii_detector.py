@@ -1,24 +1,175 @@
-"""
-Context-Preserving PII Detection and Redaction
+"""Context-preserving PII detection and DPDP/NDHM anonymisation utilities."""
 
-Implements two-tier PII system:
-- HARD PII: Never send to LLM, replace with demographic context
-- SOFT PII: Anonymize sequentially, preserve document structure
-
-Fixes:
-- Aadhaar regex to prevent false positives
-- Whitelist-based name detection
-- Pre/post-redaction diff logging
-"""
-
-import re
 import hashlib
-from typing import List, Tuple, Dict, Optional
-from datetime import datetime
-from enum import Enum
 import logging
+import re
+import secrets
+import json
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Dict, List, Optional, Tuple
+from app.core.config import settings
+from app.services.aikosh_client import IndicBERTClient, orchestrator
+from app.services.runtime_state_store import runtime_state_store
 
 logger = logging.getLogger(__name__)
+
+ADDITIONAL_PII_PATTERNS = {
+    "PAN_CARD": r"[A-Z]{5}[0-9]{4}[A-Z]",
+    "PASSPORT": r"[A-Z][1-9][0-9]{7}",
+    "VOTER_ID": r"[A-Z]{3}[0-9]{7}",
+    "GSTIN": r"[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]",
+    "IFSC": r"[A-Z]{4}0[A-Z0-9]{6}",
+    "ACCOUNT_NUMBER": r"\b[0-9]{9,18}\b",
+    "PATIENT_NAME": None,
+    "INVESTIGATOR_NAME": None,
+    "SITE_ADDRESS": None,
+    "IP_ADDRESS": r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b",
+    "DIAGNOSIS": None,
+    "MEDICATION": None,
+    "LAB_VALUES": r"\b[0-9]+\.?[0-9]*\s*(mg/dL|mmol/L|ng/mL|IU/L|g/dL|%)\b",
+}
+
+LEGAL_FRAMEWORK_MAP = {
+    "AADHAAR": ["DPDP_Act_2023_Section_4", "NDHM_Health_Data_Policy"],
+    "PATIENT_NAME": ["ICMR_Biomedical_Research_Guidelines_2017", "CDSCO_GCP"],
+    "DIAGNOSIS": ["NDHM_Health_Data_Policy_2020", "ICMR_Ethics_Guidelines"],
+    "MRN": ["DPDP_Act_2023", "CDSCO_Schedule_Y"],
+    "INVESTIGATOR_NAME": ["CDSCO_GCP", "ICH_E6_R3"],
+    "DEFAULT": ["DPDP_Act_2023"],
+}
+
+
+class TwoStepAnonymiser:
+    """Step1 pseudonymise, Step2 irreversibly anonymise."""
+
+    def pseudonymise(self, text: str, entity_type: str) -> Tuple[str, str]:
+        token = f"[{entity_type}_{secrets.token_hex(4).upper()}]"
+        return token, token
+
+    def irreversible_anonymise(self, text: str, entity_type: str, context: str) -> str:
+        if entity_type == "AGE":
+            try:
+                age = int(re.search(r"\d+", text).group())
+                decade = (age // 10) * 10
+                return f"[AGE_{decade}s]"
+            except Exception:
+                return "[AGE_GENERALISED]"
+        if entity_type == "DATE":
+            return "[DATE_GENERALISED]"
+        if entity_type in {"LOCATION", "SITE_ADDRESS", "GPE", "LOC"}:
+            return "[REGION_INDIA]"
+        return f"[{entity_type}_ANONYMISED]"
+
+
+class NLPEntityDetector:
+    """spaCy-backed named entity detector with lazy loading."""
+
+    def __init__(self):
+        self._nlp = None
+
+    def _get_nlp(self):
+        if self._nlp is None:
+            import spacy
+            self._nlp = spacy.load("en_core_web_sm")
+        return self._nlp
+
+    def detect_entities(self, text: str) -> List[Dict]:
+        doc = self._get_nlp()(text)
+        entities = []
+        for ent in doc.ents:
+            if ent.label_ in ["PERSON", "ORG", "GPE", "LOC", "DATE"]:
+                entities.append(
+                    {
+                        "text": ent.text,
+                        "label": ent.label_,
+                        "start": ent.start_char,
+                        "end": ent.end_char,
+                    }
+                )
+        return entities
+
+
+class StructuredDataAnonymiser:
+    """Handle CSV/JSON/table-like PHI with simple column heuristics."""
+
+    def __init__(self):
+        self.two_step = TwoStepAnonymiser()
+
+    def anonymise_dataframe(self, df, pii_columns: List[str]):
+        for col in pii_columns:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda x: self._anonymise_cell(x, col))
+        return df
+
+    def _anonymise_cell(self, value, column_name: str):
+        if value is None:
+            return value
+        text = str(value)
+        entity_type = column_name.upper().replace(" ", "_")
+        token, _ = self.two_step.pseudonymise(text, entity_type)
+        return self.two_step.irreversible_anonymise(token, entity_type, text)
+
+    def auto_detect_pii_columns(self, df) -> List[str]:
+        pii_keywords = [
+            "name", "phone", "email", "address", "dob", "aadhaar",
+            "patient", "subject", "mrn", "id", "contact", "gender",
+        ]
+        return [col for col in df.columns if any(kw in col.lower() for kw in pii_keywords)]
+
+
+class PIIAuditLogger:
+    """Track anonymisation actions for DPDP compliance."""
+
+    def __init__(self):
+        self.entries: List[Dict] = []
+        self.retention_days = settings.audit_log_retention_days
+
+    def _utc_now(self) -> datetime:
+        return datetime.now(timezone.utc)
+
+    def _filter_expired(self, entries: List[Dict]) -> List[Dict]:
+        cutoff_ts = self._utc_now().timestamp() - (self.retention_days * 24 * 60 * 60)
+        filtered = []
+        for entry in entries:
+            timestamp = entry.get("timestamp")
+            if not timestamp:
+                continue
+            try:
+                dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if dt.timestamp() >= cutoff_ts:
+                filtered.append(entry)
+        return filtered
+
+    def log_anonymisation(self, session_id: str, entity_type: str, action: str, legal_basis: str):
+        active_entries = self.get_session_entries(session_id)
+        entry = {
+            "timestamp": self._utc_now().isoformat(),
+            "session_id": session_id,
+            "entity_type": entity_type,
+            "action": action,
+            "legal_basis": legal_basis,
+            "retention_policy": f"{self.retention_days}_days",
+        }
+        self.entries = [existing for existing in self.entries if existing.get("session_id") != session_id]
+        active_entries.append(entry)
+        self.entries.extend(active_entries)
+        runtime_state_store.put("anonymisation", session_id, "audit_log", active_entries, encrypt=True)
+        return entry
+
+    def get_session_entries(self, session_id: str) -> List[Dict]:
+        persisted = runtime_state_store.get("anonymisation", session_id, "audit_log", default=None)
+        if isinstance(persisted, list):
+            active_entries = self._filter_expired(persisted)
+            if len(active_entries) != len(persisted):
+                runtime_state_store.put("anonymisation", session_id, "audit_log", active_entries, encrypt=True)
+            return active_entries
+        active_entries = self._filter_expired([entry for entry in self.entries if entry["session_id"] == session_id])
+        self.entries = [entry for entry in self.entries if entry.get("session_id") != session_id]
+        self.entries.extend(active_entries)
+        return active_entries
 
 
 class PIITier(str, Enum):
@@ -56,6 +207,9 @@ class ContextPreservingPIIDetector:
             # Exact address with PIN code
             "address": r'\b\d+[,\s]+[A-Za-z\s]+,\s*[A-Za-z\s]+[-\s]\d{6}\b'
         }
+        for key, pattern in ADDITIONAL_PII_PATTERNS.items():
+            if pattern:
+                self.hard_pii_patterns[key.lower()] = pattern
         
         # SOFT PII patterns (anonymize sequentially)
         self.soft_pii_patterns = {
@@ -80,12 +234,19 @@ class ContextPreservingPIIDetector:
             "Standard Operating", "Operating Procedure", "Quality Assurance",
             "Regulatory Authority", "Central Drugs", "Drugs Standard"
         }
+        self.two_step_anonymiser = TwoStepAnonymiser()
+        self.nlp_detector = NLPEntityDetector()
+        self.structured_anonymiser = StructuredDataAnonymiser()
+        self.audit_logger = PIIAuditLogger()
+        self.indicbert = IndicBERTClient()
     
     def detect_and_redact(
         self,
         text: str,
         document_structure: Optional[Dict] = None,
-        preserve_context: bool = True
+        preserve_context: bool = True,
+        session_id: str = "default_session",
+        full_anonymisation: bool = True
     ) -> Tuple[str, Dict]:
         """
         Detect and redact PII with context preservation
@@ -125,7 +286,16 @@ class ContextPreservingPIIDetector:
             )
             all_redactions.extend(name_redactions)
         
-        # Step 4: Create diff log
+        # Step 4: NLP entities
+        nlp_redactions = self._detect_nlp_entities(redacted_text, session_id, full_anonymisation)
+        all_redactions.extend(nlp_redactions)
+
+        # Step 5: Apply recorded NLP replacements
+        for redaction in sorted(nlp_redactions, key=lambda x: x["position"][0], reverse=True):
+            start, end = redaction["position"]
+            redacted_text = redacted_text[:start] + redaction["placeholder"] + redacted_text[end:]
+
+        # Step 6: Create diff log
         diff_log = self.create_diff_log(text, redacted_text, all_redactions)
         
         # Create redaction report
@@ -144,6 +314,182 @@ class ContextPreservingPIIDetector:
         )
         
         return redacted_text, report
+
+    def pseudonymise_text(
+        self,
+        text: str,
+        session_id: str = "default_session",
+    ) -> Tuple[str, Dict]:
+        """Replace detected entities with reversible pseudonym tokens."""
+
+        pseudonymised_text = text
+        redactions = []
+
+        regex_entities = self._regex_detect(text)
+        soft_entities = []
+        for pii_type, pattern in self.soft_pii_patterns.items():
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                soft_entities.append(
+                    {
+                        "text": match.group(),
+                        "label": pii_type.upper(),
+                        "start": match.start(),
+                        "end": match.end(),
+                        "source": "soft_regex",
+                    }
+                )
+
+        nlp_entities = []
+        try:
+            for ent in self.nlp_detector.detect_entities(text):
+                mapped_type = {
+                    "PERSON": "PATIENT_NAME",
+                    "ORG": "INVESTIGATOR_NAME",
+                    "GPE": "LOCATION",
+                    "LOC": "LOCATION",
+                    "DATE": "DATE",
+                }.get(ent["label"], ent["label"])
+                nlp_entities.append(
+                    {
+                        "text": ent["text"],
+                        "label": mapped_type,
+                        "start": ent["start"],
+                        "end": ent["end"],
+                        "source": "spacy",
+                    }
+                )
+        except Exception as exc:
+            logger.warning("NLP pseudonymisation unavailable: %s", exc)
+
+        all_entities = self._deduplicate_entities(regex_entities + soft_entities + nlp_entities)
+
+        for entity in sorted(all_entities, key=lambda x: x["start"], reverse=True):
+            entity_type = entity["label"].upper()
+            placeholder, token = self.two_step_anonymiser.pseudonymise(entity["text"], entity_type)
+            start, end = entity["start"], entity["end"]
+            pseudonymised_text = pseudonymised_text[:start] + placeholder + pseudonymised_text[end:]
+            legal_refs = LEGAL_FRAMEWORK_MAP.get(entity_type, LEGAL_FRAMEWORK_MAP["DEFAULT"])
+            for legal in legal_refs:
+                self.audit_logger.log_anonymisation(session_id, entity_type, "pseudonymise", legal)
+            redactions.append(
+                {
+                    "type": entity_type.lower(),
+                    "tier": PIITier.HARD,
+                    "original_hash": hashlib.sha256(entity["text"].encode()).hexdigest()[:16],
+                    "placeholder": placeholder,
+                    "token": token,
+                    "position": (start, end),
+                    "preserved_context": placeholder,
+                    "legal_frameworks": legal_refs,
+                }
+            )
+
+        report = {
+            "total_redactions": len(redactions),
+            "hard_pii_count": len(redactions),
+            "soft_pii_count": len(redactions),
+            "redactions_by_type": self._count_by_type(redactions),
+            "diff_log": self.create_diff_log(text, pseudonymised_text, redactions),
+            "context_preserved": True,
+        }
+
+        return pseudonymised_text, report
+
+    async def detect_all_pii(self, text: str) -> List[Dict]:
+        """Three-layer hybrid: regex + IndicBERT + contextual LLM."""
+        regex_entities = self._regex_detect(text)
+        indicbert_entities = await self.indicbert.detect_entities(text)
+        sarvam_entities = await orchestrator.call(
+            group_name="pii_detection",
+            role="contextual_model",
+            prompt=(
+                "Identify PHI in this clinical text not already detected. "
+                "Return JSON array of text/entity_type/start_pos/end_pos.\n"
+                f"{text[:1000]}"
+            ),
+            temperature=0.0,
+            max_tokens=500,
+        )
+        llm_parsed = self._parse_json(sarvam_entities.get("content", "[]"))
+        all_entities = regex_entities + indicbert_entities + (llm_parsed if isinstance(llm_parsed, list) else [])
+        return self._deduplicate_entities(all_entities)
+
+    def _regex_detect(self, text: str) -> List[Dict]:
+        entities = []
+        for pii_type, pattern in self.hard_pii_patterns.items():
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                entities.append(
+                    {
+                        "text": match.group(),
+                        "label": pii_type.upper(),
+                        "start": match.start(),
+                        "end": match.end(),
+                        "source": "regex",
+                    }
+                )
+        return entities
+
+    def _deduplicate_entities(self, entities: List[Dict]) -> List[Dict]:
+        seen = set()
+        deduped = []
+        for ent in entities:
+            key = (ent.get("start"), ent.get("end"), ent.get("text"))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(ent)
+        return deduped
+
+    def _parse_json(self, text: str):
+        try:
+            return json.loads(text)
+        except Exception:
+            match = re.search(r"\[.*\]|\{.*\}", text, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(0))
+                except Exception:
+                    return []
+            return []
+
+    def _detect_nlp_entities(self, text: str, session_id: str, full_anonymisation: bool) -> List[Dict]:
+        redactions = []
+        try:
+            entities = self.nlp_detector.detect_entities(text)
+        except Exception as exc:
+            logger.warning("NLP detection unavailable: %s", exc)
+            return redactions
+
+        for ent in entities:
+            mapped_type = {
+                "PERSON": "PATIENT_NAME",
+                "ORG": "INVESTIGATOR_NAME",
+                "GPE": "LOCATION",
+                "LOC": "LOCATION",
+                "DATE": "DATE",
+            }.get(ent["label"], ent["label"])
+            pseudo, token = self.two_step_anonymiser.pseudonymise(ent["text"], mapped_type)
+            placeholder = (
+                self.two_step_anonymiser.irreversible_anonymise(ent["text"], mapped_type, text)
+                if full_anonymisation
+                else pseudo
+            )
+            legal_refs = LEGAL_FRAMEWORK_MAP.get(mapped_type, LEGAL_FRAMEWORK_MAP["DEFAULT"])
+            for legal in legal_refs:
+                self.audit_logger.log_anonymisation(session_id, mapped_type, "anonymise", legal)
+            redactions.append(
+                {
+                    "type": mapped_type.lower(),
+                    "tier": PIITier.HARD,
+                    "original_hash": hashlib.sha256(ent["text"].encode()).hexdigest()[:16],
+                    "placeholder": placeholder,
+                    "token": token,
+                    "position": (ent["start"], ent["end"]),
+                    "preserved_context": placeholder,
+                    "legal_frameworks": legal_refs,
+                }
+            )
+        return redactions
     
     def redact_hard_pii_with_context(
         self,
@@ -353,7 +699,7 @@ class ContextPreservingPIIDetector:
         if year_match:
             year = int(year_match.group())
             decade = (year // 10) * 10
-            age = datetime.now().year - year
+            age = datetime.now(timezone.utc).year - year
             age_range = f"{(age // 10) * 10}-{((age // 10) + 1) * 10}yr"
             
             return f"[DOB: {decade}s, age_{age_range}]"
@@ -465,7 +811,7 @@ class ContextPreservingPIIDetector:
             })
         
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_redactions": len(redactions),
             "diff_entries": diff_entries
         }

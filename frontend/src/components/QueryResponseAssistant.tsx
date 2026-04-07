@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { getSessionId } from '../utils/session';
+import ModelAttributionBadge, { ModelAttribution } from './ModelAttributionBadge';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -25,6 +26,7 @@ interface QueryResponse {
     confidence: string;
     reviewer_flags: string[];
     supporting_documents_referenced: string[];
+    model_attribution?: ModelAttribution;
 }
 
 export default function QueryResponseAssistant() {
@@ -41,6 +43,7 @@ export default function QueryResponseAssistant() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string>('');
     const [activeView, setActiveView] = useState<'input' | 'classification' | 'response'>('input');
+    const [modelAttribution, setModelAttribution] = useState<ModelAttribution | null>(null);
 
     const classifyQuery = async () => {
         if (!queryText.trim()) {
@@ -62,6 +65,7 @@ export default function QueryResponseAssistant() {
 
             const data = res.data;
             setClassification(data);
+            setModelAttribution(data.model_attribution || null);
             setActiveView('classification');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Classification failed');
@@ -98,6 +102,7 @@ export default function QueryResponseAssistant() {
 
             const data = res.data;
             setResponse(data);
+            setModelAttribution(data.model_attribution || data.result?.model_attribution || null);
             setActiveView('response');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Response generation failed');
@@ -118,6 +123,9 @@ export default function QueryResponseAssistant() {
                         <p className="text-gray-600">
                             Automated drafting of responses to CDSCO deficiency letters and Ethics Committee queries
                         </p>
+                        <div className="mt-2">
+                            <ModelAttributionBadge attribution={modelAttribution} />
+                        </div>
                     </div>
 
                     {/* View Tabs */}

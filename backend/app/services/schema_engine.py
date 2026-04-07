@@ -133,3 +133,52 @@ class SchemaEngine:
     def get_available_document_types(self) -> List[str]:
         """Get list of available document types"""
         return list(self._schemas_cache.keys())
+
+
+INSPECTION_REPORT_SCHEMA = {
+    "type": "inspection_report",
+    "sections": [
+        {"id": "site_details", "title": "Site Identification Details", "mandatory": True, "cdsco_template_ref": "GMP_INSP_01"},
+        {"id": "inspection_team", "title": "Inspection Team Details", "mandatory": True},
+        {"id": "scope", "title": "Scope of Inspection", "mandatory": True},
+        {"id": "observations", "title": "Observations", "mandatory": True, "classification": ["Critical", "Major", "Minor"]},
+        {"id": "gmp_compliance", "title": "GMP Compliance Assessment", "mandatory": True},
+        {"id": "capa_requirements", "title": "CAPA Requirements", "mandatory": True},
+        {"id": "conclusion", "title": "Inspection Conclusion", "mandatory": True},
+    ],
+}
+
+
+class InspectionObservationConverter:
+    """Converts unstructured observations to formal inspection report JSON."""
+
+    async def convert(self, raw_observations: str, site_details: dict) -> dict:
+        from app.config.llm_config import LLMConfig
+        from app.core.api_client import get_llm_client
+        import json
+
+        prompt = f"""
+        You are a CDSCO GMP inspector writing a formal inspection report.
+        Convert raw observations into CDSCO report format per Schedule M.
+        Classify each as CRITICAL / MAJOR / MINOR and cite GMP clause.
+        Raw Observations:
+        {raw_observations}
+        Site Details:
+        {site_details}
+        Return structured JSON only.
+        """
+        client = get_llm_client()
+        response = client.chat.completions.create(
+            model=LLMConfig.LLM_MODEL,
+            temperature=0.0,
+            max_tokens=1600,
+            messages=[
+                {"role": "system", "content": "Return valid JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        content = response.choices[0].message.content
+        try:
+            return json.loads(content)
+        except Exception:
+            return {"raw": content}
