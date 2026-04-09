@@ -4,7 +4,8 @@ FROM python:3.11-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PIP_CONSTRAINT=/app/constraints.txt
 
 WORKDIR /app
 
@@ -18,7 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN python -m pip install --upgrade pip setuptools wheel
+COPY constraints.txt .
+RUN python -m pip install --upgrade pip wheel "setuptools<82"
 RUN pip install --prefix=/install -r requirements.txt
 RUN /install/bin/python -m spacy download en_core_web_sm
 
