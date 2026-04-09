@@ -8,19 +8,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-ARG SPACY_MODEL_URL=https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
-
 # Build dependencies for Python wheels and AI/audio libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    ca-certificates \
     curl \
     ffmpeg \
     git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --prefix=/install -r requirements.txt \
-    && pip install --prefix=/install "${SPACY_MODEL_URL}"
+RUN python -m pip install --upgrade pip setuptools wheel
+RUN pip install --prefix=/install -r requirements.txt
+RUN /install/bin/python -m spacy download en_core_web_sm
 
 # ---- Runtime Stage ----
 FROM python:3.11-slim
