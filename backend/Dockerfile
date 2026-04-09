@@ -70,7 +70,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 # Run with gunicorn for production
 CMD gunicorn app.main:app \
     --bind 0.0.0.0:$PORT \
-    --workers 2 \
+    --workers 1 \
     --worker-class uvicorn.workers.UvicornWorker \
     --timeout 120 \
     --access-logfile - \

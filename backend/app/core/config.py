@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # ChromaDB Configuration
     chromadb_path: str = "./data/chromadb"
     chromadb_collection_name: str = "regulatory_knowledge"
+    memory_optimized_mode: bool = True
     
     # File Upload Configuration
     max_upload_size_mb: int = 50

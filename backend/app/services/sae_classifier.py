@@ -118,8 +118,17 @@ class SAESeverityClassifier:
 
 
 class DuplicateDetectionEngine:
-    def __init__(self, chroma_client):
-        self.collection = chroma_client.get_or_create_collection("sae_cases")
+    def __init__(self, kb_or_client):
+        self.kb = kb_or_client if hasattr(kb_or_client, "client") else None
+        self._client = kb_or_client if hasattr(kb_or_client, "get_or_create_collection") else None
+        self._collection = None
+
+    @property
+    def collection(self):
+        if self._collection is None:
+            client = self._client or self.kb.client
+            self._collection = client.get_or_create_collection("sae_cases")
+        return self._collection
 
     async def check_duplicate(self, sae_case: Dict) -> Dict[str, Any]:
         fingerprint = self._create_case_fingerprint(sae_case)
@@ -205,5 +214,5 @@ class ReviewerPrioritisationEngine:
 
 
 sae_classifier = SAESeverityClassifier()
-duplicate_engine = DuplicateDetectionEngine(knowledge_base.client)
+duplicate_engine = DuplicateDetectionEngine(knowledge_base)
 prioritisation_engine = ReviewerPrioritisationEngine()
