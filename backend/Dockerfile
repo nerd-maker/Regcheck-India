@@ -21,8 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 COPY constraints.txt .
 RUN python -m pip install --upgrade pip wheel "setuptools<82"
-RUN pip install --prefix=/install -r requirements.txt
-RUN /install/bin/python -m spacy download en_core_web_sm
+RUN pip install -r requirements.txt
+RUN python -m spacy download en_core_web_sm
 
 # ---- Runtime Stage ----
 FROM python:3.11-slim
@@ -42,8 +42,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy installed packages from builder
-COPY --from=builder /install /usr/local
+# Copy installed Python environment from builder
+COPY --from=builder /usr/local /usr/local
 
 # Create non-root user
 RUN groupadd -r regcheck && useradd -r -g regcheck -d /app -s /usr/sbin/nologin regcheck
