@@ -243,18 +243,7 @@ async def model_status():
         os.getenv("BHARATGEN_API_BASE", "https://api.bharatgen.ai/v1"),
         bool(os.getenv("BHARATGEN_API_KEY")),
     )
-    indicbert_probe = await _probe_http_endpoint(
-        "https://api-inference.huggingface.co/models/ai4bharat/indic-bert",
-        bool(os.getenv("HF_API_KEY")),
-    )
-    indictrans_probe = await _probe_http_endpoint(
-        "https://api-inference.huggingface.co/models/ai4bharat/indictrans2-indic-en-1B",
-        bool(os.getenv("HF_API_KEY")),
-    )
-    indicwav2vec_probe = await _probe_http_endpoint(
-        "https://api-inference.huggingface.co/models/ai4bharat/indicwav2vec_v1_hindi",
-        bool(os.getenv("HF_API_KEY")),
-    )
+    hf_probe = await _probe_http_endpoint("https://huggingface.co/api/whoami-v2", bool(os.getenv("HF_API_KEY")))
     nvidia_probe = await _probe_http_endpoint(
         os.getenv("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
         bool(os.getenv("LLM_API_KEY")),
@@ -280,21 +269,21 @@ async def model_status():
         "provider": "AI4Bharat / AIKosh / HuggingFace",
         "used_for": ["PII Detection NER", "M7 Entity Extraction"],
         "sovereign": True,
-        **indicbert_probe,
+        **hf_probe,
     }
     status["indicTrans2"] = {
         "active": bool(os.getenv("HF_API_KEY")),
         "provider": "AI4Bharat / AIKosh",
         "used_for": ["M4 Hindi Circular Translation", "M5 Multilingual Input"],
         "sovereign": True,
-        **indictrans_probe,
+        **hf_probe,
     }
     status["indicWav2Vec"] = {
         "active": bool(os.getenv("HF_API_KEY")),
         "provider": "AI4Bharat / AIKosh",
         "used_for": ["M5 Meeting Audio Transcription"],
         "sovereign": True,
-        **indicwav2vec_probe,
+        **hf_probe,
     }
     status["nvidia-fallback"] = {
         "active": bool(os.getenv("LLM_API_KEY")),

@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Dict, List
 
 import httpx
+from huggingface_hub import InferenceClient
 from openai import AsyncOpenAI
 
 
@@ -65,19 +66,19 @@ class ModelConfig:
             "provider": "huggingface",
             "model_id": "ai4bharat/indic-bert",
             "api_key_env": "HF_API_KEY",
-            "api_base": "https://api-inference.huggingface.co/models/ai4bharat/indic-bert",
+            "api_base": "https://router.huggingface.co/hf-inference/models/ai4bharat/indic-bert",
         },
         "indicTrans2": {
             "provider": "huggingface",
             "model_id": "ai4bharat/indictrans2-en-indic-1B",
             "api_key_env": "HF_API_KEY",
-            "api_base": "https://api-inference.huggingface.co/models/ai4bharat/indictrans2-en-indic-1B",
+            "api_base": "https://router.huggingface.co/hf-inference/models/ai4bharat/indictrans2-en-indic-1B",
         },
         "indicWav2Vec": {
             "provider": "huggingface",
             "model_id": "ai4bharat/indicwav2vec_v1_hindi",
             "api_key_env": "HF_API_KEY",
-            "api_base": "https://api-inference.huggingface.co/models/ai4bharat/indicwav2vec_v1_hindi",
+            "api_base": "https://router.huggingface.co/hf-inference/models/ai4bharat/indicwav2vec_v1_hindi",
         },
     }
 
@@ -236,53 +237,89 @@ class EnsembleOrchestrator:
 class IndicBERTClient:
     def __init__(self):
         self.api_key = os.getenv("HF_API_KEY")
-        self.api_url = "https://api-inference.huggingface.co/models/ai4bharat/indic-bert"
-        self.headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        self.model_id = "ai4bharat/indic-bert"
+
+    def _get_client(self):
+        if not self.api_key:
+            return None
+        return InferenceClient(model=self.model_id, provider="hf-inference", api_key=self.api_key, timeout=30.0)
 
     async def detect_entities(self, text: str) -> list[dict]:
         if not self.api_key:
             return []
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(self.api_url, headers=self.headers, json={"inputs": text[:512]})
-            if response.status_code == 200:
-                return self._parse_entities(response.json())
+        try:
+            client = self._get_client()
+            if client is None:
+                return []
+            raw = await asyncio.to_thread(
+                client.token_classification,
+                text[:512],
+                model=self.model_id,
+                aggregation_strategy="simple",
+            )
+            return self._parse_entities(raw)
+        except Exception:
             return []
 
     def _parse_entities(self, raw: list) -> list[dict]:
         entities = []
         for item in raw:
-            if isinstance(item, list):
-                for entity in item:
-                    if entity.get("score", 0) > 0.85:
-                        entities.append(
-                            {
-                                "text": entity.get("word", ""),
-                                "label": entity.get("entity_group", ""),
-                                "score": entity.get("score", 0),
-                                "source": "indicbert",
-                            }
-                        )
+            entity = item
+            score = getattr(entity, "score", None)
+            if score is None and isinstance(entity, dict):
+                score = entity.get("score", 0)
+            if (score or 0) > 0.85:
+                text = getattr(entity, "word", None) or getattr(entity, "entity", None)
+                label = getattr(entity, "entity_group", None) or getattr(entity, "entity", None)
+                start = getattr(entity, "start", None)
+                end = getattr(entity, "end", None)
+                if isinstance(entity, dict):
+                    text = text or entity.get("word") or entity.get("entity")
+                    label = label or entity.get("entity_group") or entity.get("entity")
+                    start = start if start is not None else entity.get("start")
+                    end = end if end is not None else entity.get("end")
+                entities.append(
+                    {
+                        "text": text or "",
+                        "label": label or "",
+                        "score": score,
+                        "start": start,
+                        "end": end,
+                        "source": "indicbert",
+                    }
+                )
         return entities
 
 
 class IndicTrans2Client:
     def __init__(self):
         self.api_key = os.getenv("HF_API_KEY")
+        self.model_id = "ai4bharat/indictrans2-indic-en-1B"
+
+    def _get_client(self):
+        if not self.api_key:
+            return None
+        return InferenceClient(model=self.model_id, provider="hf-inference", api_key=self.api_key, timeout=30.0)
 
     async def translate(self, text: str, source_lang: str = "hin_Deva", target_lang: str = "eng_Latn") -> str:
         if not self.api_key:
             return text
-        api_url = "https://api-inference.huggingface.co/models/ai4bharat/indictrans2-indic-en-1B"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                api_url,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={"inputs": text, "parameters": {"src_lang": source_lang, "tgt_lang": target_lang}},
+        try:
+            client = self._get_client()
+            if client is None:
+                return text
+            result = await asyncio.to_thread(
+                client.translation,
+                text,
+                model=self.model_id,
+                src_lang=source_lang,
+                tgt_lang=target_lang,
             )
-            if response.status_code == 200:
-                result = response.json()
-                if isinstance(result, list) and result:
-                    return result[0].get("translation_text", text)
+            translated = getattr(result, "translation_text", None)
+            if translated is None and isinstance(result, dict):
+                translated = result.get("translation_text")
+            return translated or text
+        except Exception:
             return text
 
     async def detect_language(self, text: str) -> str:
@@ -296,19 +333,30 @@ class IndicTrans2Client:
 class IndicWav2VecClient:
     def __init__(self):
         self.api_key = os.getenv("HF_API_KEY")
-        self.api_url = "https://api-inference.huggingface.co/models/ai4bharat/indicwav2vec_v1_hindi"
+        self.model_id = "ai4bharat/indicwav2vec_v1_hindi"
+
+    def _get_client(self):
+        if not self.api_key:
+            return None
+        return InferenceClient(model=self.model_id, provider="hf-inference", api_key=self.api_key, timeout=30.0)
 
     async def transcribe(self, audio_bytes: bytes) -> dict:
         if self.api_key:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    self.api_url,
-                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "audio/wav"},
-                    content=audio_bytes,
-                )
-                if response.status_code == 200:
-                    result = response.json()
-                    return {"text": result.get("text", ""), "model_used": "indicWav2Vec"}
+            try:
+                client = self._get_client()
+                if client is not None:
+                    result = await asyncio.to_thread(
+                        client.automatic_speech_recognition,
+                        audio_bytes,
+                        model=self.model_id,
+                    )
+                    text = getattr(result, "text", None)
+                    if text is None and isinstance(result, dict):
+                        text = result.get("text", "")
+                    if text:
+                        return {"text": text, "model_used": "indicWav2Vec"}
+            except Exception:
+                pass
         fallback_text = await self._whisper_fallback(audio_bytes)
         return {"text": fallback_text, "model_used": "whisper"}
 
