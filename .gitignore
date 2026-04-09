@@ -40,6 +40,7 @@ out/
 
 # ChromaDB
 backend/data/chromadb/
+backend/data/runtime/
 
 # Uploaded files
 backend/uploads/

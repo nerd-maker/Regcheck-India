@@ -1,378 +1,435 @@
 'use client';
 
 import React, { useState } from 'react';
+import AnonymisationTool from '@/components/AnonymisationTool';
+import ChangeMonitorDashboard from '@/components/ChangeMonitorDashboard';
+import DocumentComparator from '@/components/DocumentComparator';
+import DocumentGenerator from '@/components/DocumentGenerator';
+import DocumentSummariser from '@/components/DocumentSummariser';
 import DocumentUpload from '@/components/DocumentUpload';
 import MetadataForm from '@/components/MetadataForm';
-import ResultsViewer from '@/components/ResultsViewer';
-import DocumentGenerator from '@/components/DocumentGenerator';
 import QueryResponseAssistant from '@/components/QueryResponseAssistant';
-import ChangeMonitorDashboard from '@/components/ChangeMonitorDashboard';
-import AnonymisationTool from '@/components/AnonymisationTool';
-import DocumentSummariser from '@/components/DocumentSummariser';
-import DocumentComparator from '@/components/DocumentComparator';
+import ResultsViewer from '@/components/ResultsViewer';
 import SAEClassifier from '@/components/SAEClassifier';
 import { api, DocumentMetadata, EvaluationResponse } from '@/services/api';
 
-type Module = 'compliance' | 'generator' | 'query' | 'regulatory' | 'anonymise' | 'summarise' | 'comparator' | 'classifier';
+type Module =
+  | 'compliance'
+  | 'generator'
+  | 'query'
+  | 'regulatory'
+  | 'anonymise'
+  | 'summarise'
+  | 'comparator'
+  | 'classifier';
+
+type ModuleCard = {
+  id: Module;
+  name: string;
+  shortName: string;
+  icon: string;
+  description: string;
+  accent: string;
+  category: string;
+};
+
+const modules: ModuleCard[] = [
+  {
+    id: 'compliance',
+    name: 'Compliance Command',
+    shortName: 'M1',
+    icon: '01',
+    description: 'Evaluate submissions against Indian regulatory expectations with structured findings and remediation guidance.',
+    accent: '#5bc0be',
+    category: 'Core review',
+  },
+  {
+    id: 'generator',
+    name: 'Document Studio',
+    shortName: 'M2',
+    icon: '02',
+    description: 'Generate protocol-grade documentation with inline regulatory structure and reviewer-ready sections.',
+    accent: '#ffd166',
+    category: 'Drafting',
+  },
+  {
+    id: 'query',
+    name: 'Query Desk',
+    shortName: 'M3',
+    icon: '03',
+    description: 'Draft response packages for CDSCO deficiency letters with better consistency and traceability.',
+    accent: '#ff8f5a',
+    category: 'Response',
+  },
+  {
+    id: 'regulatory',
+    name: 'Intelligence Radar',
+    shortName: 'M4',
+    icon: '04',
+    description: 'Monitor regulatory movement, triage impact, and keep active submissions aligned with policy drift.',
+    accent: '#9ad1ff',
+    category: 'Monitoring',
+  },
+  {
+    id: 'anonymise',
+    name: 'Privacy Shield',
+    shortName: 'M5',
+    icon: '05',
+    description: 'Run DPDP and NDHM-aligned anonymisation workflows with auditability and structured outputs.',
+    accent: '#79e1d6',
+    category: 'Privacy',
+  },
+  {
+    id: 'summarise',
+    name: 'Summary Engine',
+    shortName: 'M6',
+    icon: '06',
+    description: 'Turn dense SUGAM, SAE, and meeting inputs into concise reviewer-friendly structured summaries.',
+    accent: '#ffb26b',
+    category: 'Synthesis',
+  },
+  {
+    id: 'comparator',
+    name: 'Comparison Lab',
+    shortName: 'M7',
+    icon: '07',
+    description: 'Inspect version drift, completeness, and substantive regulatory changes in one view.',
+    accent: '#f5d76e',
+    category: 'Diffing',
+  },
+  {
+    id: 'classifier',
+    name: 'SAE Triage',
+    shortName: 'M8',
+    icon: '08',
+    description: 'Classify safety events, surface likely duplicates, and prioritize the reviewer queue.',
+    accent: '#ff8aa1',
+    category: 'Safety',
+  },
+];
+
+const complianceStats = [
+  { label: 'Review modes', value: '8 modules' },
+  { label: 'Core legal stack', value: 'CDSCO + ICH' },
+  { label: 'Runtime posture', value: 'Session-aware' },
+];
 
 export default function Home() {
-    const [activeModule, setActiveModule] = useState<Module>('compliance');
+  const [activeModule, setActiveModule] = useState<Module>('compliance');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileId, setFileId] = useState<string | null>(null);
+  const [metadata, setMetadata] = useState<DocumentMetadata>({
+    document_type: '',
+    sponsor_name: '',
+    drug_name: '',
+    inn: '',
+    trial_phase: '',
+    submission_target: '',
+    version: '',
+    date: '',
+  });
+  const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
 
-    // Module 01 state
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [fileId, setFileId] = useState<string | null>(null);
-    const [metadata, setMetadata] = useState<DocumentMetadata>({
-        document_type: '',
-        sponsor_name: '',
-        drug_name: '',
-        inn: '',
-        trial_phase: '',
-        submission_target: '',
-        version: '',
-        date: '',
+  const activeModuleMeta = modules.find((module) => module.id === activeModule) ?? modules[0];
+
+  const handleFileSelect = async (file: File) => {
+    setSelectedFile(file);
+    setFileId(null);
+    setEvaluation(null);
+    setError(null);
+    setUploadProgress('Uploading document...');
+
+    try {
+      const response = await api.uploadDocument(file);
+      setFileId(response.file_id);
+      setUploadProgress('Document uploaded and staged for evaluation.');
+      setTimeout(() => setUploadProgress(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to upload document');
+      setUploadProgress('');
+    }
+  };
+
+  const handleEvaluate = async () => {
+    if (!fileId) {
+      setError('Please upload a document first.');
+      return;
+    }
+
+    if (
+      !metadata.document_type ||
+      !metadata.sponsor_name ||
+      !metadata.drug_name ||
+      !metadata.trial_phase ||
+      !metadata.submission_target
+    ) {
+      setError('Please fill in all required metadata fields before running evaluation.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setEvaluation(null);
+
+    try {
+      const result = await api.evaluateDocument(fileId, metadata);
+      setEvaluation(result);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to evaluate document');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    setSelectedFile(null);
+    setFileId(null);
+    setMetadata({
+      document_type: '',
+      sponsor_name: '',
+      drug_name: '',
+      inn: '',
+      trial_phase: '',
+      submission_target: '',
+      version: '',
+      date: '',
     });
-    const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [uploadProgress, setUploadProgress] = useState<string>('');
+    setEvaluation(null);
+    setError(null);
+    setUploadProgress('');
+  };
 
-    const handleFileSelect = async (file: File) => {
-        setSelectedFile(file);
-        setFileId(null);
-        setEvaluation(null);
-        setError(null);
-        setUploadProgress('Uploading document...');
+  return (
+    <div className="app-shell">
+      <div className="relative z-10">
+        <header className="mx-auto max-w-7xl px-4 pb-6 pt-8 sm:px-6 lg:px-8">
+          <div className="glass-panel-strong overflow-hidden p-6 md:p-8">
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl space-y-5">
+                <span className="section-kicker">Regulatory Operating System</span>
+                <div className="space-y-3">
+                  <h1 className="text-balance text-4xl font-semibold md:text-5xl">
+                    RegCheck-India
+                  </h1>
+                  <p className="max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
+                    A sharper control surface for Indian pharmaceutical compliance work, from
+                    protocol review and query drafting to anonymisation, summarisation, comparison,
+                    and SAE triage.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <span className="status-chip">India sovereign AI stack</span>
+                  <span className="status-chip">Session-aware workflows</span>
+                  <span className="status-chip">CDSCO and ICH aligned</span>
+                </div>
+              </div>
 
-        try {
-            const response = await api.uploadDocument(file);
-            setFileId(response.file_id);
-            setUploadProgress('Document uploaded successfully!');
-            setTimeout(() => setUploadProgress(''), 3000);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Failed to upload document');
-            setUploadProgress('');
-        }
-    };
+              <div className="grid min-w-full gap-4 sm:grid-cols-3 lg:min-w-[360px]">
+                {complianceStats.map((stat) => (
+                  <div key={stat.label} className="metric-card">
+                    <div className="metric-label">{stat.label}</div>
+                    <div className="metric-value">{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </header>
 
-    const handleEvaluate = async () => {
-        if (!fileId) {
-            setError('Please upload a document first');
-            return;
-        }
+        <main className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+          <section className="glass-panel mb-8 p-5 md:p-6">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <div className="section-kicker">Module Grid</div>
+                <h2 className="section-title mt-3">Switch between review lanes</h2>
+              </div>
+              <p className="section-copy max-w-2xl">
+                The interface is organized like a regulatory control room: pick a lane, see the
+                active mission clearly, and keep every output tied to the same session context.
+              </p>
+            </div>
 
-        if (!metadata.document_type || !metadata.sponsor_name || !metadata.drug_name ||
-            !metadata.trial_phase || !metadata.submission_target) {
-            setError('Please fill in all required fields (marked with *)');
-            return;
-        }
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {modules.map((module) => {
+                const isActive = activeModule === module.id;
+                return (
+                  <button
+                    key={module.id}
+                    type="button"
+                    onClick={() => setActiveModule(module.id)}
+                    className={`module-card ${isActive ? 'module-card-active' : ''}`}
+                    style={{
+                      boxShadow: isActive ? `0 16px 42px ${module.accent}22` : undefined,
+                    }}
+                  >
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <div
+                        className="flex h-12 w-12 items-center justify-center rounded-2xl border text-sm font-semibold"
+                        style={{
+                          borderColor: `${module.accent}55`,
+                          backgroundColor: `${module.accent}22`,
+                          color: module.accent,
+                        }}
+                      >
+                        {module.icon}
+                      </div>
+                      <span
+                        className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                        style={{
+                          backgroundColor: `${module.accent}20`,
+                          color: module.accent,
+                        }}
+                      >
+                        {module.shortName}
+                      </span>
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        {module.category}
+                      </div>
+                      <h3 className="mt-2 text-lg font-semibold text-slate-50">{module.name}</h3>
+                      <p className="mt-3 text-sm leading-6 text-slate-400">{module.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
 
-        setLoading(true);
-        setError(null);
-        setEvaluation(null);
+          <section className="glass-panel-strong overflow-hidden">
+            <div className="border-b border-white/10 px-6 py-5 md:px-8">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div
+                    className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em]"
+                    style={{
+                      backgroundColor: `${activeModuleMeta.accent}1f`,
+                      color: activeModuleMeta.accent,
+                    }}
+                  >
+                    {activeModuleMeta.shortName} active
+                  </div>
+                  <h2 className="mt-3 text-2xl font-semibold text-white">{activeModuleMeta.name}</h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                    {activeModuleMeta.description}
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="metric-card min-w-[180px]">
+                    <div className="metric-label">Current lane</div>
+                    <div className="metric-value text-xl">{activeModuleMeta.category}</div>
+                  </div>
+                  <div className="metric-card min-w-[180px]">
+                    <div className="metric-label">Status</div>
+                    <div className="metric-value text-xl">Ready to run</div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        try {
-            const result = await api.evaluateDocument(fileId, metadata);
-            setEvaluation(result);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Failed to evaluate document');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleReset = () => {
-        setSelectedFile(null);
-        setFileId(null);
-        setMetadata({
-            document_type: '',
-            sponsor_name: '',
-            drug_name: '',
-            inn: '',
-            trial_phase: '',
-            submission_target: '',
-            version: '',
-            date: '',
-        });
-        setEvaluation(null);
-        setError(null);
-        setUploadProgress('');
-    };
-
-    const modules = [
-        {
-            id: 'compliance' as Module,
-            name: 'Compliance Checker',
-            icon: '✓',
-            description: 'Evaluate documents for regulatory compliance',
-            color: 'blue'
-        },
-        {
-            id: 'generator' as Module,
-            name: 'Document Generator',
-            icon: '📄',
-            description: 'Generate regulatory documents section-by-section',
-            color: 'indigo'
-        },
-        {
-            id: 'query' as Module,
-            name: 'Query Response',
-            icon: '💬',
-            description: 'Draft responses to CDSCO queries',
-            color: 'green'
-        },
-        {
-            id: 'regulatory' as Module,
-            name: 'Regulatory Intelligence',
-            icon: '📊',
-            description: 'Monitor CDSCO changes and assess impact',
-            color: 'emerald'
-        },
-        {
-            id: 'anonymise' as Module,
-            name: 'M5: Anonymisation',
-            icon: '🛡️',
-            description: 'DPDP/NDHM anonymisation workflows',
-            color: 'purple'
-        },
-        {
-            id: 'summarise' as Module,
-            name: 'M6: Summarisation',
-            icon: '🧠',
-            description: 'SUGAM/SAE/Meeting summarisation',
-            color: 'indigo'
-        },
-        {
-            id: 'comparator' as Module,
-            name: 'M7: Comparator',
-            icon: '🔍',
-            description: 'Version diff and completeness checks',
-            color: 'amber'
-        },
-        {
-            id: 'classifier' as Module,
-            name: 'M8: SAE Classifier',
-            icon: '🚨',
-            description: 'Severity, duplicates, and queue priority',
-            color: 'rose'
-        }
-    ];
-
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-            {/* Header */}
-            <header className="bg-white shadow-md border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                    <div className="flex items-center justify-between">
+            <div className="px-6 py-6 md:px-8 md:py-8">
+              {activeModule === 'compliance' && (
+                <div className="space-y-6">
+                  <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                    <div className="glass-panel p-6">
+                      <div className="mb-5 flex items-start justify-between gap-4">
                         <div>
-                            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                                RegCheck-India
-                            </h1>
-                            <p className="text-sm text-gray-600 mt-1">
-                                AI-Powered Pharmaceutical Regulatory Platform for Indian Submissions
-                            </p>
+                          <div className="section-kicker">Step 1</div>
+                          <h3 className="mt-3 text-xl font-semibold">Upload and stage the source file</h3>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
-                                Powered by Claude AI
-                            </span>
-                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
-                                v1.0.0
-                            </span>
+                        <span className="status-chip">PDF or DOCX</span>
+                      </div>
+                      <DocumentUpload onFileSelect={handleFileSelect} selectedFile={selectedFile} />
+                      {uploadProgress && (
+                        <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+                          {uploadProgress}
                         </div>
+                      )}
                     </div>
+
+                    <div className="glass-panel p-6">
+                      <div className="section-kicker">Review note</div>
+                      <h3 className="mt-3 text-xl font-semibold">Keep human oversight in the loop</h3>
+                      <p className="mt-3 text-sm leading-6 text-slate-400">
+                        This workspace accelerates review, but filing decisions should still be made
+                        by qualified regulatory professionals.
+                      </p>
+                      <div className="mt-6 grid gap-4">
+                        <div className="metric-card">
+                          <div className="metric-label">Evaluation basis</div>
+                          <div className="metric-value text-xl">NDCTR 2019</div>
+                        </div>
+                        <div className="metric-card">
+                          <div className="metric-label">Supporting frame</div>
+                          <div className="metric-value text-xl">CDSCO, Schedule Y, CTRI</div>
+                        </div>
+                        <div className="metric-card">
+                          <div className="metric-label">Workflow mode</div>
+                          <div className="metric-value text-xl">Upload, map, evaluate</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {fileId && (
+                    <div className="glass-panel p-6">
+                      <div className="mb-4">
+                        <div className="section-kicker">Step 2</div>
+                        <h3 className="mt-3 text-xl font-semibold">Document metadata</h3>
+                      </div>
+                      <MetadataForm metadata={metadata} onChange={setMetadata} />
+                    </div>
+                  )}
+
+                  {fileId && (
+                    <div className="glass-panel flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="section-kicker">Step 3</div>
+                        <h3 className="mt-3 text-xl font-semibold">Run compliance evaluation</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-400">
+                          Launch the evaluator once the source file and filing metadata are in place.
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={handleEvaluate}
+                          disabled={loading}
+                          className={`primary-button ${loading ? 'cursor-not-allowed opacity-70' : ''}`}
+                        >
+                          {loading ? 'Evaluating...' : 'Evaluate document'}
+                        </button>
+                        <button type="button" onClick={handleReset} className="secondary-button">
+                          Reset workspace
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {error && (
+                    <div className="rounded-3xl border border-rose-300/20 bg-rose-400/10 px-5 py-4 text-sm text-rose-100">
+                      {error}
+                    </div>
+                  )}
+
+                  {evaluation && <ResultsViewer evaluation={evaluation} />}
                 </div>
-            </header>
+              )}
 
-            {/* Module Navigation */}
-            <nav className="bg-white border-b border-gray-200 shadow-sm">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex gap-2 overflow-x-auto py-4">
-                        {modules.map(module => (
-                            <button
-                                key={module.id}
-                                onClick={() => setActiveModule(module.id)}
-                                className={`flex-shrink-0 px-6 py-3 rounded-lg font-semibold transition-all ${activeModule === module.id
-                                    ? `bg-${module.color}-600 text-white shadow-lg scale-105`
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
-                                style={activeModule === module.id ? {
-                                    backgroundColor: module.color === 'blue' ? '#2563eb' :
-                                        module.color === 'indigo' ? '#4f46e5' :
-                                            module.color === 'purple' ? '#9333ea' :
-                                                module.color === 'amber' ? '#d97706' :
-                                                    module.color === 'rose' ? '#e11d48' :
-                                                '#059669'
-                                } : {}}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xl">{module.icon}</span>
-                                    <div className="text-left">
-                                        <div className="font-bold">{module.name}</div>
-                                        <div className="text-xs opacity-90">{module.description}</div>
-                                    </div>
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </nav>
-
-            {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {/* Module 01: Compliance Checker */}
-                {activeModule === 'compliance' && (
-                    <div className="space-y-6">
-                        {/* Info Banner */}
-                        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-                            <div className="flex">
-                                <div className="flex-shrink-0">
-                                    <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                                <div className="ml-3">
-                                    <p className="text-sm text-blue-700">
-                                        <strong>Important:</strong> This is a quality assurance tool for regulatory compliance evaluation.
-                                        All outputs should be reviewed by qualified regulatory professionals.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Upload Section */}
-                        <div className="bg-white rounded-lg shadow-md p-6">
-                            <h2 className="text-xl font-bold text-gray-800 mb-4">Step 1: Upload Document</h2>
-                            <DocumentUpload onFileSelect={handleFileSelect} selectedFile={selectedFile} />
-                            {uploadProgress && (
-                                <p className="mt-2 text-sm text-green-600">{uploadProgress}</p>
-                            )}
-                        </div>
-
-                        {/* Metadata Section */}
-                        {fileId && (
-                            <div>
-                                <MetadataForm metadata={metadata} onChange={setMetadata} />
-                            </div>
-                        )}
-
-                        {/* Evaluate Button */}
-                        {fileId && (
-                            <div className="flex justify-center gap-4">
-                                <button
-                                    onClick={handleEvaluate}
-                                    disabled={loading}
-                                    className={`px-8 py-3 rounded-lg font-semibold text-white transition-colors ${loading
-                                        ? 'bg-gray-400 cursor-not-allowed'
-                                        : 'bg-blue-600 hover:bg-blue-700'
-                                        }`}
-                                >
-                                    {loading ? (
-                                        <span className="flex items-center gap-2">
-                                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                            </svg>
-                                            Evaluating...
-                                        </span>
-                                    ) : (
-                                        'Evaluate Document'
-                                    )}
-                                </button>
-                                <button
-                                    onClick={handleReset}
-                                    className="px-8 py-3 rounded-lg font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors"
-                                >
-                                    Reset
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Error Display */}
-                        {error && (
-                            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                                <div className="flex">
-                                    <div className="flex-shrink-0">
-                                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div className="ml-3">
-                                        <p className="text-sm text-red-700">{error}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Results Section */}
-                        {evaluation && (
-                            <div>
-                                <ResultsViewer evaluation={evaluation} />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Module 02: Document Generator */}
-                {activeModule === 'generator' && <DocumentGenerator />}
-
-                {/* Module 03: Query Response */}
-                {activeModule === 'query' && <QueryResponseAssistant />}
-
-                {/* Module 04: Regulatory Intelligence */}
-                {activeModule === 'regulatory' && (
-                    <div className="space-y-6">
-                        <div className="bg-white p-6 rounded-lg shadow">
-                            <h3 className="text-lg font-semibold mb-4">Regulatory Intelligence Monitor</h3>
-                            <p className="text-gray-600 mb-4">
-                                Select a view to monitor CDSCO regulatory changes, assess impact on submissions, or generate weekly digests.
-                            </p>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setActiveModule('regulatory')}
-                                    className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-md font-medium"
-                                >
-                                    Change Monitor
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Tabbed Interface for Module 04 */}
-                        <div className="bg-white rounded-lg shadow">
-                            <div className="border-b border-gray-200">
-                                <nav className="flex -mb-px">
-                                    <button className="px-6 py-3 border-b-2 border-emerald-600 text-emerald-600 font-medium">
-                                        Change Monitor
-                                    </button>
-                                    <button className="px-6 py-3 text-gray-600 hover:text-gray-800 font-medium">
-                                        Impact Assessment
-                                    </button>
-                                    <button className="px-6 py-3 text-gray-600 hover:text-gray-800 font-medium">
-                                        Weekly Digest
-                                    </button>
-                                </nav>
-                            </div>
-                            <div className="p-6">
-                                <ChangeMonitorDashboard />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {activeModule === 'anonymise' && <AnonymisationTool />}
-                {activeModule === 'summarise' && <DocumentSummariser />}
-                {activeModule === 'comparator' && <DocumentComparator />}
-                {activeModule === 'classifier' && <SAEClassifier />}
-            </main>
-
-            {/* Footer */}
-            <footer className="bg-white border-t border-gray-200 mt-12">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                    <div className="text-center text-sm text-gray-600">
-                        <p>RegCheck-India v1.0.0 | Specialized AI for Indian Pharmaceutical Regulatory Compliance</p>
-                        <p className="mt-1">Evaluates against NDCTR 2019, CDSCO Guidelines, ICH E6(R3), Schedule Y, and CTRI Requirements</p>
-                    </div>
-                </div>
-            </footer>
-        </div>
-    );
+              {activeModule === 'generator' && <DocumentGenerator />}
+              {activeModule === 'query' && <QueryResponseAssistant />}
+              {activeModule === 'regulatory' && <ChangeMonitorDashboard />}
+              {activeModule === 'anonymise' && <AnonymisationTool />}
+              {activeModule === 'summarise' && <DocumentSummariser />}
+              {activeModule === 'comparator' && <DocumentComparator />}
+              {activeModule === 'classifier' && <SAEClassifier />}
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
 }
