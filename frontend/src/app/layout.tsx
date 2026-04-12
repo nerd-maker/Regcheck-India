@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
-import { Manrope, Space_Grotesk } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const manrope = Manrope({
+const inter = Inter({
     subsets: ["latin"],
-    variable: "--font-body",
-});
-
-const spaceGrotesk = Space_Grotesk({
-    subsets: ["latin"],
-    variable: "--font-display",
+    variable: "--font-inter",
+    display: "swap",
 });
 
 export const metadata: Metadata = {
     title: "RegCheck-India | Pharmaceutical Regulatory Compliance",
-    description: "AI-powered regulatory compliance evaluation for Indian pharmaceutical and clinical trial documents",
+    description: "India's first CDSCO-native AI compliance platform. Automate pharmaceutical regulatory compliance evaluation for Indian clinical trial documents using sovereign AI.",
 };
 
 export default function RootLayout({
@@ -24,7 +20,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className={`${manrope.variable} ${spaceGrotesk.variable}`}>{children}</body>
+            <body className={`${inter.variable} ${inter.className}`}>{children}</body>
         </html>
     );
 }
