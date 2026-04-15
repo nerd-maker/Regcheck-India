@@ -507,71 +507,37 @@ export default function Home() {
 
       {/* Main content area */}
       <div className="lg:ml-72 relative z-10">
-        <header className="mx-auto max-w-7xl px-4 pb-6 pt-8 sm:px-6 lg:px-8">
-          <div className="glass-panel-strong overflow-hidden p-6 md:p-8">
-            <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-3xl space-y-5">
-                <span className="section-kicker">Regulatory Operating System</span>
-                <div className="space-y-3">
-                  <h1 className="text-balance text-4xl font-semibold md:text-5xl">
-                    RegCheck-India
-                  </h1>
-                  <p className="max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
-                    A sharper control surface for Indian pharmaceutical compliance work, from
-                    protocol review and query drafting to anonymisation, summarisation, comparison,
-                    and SAE triage.
-                  </p>
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          {/* Active module bar */}
+          <div className="glass-panel-strong overflow-hidden">
+            <div className="flex flex-col gap-4 px-6 py-5 md:px-8 md:flex-row md:items-center md:justify-between border-b border-white/10">
+              <div className="flex items-center gap-4">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold"
+                  style={{
+                    backgroundColor: `${activeModuleMeta.accent}22`,
+                    color: activeModuleMeta.accent,
+                    border: `1px solid ${activeModuleMeta.accent}44`,
+                  }}
+                >
+                  {activeModuleMeta.icon}
                 </div>
-                <div className="flex flex-wrap gap-3">
-                  <span className="status-chip">Anthropic Claude stack</span>
-                  <span className="status-chip">Session-aware workflows</span>
-                  <span className="status-chip">CDSCO and ICH aligned</span>
-                </div>
-              </div>
-
-              <div className="grid min-w-full gap-4 sm:grid-cols-3 lg:min-w-[360px]">
-                {complianceStats.map((stat) => (
-                  <div key={stat.label} className="metric-card">
-                    <div className="metric-label">{stat.label}</div>
-                    <div className="metric-value">{stat.value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
-
-
-          <section className="glass-panel-strong overflow-hidden">
-            <div className="border-b border-white/10 px-6 py-5 md:px-8">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div
-                    className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em]"
-                    style={{
-                      backgroundColor: `${activeModuleMeta.accent}1f`,
-                      color: activeModuleMeta.accent,
-                    }}
-                  >
-                    {activeModuleMeta.shortName} active
-                  </div>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">{activeModuleMeta.name}</h2>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                    {activeModuleMeta.description}
-                  </p>
+                  <h1 className="text-xl font-semibold text-white">{activeModuleMeta.name}</h1>
+                  <p className="text-sm text-slate-400 mt-0.5">{activeModuleMeta.description.slice(0, 90)}...</p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="metric-card min-w-[180px]">
-                    <div className="metric-label">Current lane</div>
-                    <div className="metric-value text-xl">{activeModuleMeta.category}</div>
-                  </div>
-                  <div className="metric-card min-w-[180px]">
-                    <div className="metric-label">Status</div>
-                    <div className="metric-value text-xl">Ready to run</div>
-                  </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div
+                  className="inline-flex rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]"
+                  style={{
+                    backgroundColor: `${activeModuleMeta.accent}1f`,
+                    color: activeModuleMeta.accent,
+                  }}
+                >
+                  {activeModuleMeta.category}
                 </div>
+                <span className="status-chip">Ready</span>
               </div>
             </div>
 
@@ -677,7 +643,7 @@ export default function Home() {
               {activeModule === 'schedule-y' && <ScheduleYChecker />}
               {activeModule === 'ich-gcp' && <ICHGCPChecker />}
             </div>
-          </section>
+          </div>
         </main>
       </div>
     </div>
