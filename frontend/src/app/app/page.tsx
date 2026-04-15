@@ -39,22 +39,25 @@ type SidebarItem = {
   label: string;
   module?: Module;
   icon: React.ReactNode;
+  divider?: string;  // optional section heading above this item
 };
 
 const sidebarItems: SidebarItem[] = [
+  // ── Core Workflow ─────────────────────────────────
   {
-    id: 'dashboard',
-    label: 'Dashboard',
+    id: 'compliance-command',
+    label: 'Compliance Command',
     module: 'compliance',
+    divider: 'Core Workflow',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
       </svg>
     ),
   },
   {
-    id: 'submissions',
-    label: 'Submissions',
+    id: 'document-studio',
+    label: 'Document Studio',
     module: 'generator',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,28 +66,18 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'audit-trails',
-    label: 'Audit Trails',
-    module: 'anonymise',
+    id: 'query-desk',
+    label: 'Query Desk',
+    module: 'query',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
       </svg>
     ),
   },
   {
-    id: 'compliance-tracking',
-    label: 'Compliance Tracking',
-    module: 'compliance',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'regulatory-intelligence',
-    label: 'Regulatory Intelligence',
+    id: 'intelligence-radar',
+    label: 'Intelligence Radar',
     module: 'regulatory',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,9 +85,21 @@ const sidebarItems: SidebarItem[] = [
       </svg>
     ),
   },
+  // ── Document Tools ────────────────────────────────
   {
-    id: 'product-catalog',
-    label: 'Product Catalog',
+    id: 'privacy-shield',
+    label: 'Privacy Shield',
+    module: 'anonymise',
+    divider: 'Document Tools',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'summary-engine',
+    label: 'Summary Engine',
     module: 'summarise',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,8 +108,8 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'document-archive',
-    label: 'Document Archive',
+    id: 'comparison-lab',
+    label: 'Comparison Lab',
     module: 'comparator',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -113,9 +118,21 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'completeness-check',
-    label: 'Completeness',
+    id: 'sae-triage',
+    label: 'SAE Triage',
+    module: 'classifier',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+    ),
+  },
+  // ── Compliance Agents ─────────────────────────────
+  {
+    id: 'completeness-gate',
+    label: 'Completeness Gate',
     module: 'completeness' as Module,
+    divider: 'Compliance Agents',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -159,16 +176,6 @@ const sidebarItems: SidebarItem[] = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
   },
@@ -312,7 +319,7 @@ const complianceStats = [
 
 export default function Home() {
   const [activeModule, setActiveModule] = useState<Module>('compliance');
-  const [activeSidebar, setActiveSidebar] = useState('regulatory-intelligence');
+  const [activeSidebar, setActiveSidebar] = useState('compliance-command');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileId, setFileId] = useState<string | null>(null);
@@ -455,23 +462,31 @@ export default function Home() {
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {sidebarItems.map((item) => {
             const isActive = activeSidebar === item.id;
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleSidebarClick(item)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                  isActive
-                    ? 'border-l-4 border-secondary bg-secondary-fixed/10 text-secondary-fixed-dim ml-0 pl-3'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5 border-l-4 border-transparent'
-                }`}
-              >
-                {item.icon}
-                {item.label}
-              </button>
+              <React.Fragment key={item.id}>
+                {item.divider && (
+                  <div className="px-4 pt-5 pb-2 first:pt-0">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                      {item.divider}
+                    </span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleSidebarClick(item)}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    isActive
+                      ? 'border-l-4 border-secondary bg-secondary-fixed/10 text-secondary-fixed-dim ml-0 pl-3'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5 border-l-4 border-transparent'
+                  }`}
+                >
+                  {item.icon}
+                  {item.label}
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>
@@ -527,64 +542,7 @@ export default function Home() {
         </header>
 
         <main className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
-          <section className="glass-panel mb-8 p-5 md:p-6">
-            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <div className="section-kicker">Module Grid</div>
-                <h2 className="section-title mt-3">Switch between review lanes</h2>
-              </div>
-              <p className="section-copy max-w-2xl">
-                The interface is organized like a regulatory control room: pick a lane, see the
-                active mission clearly, and keep every output tied to the same session context.
-              </p>
-            </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {modules.map((module) => {
-                const isActive = activeModule === module.id;
-                return (
-                  <button
-                    key={module.id}
-                    type="button"
-                    onClick={() => setActiveModule(module.id)}
-                    className={`module-card ${isActive ? 'module-card-active' : ''}`}
-                    style={{
-                      boxShadow: isActive ? `0 16px 42px ${module.accent}22` : undefined,
-                    }}
-                  >
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div
-                        className="flex h-12 w-12 items-center justify-center rounded-2xl border text-sm font-semibold"
-                        style={{
-                          borderColor: `${module.accent}55`,
-                          backgroundColor: `${module.accent}22`,
-                          color: module.accent,
-                        }}
-                      >
-                        {module.icon}
-                      </div>
-                      <span
-                        className="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
-                        style={{
-                          backgroundColor: `${module.accent}20`,
-                          color: module.accent,
-                        }}
-                      >
-                        {module.shortName}
-                      </span>
-                    </div>
-                    <div className="text-left">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        {module.category}
-                      </div>
-                      <h3 className="mt-2 text-lg font-semibold text-slate-50">{module.name}</h3>
-                      <p className="mt-3 text-sm leading-6 text-slate-400">{module.description}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
 
           <section className="glass-panel-strong overflow-hidden">
             <div className="border-b border-white/10 px-6 py-5 md:px-8">
