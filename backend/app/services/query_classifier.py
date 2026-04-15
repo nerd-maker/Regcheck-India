@@ -10,7 +10,6 @@ from typing import Dict, List, Optional
 
 import logging
 import hashlib
-import anthropic
 
 from app.core.config import settings
 from app.prompts.query_response_prompts import (
@@ -29,7 +28,6 @@ from app.services.classification_confidence import classification_confidence_man
 from app.services.claude_client import call_claude, MODEL_HAIKU
 
 logger = logging.getLogger(__name__)
-OpenAI = anthropic.Anthropic
 
 
 class QueryClassifier:

@@ -13,6 +13,29 @@ const apiClient = axios.create({
     },
 });
 
+type AgentEnvelope<T = Record<string, unknown>> = {
+    agent: string;
+    model: string;
+    result: T;
+    timestamp: string;
+    token_usage: {
+        input_tokens: number;
+        output_tokens: number;
+    };
+};
+
+const unwrapAgentResult = <T extends Record<string, unknown>>(payload: AgentEnvelope<T>) => ({
+    ...payload.result,
+    model_attribution: {
+        primary_model: payload.model,
+        provider: 'Anthropic Claude',
+        sovereign: false,
+    },
+    agent: payload.agent,
+    timestamp: payload.timestamp,
+    token_usage: payload.token_usage,
+});
+
 // Inject X-Session-ID header on every request
 apiClient.interceptors.request.use((config) => {
     config.headers['X-Session-ID'] = getSessionId();
@@ -302,33 +325,45 @@ export const api = {
     },
 
     anonymiseText: async (text: string, fullAnonymisation: boolean): Promise<Record<string, unknown>> => {
-        const response = await apiClient.post('/api/anonymise/text', {
-            text,
-            full_anonymisation: fullAnonymisation,
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/anonymise', {
+            document: text,
+            metadata: {
+                mode: fullAnonymisation ? 'full' : 'pseudo',
+                full_anonymisation: fullAnonymisation,
+            },
         });
-        return response.data;
+        return unwrapAgentResult(response.data);
     },
 
     summariseSugamApplication: async (documentText: string, checklistType: string = 'ct04'): Promise<Record<string, unknown>> => {
-        const response = await apiClient.post('/api/summarise/sugam-application', {
-            document_text: documentText,
-            checklist_type: checklistType,
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/summarise', {
+            document: documentText,
+            metadata: {
+                document_type: 'sugam_application',
+                checklist_type: checklistType,
+            },
         });
-        return response.data;
+        return unwrapAgentResult(response.data);
     },
 
     summariseSAECase: async (saeText: string): Promise<Record<string, unknown>> => {
-        const response = await apiClient.post('/api/summarise/sae-case', {
-            sae_text: saeText,
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/summarise', {
+            document: saeText,
+            metadata: {
+                document_type: 'sae_case',
+            },
         });
-        return response.data;
+        return unwrapAgentResult(response.data);
     },
 
     summariseMeeting: async (transcriptText: string): Promise<Record<string, unknown>> => {
-        const response = await apiClient.post('/api/summarise/meeting', {
-            transcript_text: transcriptText,
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/summarise', {
+            document: transcriptText,
+            metadata: {
+                document_type: 'meeting_transcript',
+            },
         });
-        return response.data;
+        return unwrapAgentResult(response.data);
     },
 
     compareVersions: async (v1: string, v2: string, docType: string = 'general'): Promise<Record<string, unknown>> => {
@@ -341,10 +376,13 @@ export const api = {
     },
 
     classifySAE: async (saeText: string): Promise<Record<string, unknown>> => {
-        const response = await apiClient.post('/api/classify/sae', {
-            sae_text: saeText,
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/classify', {
+            document: saeText,
+            metadata: {
+                document_type: 'sae_case',
+            },
         });
-        return response.data;
+        return unwrapAgentResult(response.data);
     },
 
     checkSAEDuplicate: async (saeCase: Record<string, unknown>): Promise<Record<string, unknown>> => {
@@ -352,5 +390,56 @@ export const api = {
             sae_case: saeCase,
         });
         return response.data;
+    },
+
+    agentsHealth: async (): Promise<Record<string, unknown>> => {
+        const response = await apiClient.get('/api/v1/agents/health');
+        return response.data;
+    },
+
+    // ─── Agent 03: Completeness Assessment ──────────────────────────────
+    assessCompleteness: async (documentText: string, metadata?: Record<string, unknown>): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/completeness', {
+            document: documentText,
+            metadata: metadata ?? {},
+        });
+        return unwrapAgentResult(response.data);
+    },
+
+    // ─── Agent 05: Inspection Report Generation ─────────────────────────
+    generateInspectionReport: async (findingsText: string, metadata?: Record<string, unknown>): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/inspection-report', {
+            document: findingsText,
+            metadata: metadata ?? {},
+        });
+        return unwrapAgentResult(response.data);
+    },
+
+    // ─── Agent 06: Regulatory Q&A (RAG) ─────────────────────────────────
+    regulatoryQA: async (question: string, retrievedContext: string, metadata?: Record<string, unknown>): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/qa', {
+            question,
+            retrieved_context: retrievedContext,
+            metadata: metadata ?? {},
+        });
+        return unwrapAgentResult(response.data);
+    },
+
+    // ─── Agent 07: Schedule Y / CDSCO Compliance ────────────────────────
+    checkScheduleY: async (documentText: string, metadata?: Record<string, unknown>): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/schedule-y', {
+            document: documentText,
+            metadata: metadata ?? {},
+        });
+        return unwrapAgentResult(response.data);
+    },
+
+    // ─── Agent 08: ICH E6(R3) GCP Compliance ────────────────────────────
+    checkICHGCP: async (documentText: string, metadata?: Record<string, unknown>): Promise<Record<string, unknown>> => {
+        const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/ich-gcp', {
+            document: documentText,
+            metadata: metadata ?? {},
+        });
+        return unwrapAgentResult(response.data);
     },
 };

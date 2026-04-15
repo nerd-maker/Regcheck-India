@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 _client: Optional[anthropic.Anthropic] = None
 
 # Model constants
-MODEL_SONNET = "claude-sonnet-4-20250514"
-MODEL_HAIKU = "claude-haiku-4-20250414"
+MODEL_SONNET = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
+MODEL_HAIKU = os.getenv("LLM_MODEL_FAST", "claude-haiku-4-20250414")
 
 
 def get_claude_client() -> anthropic.Anthropic:

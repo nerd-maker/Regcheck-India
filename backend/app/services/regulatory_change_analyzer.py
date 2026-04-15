@@ -10,7 +10,6 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any
 
-import anthropic
 
 from app.core.config import settings
 from app.models.regulatory_change_schemas import (
@@ -25,7 +24,6 @@ from app.prompts.regulatory_intelligence_prompts import (
 from app.services.claude_client import call_claude, MODEL_SONNET
 
 logger = logging.getLogger(__name__)
-OpenAI = anthropic.Anthropic
 
 
 class RegulatoryChangeAnalyzer:

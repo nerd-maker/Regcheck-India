@@ -9,7 +9,6 @@ from typing import Dict, List, Optional
 
 import logging
 import hashlib
-import anthropic
 
 from app.core.config import settings
 from app.services.schema_engine import SchemaEngine, SectionSchema
@@ -34,7 +33,6 @@ from app.services.prompt_version_manager import prompt_version_manager # Gap 8
 from app.services.claude_client import call_claude, MODEL_SONNET
 
 logger = logging.getLogger(__name__)
-OpenAI = anthropic.Anthropic
 
 
 class DocumentGenerator:

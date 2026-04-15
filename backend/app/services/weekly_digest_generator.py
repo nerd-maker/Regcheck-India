@@ -8,7 +8,6 @@ import json
 import logging
 from datetime import datetime
 from typing import List, Dict, Any
-import anthropic
 
 
 from app.core.config import settings
@@ -26,7 +25,6 @@ from app.prompts.regulatory_intelligence_prompts import (
 )
 
 logger = logging.getLogger(__name__)
-OpenAI = anthropic.Anthropic
 
 
 from app.services.claude_client import call_claude, MODEL_SONNET

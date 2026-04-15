@@ -1,17 +1,22 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import Link from 'next/link';
 import AnonymisationTool from '@/components/AnonymisationTool';
 import ChangeMonitorDashboard from '@/components/ChangeMonitorDashboard';
+import CompletenessAssessor from '@/components/CompletenessAssessor';
 import DocumentComparator from '@/components/DocumentComparator';
 import DocumentGenerator from '@/components/DocumentGenerator';
 import DocumentSummariser from '@/components/DocumentSummariser';
 import DocumentUpload from '@/components/DocumentUpload';
+import ICHGCPChecker from '@/components/ICHGCPChecker';
+import InspectionReportGenerator from '@/components/InspectionReportGenerator';
 import MetadataForm from '@/components/MetadataForm';
 import QueryResponseAssistant from '@/components/QueryResponseAssistant';
+import RegulatoryQA from '@/components/RegulatoryQA';
 import ResultsViewer from '@/components/ResultsViewer';
 import SAEClassifier from '@/components/SAEClassifier';
+import ScheduleYChecker from '@/components/ScheduleYChecker';
 import { api, DocumentMetadata, EvaluationResponse } from '@/services/api';
 
 type Module =
@@ -22,7 +27,12 @@ type Module =
   | 'anonymise'
   | 'summarise'
   | 'comparator'
-  | 'classifier';
+  | 'classifier'
+  | 'completeness'
+  | 'inspection'
+  | 'reg-qa'
+  | 'schedule-y'
+  | 'ich-gcp';
 
 type SidebarItem = {
   id: string;
@@ -99,6 +109,56 @@ const sidebarItems: SidebarItem[] = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+      </svg>
+    ),
+  },
+  {
+    id: 'completeness-check',
+    label: 'Completeness',
+    module: 'completeness' as Module,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
+    id: 'inspection-report',
+    label: 'Inspection Report',
+    module: 'inspection' as Module,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'regulatory-qa',
+    label: 'Regulatory Q&A',
+    module: 'reg-qa' as Module,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'schedule-y-check',
+    label: 'Schedule Y',
+    module: 'schedule-y' as Module,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'ich-gcp-check',
+    label: 'ICH GCP',
+    module: 'ich-gcp' as Module,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
   },
@@ -197,10 +257,55 @@ const modules: ModuleCard[] = [
     accent: '#ff8aa1',
     category: 'Safety',
   },
+  {
+    id: 'completeness',
+    name: 'Completeness Gate',
+    shortName: 'M9',
+    icon: '09',
+    description: 'Check whether a submission package is complete against CDSCO, Schedule Y, NDCTR 2019, and ICH requirements.',
+    accent: '#6ee7b7',
+    category: 'Assessment',
+  },
+  {
+    id: 'inspection',
+    name: 'Inspection Report',
+    shortName: 'M10',
+    icon: '10',
+    description: 'Turn raw inspection findings into structured CDSCO-style reports with observations and CAPA plans.',
+    accent: '#fca5a5',
+    category: 'Reporting',
+  },
+  {
+    id: 'reg-qa',
+    name: 'Regulatory Q&A',
+    shortName: 'M11',
+    icon: '11',
+    description: 'Ask regulatory questions grounded in retrieved knowledge-base context with cited answers.',
+    accent: '#93c5fd',
+    category: 'Knowledge',
+  },
+  {
+    id: 'schedule-y',
+    name: 'Schedule Y Check',
+    shortName: 'M12',
+    icon: '12',
+    description: 'Deep compliance review against Schedule Y and NDCTR 2019 with priority remediation actions.',
+    accent: '#fde68a',
+    category: 'Compliance',
+  },
+  {
+    id: 'ich-gcp',
+    name: 'ICH GCP Check',
+    shortName: 'M13',
+    icon: '13',
+    description: 'ICH E6(R3) GCP assessment with R3-specific gap analysis and inspection readiness scoring.',
+    accent: '#c4b5fd',
+    category: 'GCP',
+  },
 ];
 
 const complianceStats = [
-  { label: 'Review modes', value: '8 modules' },
+  { label: 'Review modes', value: '13 modules' },
   { label: 'Core legal stack', value: 'CDSCO + ICH' },
   { label: 'Runtime posture', value: 'Session-aware' },
 ];
@@ -608,6 +713,11 @@ export default function Home() {
               {activeModule === 'summarise' && <DocumentSummariser />}
               {activeModule === 'comparator' && <DocumentComparator />}
               {activeModule === 'classifier' && <SAEClassifier />}
+              {activeModule === 'completeness' && <CompletenessAssessor />}
+              {activeModule === 'inspection' && <InspectionReportGenerator />}
+              {activeModule === 'reg-qa' && <RegulatoryQA />}
+              {activeModule === 'schedule-y' && <ScheduleYChecker />}
+              {activeModule === 'ich-gcp' && <ICHGCPChecker />}
             </div>
           </section>
         </main>

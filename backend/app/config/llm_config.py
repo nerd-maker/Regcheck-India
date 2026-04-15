@@ -9,6 +9,7 @@ Gap 12: Review queue SLA configuration
 Gap 16: Commitment tracking alerts
 """
 
+import os
 from typing import Dict, List
 
 
@@ -45,8 +46,8 @@ class LLMConfig:
     }
 
     # LLM model (Anthropic Claude)
-    LLM_MODEL = "claude-sonnet-4-20250514"
-    LLM_MODEL_FAST = "claude-haiku-4-20250414"
+    LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
+    LLM_MODEL_FAST = os.getenv("LLM_MODEL_FAST", "claude-haiku-4-20250414")
 
     # --- Gap 11: M3 Classification Confidence ---
     CLASSIFICATION_CONFIDENCE_THRESHOLD: float = 0.75

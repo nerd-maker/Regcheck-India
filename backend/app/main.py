@@ -39,6 +39,7 @@ from app.services.kb_version_manager import kb_version_manager
 from app.services.runtime_state_store import runtime_state_store
 from app.config.llm_config import LLMConfig
 from app.core.datetime_utils import utc_now
+from agents_router import router as agents_router
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,7 @@ app.include_router(anonymisation_endpoints.router, prefix="/api/anonymise", tags
 app.include_router(summarisation_endpoints.router, prefix="/api/summarise", tags=["Summarisation"])
 app.include_router(comparison_endpoints.router, prefix="/api/compare", tags=["Comparison"])
 app.include_router(classification_endpoints.router, prefix="/api/classify", tags=["Classification"])
+app.include_router(agents_router, prefix="/api/v1/agents", tags=["AI Agents"])
 
 # Create upload directory
 UPLOAD_DIR = Path(settings.upload_dir)

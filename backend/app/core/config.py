@@ -1,6 +1,7 @@
 """
 Configuration management for RegCheck-India backend.
 """
+import os
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import List
@@ -17,7 +18,8 @@ class Settings(BaseSettings):
     
     # LLM Configuration (Anthropic Claude)
     anthropic_api_key: str = ""
-    llm_model: str = "claude-sonnet-4-20250514"
+    llm_model: str = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
+    llm_model_fast: str = os.getenv("LLM_MODEL_FAST", "claude-haiku-4-20250414")
     llm_max_tokens: int = 8000
     llm_temperature: float = 0.0
     

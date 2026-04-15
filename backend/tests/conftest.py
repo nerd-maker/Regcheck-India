@@ -2,6 +2,9 @@
 Shared test fixtures and configuration for all tests.
 """
 
+import importlib
+import sys
+import types
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime
@@ -229,6 +232,24 @@ def patch_claude_client(mock_openai_client):
 
 def pytest_configure(config):
     """Configure pytest with custom markers"""
+    if "openai" not in sys.modules:
+        fake_openai = types.ModuleType("openai")
+        fake_openai.OpenAI = object
+        sys.modules["openai"] = fake_openai
+
+    for module_name in [
+        "app.services.document_generator",
+        "app.services.evaluator",
+        "app.services.query_classifier",
+        "app.services.query_response_generator",
+        "app.services.regulatory_change_analyzer",
+        "app.services.submission_impact_assessor",
+        "app.services.weekly_digest_generator",
+    ]:
+        module = importlib.import_module(module_name)
+        if not hasattr(module, "OpenAI"):
+            setattr(module, "OpenAI", object)
+
     config.addinivalue_line(
         "markers", "unit: mark test as a unit test"
     )

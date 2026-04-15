@@ -7,7 +7,6 @@ Assesses the impact of regulatory changes on active pharmaceutical submissions.
 import json
 import logging
 from typing import List, Dict, Any
-import anthropic
 from app.services.claude_client import call_claude, MODEL_SONNET
 
 from app.core.config import settings
@@ -25,7 +24,6 @@ from app.prompts.regulatory_intelligence_prompts import (
 )
 
 logger = logging.getLogger(__name__)
-OpenAI = anthropic.Anthropic
 
 
 class SubmissionImpactAssessor:
