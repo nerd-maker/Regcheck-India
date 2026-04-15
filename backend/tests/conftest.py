@@ -3,20 +3,26 @@ Shared test fixtures and configuration for all tests.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 from datetime import datetime
 
 
 # =============================================================================
-# MOCK LLM CLIENT (OpenAI-compatible for NVIDIA API)
+# MOCK LLM CLIENT (Anthropic Claude)
 # =============================================================================
 
 @pytest.fixture
 def mock_openai_client():
-    """Mock OpenAI-compatible client for all tests"""
+    """Mock Anthropic Claude client for all tests (legacy name kept for compatibility)"""
     client = Mock()
+    client.messages = Mock()
     client.chat = Mock()
     client.chat.completions = Mock()
+
+    def _proxy_messages_create(*args, **kwargs):
+        return client.chat.completions.create(*args, **kwargs)
+
+    client.messages.create.side_effect = _proxy_messages_create
     return client
 
 
@@ -29,15 +35,13 @@ def mock_anthropic_client(mock_openai_client):
 
 @pytest.fixture
 def mock_claude_response_json():
-    """Mock LLM API response with JSON content (OpenAI format)"""
+    """Mock Anthropic Claude API response with JSON content"""
     def _create_response(json_content: str):
         response = Mock()
-        message = Mock()
-        message.content = json_content
-        choice = Mock()
-        choice.message = message
-        response.choices = [choice]
-        response.usage = Mock(completion_tokens=100, prompt_tokens=50, total_tokens=150)
+        text_block = Mock()
+        text_block.text = json_content
+        response.content = [text_block]
+        response.usage = Mock(input_tokens=50, output_tokens=100)
         return response
     return _create_response
 
@@ -214,6 +218,13 @@ def reset_mocks():
     """Reset all mocks before each test"""
     yield
     # Cleanup after test
+
+
+@pytest.fixture(autouse=True)
+def patch_claude_client(mock_openai_client):
+    """Route all Claude calls through the shared mock client in tests."""
+    with patch("app.services.claude_client.get_claude_client", return_value=mock_openai_client):
+        yield
 
 
 def pytest_configure(config):

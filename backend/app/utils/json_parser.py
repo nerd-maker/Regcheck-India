@@ -6,9 +6,8 @@ Implements Rule 7: Fallback behavior for unparseable LLM responses
 import json
 import logging
 from typing import Any, Dict, Optional
-from openai import OpenAI
 
-from app.core.config import settings
+from app.services.claude_client import call_claude, MODEL_HAIKU
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,7 @@ class RobustJSONParser:
         response_text: str,
         session_id: str,
         module: str,
-        client: OpenAI,
+        client: Any = None,
         max_retries: int = 1
     ) -> Dict[str, Any]:
         """
@@ -43,7 +42,7 @@ class RobustJSONParser:
             response_text: Raw LLM response text
             session_id: Session ID for audit trail
             module: Module name (M1, M2, M3, M4)
-            client: OpenAI-compatible client for retry
+            client: Unused (kept for API compatibility)
             max_retries: Maximum retry attempts (default: 1)
             
         Returns:
@@ -76,7 +75,6 @@ class RobustJSONParser:
                     error=e,
                     session_id=session_id,
                     module=module,
-                    client=client
                 )
             else:
                 raise JSONParseError(f"JSON parsing failed: {str(e)}")
@@ -87,7 +85,6 @@ class RobustJSONParser:
         error: json.JSONDecodeError,
         session_id: str,
         module: str,
-        client: OpenAI
     ) -> Dict[str, Any]:
         """Retry parsing with repair prompt"""
         
@@ -104,14 +101,14 @@ Ensure all strings are properly quoted, all brackets are balanced, and there are
         logger.info(f"Attempting JSON repair via LLM")
         
         try:
-            retry_response = client.chat.completions.create(
-                model=settings.llm_model,
-                temperature=0.0,  # Deterministic for repair
+            result = call_claude(
+                prompt=repair_prompt,
+                model=MODEL_HAIKU,
                 max_tokens=len(response_text) + 1000,
-                messages=[{"role": "user", "content": repair_prompt}]
+                temperature=0.0,
             )
             
-            repaired_text = retry_response.choices[0].message.content.strip()
+            repaired_text = result["content"].strip()
             
             # Remove markdown code blocks if present
             if repaired_text.startswith("```"):
@@ -160,17 +157,16 @@ async def parse_llm_json(
     response_text: str,
     session_id: str,
     module: str,
-    client: OpenAI
+    client: Any = None
 ) -> Dict[str, Any]:
     """
     Parse LLM JSON response with automatic retry
     
     Usage:
         result = await parse_llm_json(
-            response.choices[0].message.content,
+            response_content,
             session_id,
-            "M2",
-            openai_client
+            "M2"
         )
     """
     return await RobustJSONParser.parse_with_retry(

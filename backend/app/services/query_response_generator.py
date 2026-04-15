@@ -6,9 +6,10 @@ Generates structured responses to regulatory queries with commitment tracking
 import json
 import os
 from typing import Dict, List, Optional
-from openai import OpenAI
+
 import logging
 import hashlib
+import anthropic
 
 from app.core.config import settings
 from app.services.knowledge_base import knowledge_base
@@ -33,9 +34,10 @@ from app.services.session_manager import session_manager
 # Gap service integrations
 from app.services.commitment_tracker import commitment_manager         # Gap 16
 from app.services.prompt_version_manager import prompt_version_manager # Gap 8
-from app.services.aikosh_client import orchestrator, run_async
+from app.services.claude_client import call_claude, MODEL_SONNET, MODEL_HAIKU
 
 logger = logging.getLogger(__name__)
+OpenAI = anthropic.Anthropic
 
 
 class QueryResponseGenerator:
@@ -44,10 +46,6 @@ class QueryResponseGenerator:
     """
     
     def __init__(self):
-        self.client = OpenAI(
-            api_key=settings.llm_api_key or "placeholder",
-            base_url=settings.llm_base_url
-        )
         self.classifier = QueryClassifier()
     
     def generate_response(
@@ -129,43 +127,34 @@ class QueryResponseGenerator:
         )
 
     def classify_and_respond(self, query: QueryInput) -> dict:
-        classification = run_async(
-            orchestrator.call(
-                group_name="query_intelligence",
-                role="classifier",
-                prompt=f"Classify this CDSCO query into one of 16 categories: {query.query_text}",
-                temperature=0.0,
-                max_tokens=500,
-            )
+        classification = call_claude(
+            prompt=f"Classify this CDSCO query into one of 16 categories: {query.query_text}",
+            model=MODEL_HAIKU,
+            max_tokens=500,
+            temperature=0.0,
         )
-        response_draft = run_async(
-            orchestrator.call(
-                group_name="query_intelligence",
-                role="responder",
-                system_prompt="You are a regulatory affairs expert drafting CDSCO query responses.",
-                prompt=f"Query Category: {classification.get('content', '')}\nQuery Text: {query.query_text}",
-                temperature=0.2,
-                max_tokens=3000,
-            )
+        response_draft = call_claude(
+            prompt=f"Query Category: {classification['content']}\nQuery Text: {query.query_text}",
+            system_prompt="You are a regulatory affairs expert drafting CDSCO query responses.",
+            model=MODEL_SONNET,
+            max_tokens=3000,
+            temperature=0.2,
         )
         out = {
-            "classification": classification.get("content", ""),
-            "response": response_draft.get("content", ""),
-            "models_used": [classification.get("model_used"), response_draft.get("model_used")],
+            "classification": classification["content"],
+            "response": response_draft["content"],
+            "models_used": [classification["model"], response_draft["model"]],
         }
-        ctext = classification.get("content", "").lower()
+        ctext = classification["content"].lower()
         if "pharmacovigilance" in ctext or "cat-07" in ctext:
-            validation = run_async(
-                orchestrator.call(
-                    group_name="query_intelligence",
-                    role="validator",
-                    prompt=f"Validate this pharmacovigilance response for ICH E2A compliance: {response_draft.get('content', '')}",
-                    temperature=0.0,
-                    max_tokens=1000,
-                )
+            validation = call_claude(
+                prompt=f"Validate this pharmacovigilance response for ICH E2A compliance: {response_draft['content']}",
+                model=MODEL_SONNET,
+                max_tokens=1000,
+                temperature=0.0,
             )
-            out["validation"] = validation.get("content", "")
-            out["models_used"].append(validation.get("model_used"))
+            out["validation"] = validation["content"]
+            out["models_used"].append(validation["model"])
         return out
     
     def _retrieve_regulatory_context(self, query_text: str, category: str) -> str:
@@ -263,34 +252,16 @@ class QueryResponseGenerator:
         temperature = LLMConfig.get_temperature("M3_QUERY")
         max_tokens = LLMConfig.get_max_tokens("M3_QUERY_RESPONSE")
         
-        use_ensemble = bool(os.getenv("SARVAM_API_KEY"))
-        if use_ensemble:
-            response = run_async(
-                orchestrator.call(
-                    group_name="query_intelligence",
-                    role="responder",
-                    system_prompt=SYSTEM_PROMPT_QUERYREPLY,
-                    prompt=context,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-            )
-            response_text = response.get("content", "")
-            model_used = response.get("model_used", "nvidia-fallback")
-            usage_tokens = response.get("usage", {}).get("completion_tokens", 0)
-        else:
-            raw = self.client.chat.completions.create(
-                model=LLMConfig.LLM_MODEL,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_QUERYREPLY},
-                    {"role": "user", "content": context}
-                ]
-            )
-            response_text = raw.choices[0].message.content
-            model_used = "nvidia-fallback"
-            usage_tokens = raw.usage.completion_tokens if raw.usage else 0
+        result = call_claude(
+            prompt=context,
+            system_prompt=SYSTEM_PROMPT_QUERYREPLY,
+            model=MODEL_SONNET,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        response_text = result["content"]
+        model_used = result["model"]
+        usage_tokens = result["usage"]["output_tokens"]
         
         # Rule 2: Log to audit trail
         if session_id:
@@ -308,8 +279,8 @@ class QueryResponseGenerator:
                     "classification": classification.primary_category,
                     "model_attribution": {
                         "primary_model": model_used,
-                        "provider": "AIKosh India Sovereign AI Stack",
-                        "sovereign": model_used.startswith(("sarvam", "bharatgen")),
+                        "provider": "Anthropic Claude",
+                        "sovereign": False,
                     },
                 }
             )
@@ -348,16 +319,14 @@ class QueryResponseGenerator:
         prompt = COMMITMENT_EXTRACTION_PROMPT.format(response_text=response_text)
         
         try:
-            response = self.client.chat.completions.create(
-                model=settings.llm_model,
+            result_resp = call_claude(
+                prompt=prompt,
+                model=MODEL_HAIKU,
                 max_tokens=1024,
                 temperature=0.3,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
             )
             
-            result = json.loads(response.choices[0].message.content)
+            result = json.loads(result_resp["content"])
             commitments = result.get('commitments', [])
             
             # Convert to simple list of descriptions

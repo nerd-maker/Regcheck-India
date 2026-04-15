@@ -15,10 +15,9 @@ class Settings(BaseSettings):
     app_name: str = "RegCheck-India"
     app_version: str = "1.0.0"
     
-    # LLM Configuration (NVIDIA OpenAI-compatible API)
-    llm_api_key: str = ""
-    llm_base_url: str = "https://integrate.api.nvidia.com/v1"
-    llm_model: str = "openai/gpt-oss-120b"
+    # LLM Configuration (Anthropic Claude)
+    anthropic_api_key: str = ""
+    llm_model: str = "claude-sonnet-4-20250514"
     llm_max_tokens: int = 8000
     llm_temperature: float = 0.0
     

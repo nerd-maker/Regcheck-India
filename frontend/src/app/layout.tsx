@@ -10,7 +10,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
     title: "RegCheck-India | Pharmaceutical Regulatory Compliance",
-    description: "India's first CDSCO-native AI compliance platform. Automate pharmaceutical regulatory compliance evaluation for Indian clinical trial documents using sovereign AI.",
+    description: "CDSCO-native AI compliance platform for Indian pharmaceutical and clinical trial workflows, powered by Anthropic Claude models.",
 };
 
 export default function RootLayout({

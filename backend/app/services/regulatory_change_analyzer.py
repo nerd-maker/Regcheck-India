@@ -9,7 +9,8 @@ import logging
 import os
 from datetime import datetime
 from typing import List, Dict, Any
-from openai import OpenAI
+
+import anthropic
 
 from app.core.config import settings
 from app.models.regulatory_change_schemas import (
@@ -21,9 +22,10 @@ from app.prompts.regulatory_intelligence_prompts import (
     SYSTEM_PROMPT,
     INGESTION_PROMPT
 )
-from app.services.aikosh_client import IndicTrans2Client, orchestrator, run_async
+from app.services.claude_client import call_claude, MODEL_SONNET
 
 logger = logging.getLogger(__name__)
+OpenAI = anthropic.Anthropic
 
 
 class RegulatoryChangeAnalyzer:
@@ -39,11 +41,6 @@ class RegulatoryChangeAnalyzer:
     
     def __init__(self):
         """Initialize the analyzer with Claude API client"""
-        self.client = OpenAI(
-            api_key=settings.llm_api_key or "placeholder",
-            base_url=settings.llm_base_url
-        )
-        self.model = settings.llm_model
     
     
     def ingest_new_document(
@@ -61,11 +58,7 @@ class RegulatoryChangeAnalyzer:
         Returns:
             Tuple of (classification, list of changes)
         """
-        translator = IndicTrans2Client()
         input_text = document_request.full_text
-        detected_lang = run_async(translator.detect_language(input_text))
-        if detected_lang == "hin_Deva":
-            input_text = run_async(translator.translate(input_text, source_lang="hin_Deva", target_lang="eng_Latn"))
 
         # Format the ingestion prompt
         prompt = INGESTION_PROMPT.format(
@@ -77,28 +70,14 @@ class RegulatoryChangeAnalyzer:
             kb_summary=kb_summary or "No existing requirements found for comparison."
         )
 
-        if os.getenv("SARVAM_API_KEY"):
-            ai_result = run_async(
-                orchestrator.call(
-                    group_name="regulatory_intelligence",
-                    role="extractor",
-                    system_prompt=SYSTEM_PROMPT,
-                    prompt=prompt,
-                    temperature=0.0,
-                    max_tokens=3000,
-                )
-            )
-            response_text = ai_result.get("content", "")
-        else:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                max_tokens=8000,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            response_text = response.choices[0].message.content
+        result = call_claude(
+            prompt=prompt,
+            system_prompt=SYSTEM_PROMPT,
+            model=MODEL_SONNET,
+            max_tokens=3000,
+            temperature=0.0,
+        )
+        response_text = result["content"]
         
         # Extract JSON from response (handle markdown code blocks)
         if "```json" in response_text:
@@ -202,16 +181,15 @@ Document Text:
 
 Return a JSON object with domain classifications."""
         
-        response = self.client.chat.completions.create(
-            model=self.model,
+        result = call_claude(
+            prompt=prompt,
+            system_prompt=SYSTEM_PROMPT,
+            model=MODEL_SONNET,
             max_tokens=2000,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ]
+            temperature=0.0,
         )
         
-        response_text = response.choices[0].message.content
+        response_text = result["content"]
         
         # Parse JSON
         if "```json" in response_text:

@@ -38,7 +38,7 @@ export default function ModelAttributionBadge({ attribution }: { attribution?: M
               color: attribution.sovereign ? '#95efea' : '#ffc5ab',
             }}
           >
-            {attribution.sovereign ? 'Sovereign AI' : 'Fallback model'}
+            {attribution.sovereign ? 'Sovereign AI' : 'External AI'}
           </span>
           <div className="text-sm text-slate-300">
             {attribution.provider || 'Model attribution available'}

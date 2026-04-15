@@ -4,9 +4,9 @@ Claude-powered compliance evaluator for pharmaceutical documents.
 import json
 import os
 from typing import Dict, Optional
-from openai import OpenAI
 import logging
 import hashlib
+import anthropic
 
 from app.core.config import settings
 from app.models.schemas import DocumentMetadata, EvaluationResponse
@@ -21,20 +21,17 @@ from app.services.review_queue import review_queue, assess_confidence
 from app.services.confidence_assessor import confidence_assessor       # Gap 2
 from app.services.output_determinism import output_determinism         # Gap 9
 from app.services.prompt_version_manager import prompt_version_manager # Gap 8
-from app.services.aikosh_client import orchestrator, run_async
+from app.services.claude_client import call_claude, MODEL_SONNET
 
 logger = logging.getLogger(__name__)
+OpenAI = anthropic.Anthropic
 
 
 class ComplianceEvaluator:
     """Evaluate pharmaceutical documents using Claude AI."""
     
     def __init__(self):
-        """Initialize OpenAI-compatible client with production safety config."""
-        self.client = OpenAI(
-            api_key=settings.llm_api_key or "placeholder",
-            base_url=settings.llm_base_url
-        )
+        """Initialize compliance evaluator with Claude client."""
     
     def evaluate_document(
         self,
@@ -81,33 +78,16 @@ class ComplianceEvaluator:
         temperature = LLMConfig.get_temperature("M1_COMPLIANCE")
         max_tokens = LLMConfig.get_max_tokens("M1_SECTION_EVAL")
         
-        if os.getenv("SARVAM_API_KEY"):
-            result = run_async(
-                orchestrator.call(
-                    group_name="regulatory_compliance",
-                    role="primary",
-                    system_prompt=system_prompt,
-                    prompt=user_prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-            )
-            response_text = result.get("content", "")
-            model_used = result.get("model_used", "nvidia-fallback")
-            usage_tokens = result.get("usage", {}).get("completion_tokens", 0)
-        else:
-            response = self.client.chat.completions.create(
-                model=LLMConfig.LLM_MODEL,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ]
-            )
-            response_text = response.choices[0].message.content
-            model_used = "nvidia-fallback"
-            usage_tokens = response.usage.output_tokens
+        result = call_claude(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            model=MODEL_SONNET,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        response_text = result["content"]
+        model_used = result["model"]
+        usage_tokens = result["usage"]["output_tokens"]
         
         # Gap 9: Check output cache first (before expensive parsing)
         input_hash = hashlib.sha256(user_prompt.encode()).hexdigest()[:16]
@@ -174,8 +154,8 @@ class ComplianceEvaluator:
                     "confidence_signals": multi_signal_confidence.get("signals", {}),
                     "model_attribution": {
                         "primary_model": model_used,
-                        "provider": "AIKosh India Sovereign AI Stack",
-                        "sovereign": model_used.startswith(("sarvam", "bharatgen")),
+                        "provider": "Anthropic Claude",
+                        "sovereign": False,
                     },
                 }
             )

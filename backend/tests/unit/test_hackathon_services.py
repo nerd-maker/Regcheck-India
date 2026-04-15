@@ -11,12 +11,6 @@ from app.services.document_summariser import (
     SAECaseNarrationSummariser,
     SUGAMApplicationSummariser,
 )
-from app.services.aikosh_client import (
-    EnsembleOrchestrator,
-    IndicBERTClient,
-    IndicTrans2Client,
-    IndicWav2VecClient,
-)
 from app.services.evaluator import SUGAMChecklistEvaluator
 from app.services.pii_detector import (
     PIIAuditLogger,
@@ -190,7 +184,7 @@ class TestDocumentVersionComparator:
     @pytest.mark.asyncio
     async def test_compare_versions_structure(self):
         comp = DocumentVersionComparator()
-        with patch.object(comp, "_call_llm", new_callable=AsyncMock, return_value=[]):
+        with patch.object(comp, "_detect_substantive_changes", new_callable=AsyncMock, return_value=[]):
             out = await comp.compare_versions("1. Section A\nbody", "1. Section B\nbody", "protocol")
         assert "summary" in out
         assert "diff_html" in out
@@ -201,80 +195,26 @@ class TestSummarisers:
     @pytest.mark.asyncio
     async def test_sugam_summarise_parses_json(self):
         summariser = SUGAMApplicationSummariser()
-        mock_resp = Mock()
-        mock_resp.choices = [Mock(message=Mock(content='{"sponsor_details": {}}'))]
-        with patch("app.services.document_summariser.get_llm_client") as m_client:
-            m_client.return_value.chat.completions.create.return_value = mock_resp
+        with patch("app.services.document_summariser.call_claude") as m_call:
+            m_call.return_value = {"content": '{"sponsor_details": {}}', "model": "claude-haiku-4-20250414", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise("doc text", "ct04")
         assert "sponsor_details" in out or "raw" in out
 
     @pytest.mark.asyncio
     async def test_sae_summariser(self):
         summariser = SAECaseNarrationSummariser()
-        mock_resp = Mock()
-        mock_resp.choices = [Mock(message=Mock(content='{"case_id": "C1"}'))]
-        with patch("app.services.document_summariser.get_llm_client") as m_client:
-            m_client.return_value.chat.completions.create.return_value = mock_resp
+        with patch("app.services.document_summariser.call_claude") as m_call:
+            m_call.return_value = {"content": '{"case_id": "C1"}', "model": "claude-haiku-4-20250414", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise("SAE narrative")
         assert out.get("case_id") == "C1" or "raw" in out
 
     @pytest.mark.asyncio
     async def test_meeting_transcript(self):
         summariser = MeetingTranscriptSummariser()
-        mock_resp = Mock()
-        mock_resp.choices = [Mock(message=Mock(content='{"meeting_overview": "x"}'))]
-        with patch("app.services.document_summariser.get_llm_client") as m_client:
-            m_client.return_value.chat.completions.create.return_value = mock_resp
+        with patch("app.services.document_summariser.call_claude") as m_call:
+            m_call.return_value = {"content": '{"meeting_overview": "x"}', "model": "claude-haiku-4-20250414", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise_transcript("transcript")
         assert "meeting_overview" in out or "raw" in out
-
-    @pytest.mark.asyncio
-    async def test_sae_summariser_uses_fallback_model_attribution(self):
-        summariser = SAECaseNarrationSummariser()
-        with patch("app.services.document_summariser.orchestrator.call", new_callable=AsyncMock) as m_call:
-            m_call.return_value = {"content": '{"case_id":"C2"}', "model_used": "nvidia-fallback"}
-            out = await summariser.summarise("SAE text")
-        assert out["case_id"] == "C2"
-        assert out["model_attribution"]["primary_model"] == "nvidia-fallback"
-
-
-class TestAIKoshFallbacks:
-    @pytest.mark.asyncio
-    async def test_orchestrator_falls_back_to_nvidia_on_primary_error(self):
-        orch = EnsembleOrchestrator()
-
-        async def fake_call_model(config, prompt, system, temp, max_tokens):
-            if config["provider"] != "nvidia":
-                raise RuntimeError("primary unavailable")
-            return {"content": '{"ok": true}', "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
-
-        with patch.object(orch, "_call_model", side_effect=fake_call_model):
-            out = await orch.call("document_summarisation", "prompt", role="summariser")
-
-        assert out["model_used"] == "nvidia-fallback"
-        assert out["fallback_reason"] == "primary unavailable"
-
-    @pytest.mark.asyncio
-    async def test_indicbert_returns_empty_without_hf_key(self):
-        client = IndicBERTClient()
-        client.api_key = None
-        client.headers = {}
-        assert await client.detect_entities("clinical note") == []
-
-    @pytest.mark.asyncio
-    async def test_indictrans_returns_original_without_hf_key(self):
-        client = IndicTrans2Client()
-        client.api_key = None
-        assert await client.translate("नमस्ते") == "नमस्ते"
-
-    @pytest.mark.asyncio
-    async def test_indicwav2vec_uses_whisper_fallback_without_hf_key(self):
-        client = IndicWav2VecClient()
-        client.api_key = None
-        with patch.object(client, "_whisper_fallback", new_callable=AsyncMock, return_value="fallback transcript"):
-            result = await client.transcribe(b"RIFFfakeWAVE")
-        assert result["text"] == "fallback transcript"
-        assert result["model_used"] == "whisper"
 
 
 class TestInspectionSchema:
@@ -287,9 +227,7 @@ class TestInspectionSchema:
     @pytest.mark.asyncio
     async def test_inspection_converter_parses_json(self):
         conv = InspectionObservationConverter()
-        mock_resp = Mock()
-        mock_resp.choices = [Mock(message=Mock(content='{"observations": []}'))]
-        with patch("app.core.api_client.get_llm_client") as m_client:
-            m_client.return_value.chat.completions.create.return_value = mock_resp
+        with patch("app.services.claude_client.call_claude") as m_call:
+            m_call.return_value = {"content": '{"observations": []}', "model": "claude-sonnet-4-20250514", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await conv.convert("raw note", {"site": "S1"})
         assert "observations" in out or "raw" in out

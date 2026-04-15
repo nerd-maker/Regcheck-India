@@ -4,7 +4,7 @@ import json
 import uuid
 from typing import Any, Dict, List
 
-from app.services.aikosh_client import IndicBERTClient, orchestrator
+from app.services.claude_client import call_claude, MODEL_HAIKU
 from app.services.knowledge_base import knowledge_base
 
 
@@ -16,13 +16,12 @@ def _parse_json(content: str) -> Dict[str, Any]:
         return {}
 
 
-def _build_attr(primary_model: str, validator_model: str | None = None, ner_model: str | None = None) -> Dict[str, Any]:
+def _build_attr(primary_model: str, validator_model: str | None = None) -> Dict[str, Any]:
     return {
         "primary_model": primary_model,
         "validator_model": validator_model,
-        "ner_model": ner_model,
-        "provider": "AIKosh India Sovereign AI Stack",
-        "sovereign": primary_model != "nvidia-fallback",
+        "provider": "Anthropic Claude",
+        "sovereign": False,
     }
 
 
@@ -37,20 +36,14 @@ class SAESeverityClassifier:
         "OTHER": {"code": "CAT-07", "reporting_timeline": "15_days", "priority": 3, "keywords": []},
     }
 
-    def __init__(self):
-        self.indicbert = IndicBERTClient()
-
     async def classify(self, sae_text: str) -> Dict[str, Any]:
         seriousness_criteria = self._rule_based_check(sae_text)
-        ner_entities = await self.indicbert.detect_entities(sae_text)
-        ner_model = "indicbert" if ner_entities else None
 
         classifier_payload = await self._call_llm(
             prompt=f"""
             You are a CDSCO pharmacovigilance officer classifying an SAE report.
             Extract severity using ICH E2A / CDSCO categories.
             Rule-based triggers: {seriousness_criteria}
-            Detected entities: {ner_entities[:10]}
 
             Return JSON with:
             - primary_category
@@ -75,7 +68,6 @@ class SAESeverityClassifier:
             Validate this SAE classification and return the final JSON using the same schema.
 
             Rule-based triggers: {seriousness_criteria}
-            IndicBERT entities: {ner_entities[:10]}
             Proposed classification:
             {classifier_payload}
 
@@ -87,25 +79,22 @@ class SAESeverityClassifier:
 
         final_payload = validator_payload or classifier_payload or {}
         final_payload["seriousness_criteria"] = seriousness_criteria
-        final_payload["ner_entities"] = ner_entities[:10]
         final_payload["model_attribution"] = _build_attr(
-            primary_model=validator_payload.get("_model_used", classifier_payload.get("_model_used", "nvidia-fallback")),
+            primary_model=validator_payload.get("_model_used", classifier_payload.get("_model_used", MODEL_HAIKU)),
             validator_model=classifier_payload.get("_model_used"),
-            ner_model=ner_model,
         )
         return final_payload
 
     async def _call_llm(self, prompt: str, role: str) -> Dict[str, Any]:
-        result = await orchestrator.call(
-            group_name="sae_classification",
-            role=role,
-            system_prompt="Return valid JSON only for SAE severity classification.",
+        result = call_claude(
             prompt=prompt,
-            temperature=0.0,
+            system_prompt="Return valid JSON only for SAE severity classification.",
+            model=MODEL_HAIKU,
             max_tokens=1200,
+            temperature=0.0,
         )
-        payload = _parse_json(result.get("content", ""))
-        payload["_model_used"] = result.get("model_used", "nvidia-fallback")
+        payload = _parse_json(result["content"])
+        payload["_model_used"] = result["model"]
         return payload
 
     def _rule_based_check(self, text: str) -> List[str]:

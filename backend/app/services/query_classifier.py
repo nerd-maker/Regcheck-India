@@ -7,9 +7,10 @@ import json
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
-from openai import OpenAI
+
 import logging
 import hashlib
+import anthropic
 
 from app.core.config import settings
 from app.prompts.query_response_prompts import (
@@ -25,9 +26,10 @@ from app.services.review_queue import review_queue, assess_confidence
 
 # Gap service integrations
 from app.services.classification_confidence import classification_confidence_manager  # Gap 11
-from app.services.aikosh_client import orchestrator, run_async
+from app.services.claude_client import call_claude, MODEL_HAIKU
 
 logger = logging.getLogger(__name__)
+OpenAI = anthropic.Anthropic
 
 
 class QueryClassifier:
@@ -38,10 +40,6 @@ class QueryClassifier:
     def __init__(self, categories_file: str = "app/data/query_categories.json"):
         self.categories_file = Path(categories_file)
         self.categories = self._load_categories()
-        self.client = OpenAI(
-            api_key=settings.llm_api_key or "placeholder",
-            base_url=settings.llm_base_url
-        )
     
     def _load_categories(self) -> List[Dict]:
         """Load query categories from JSON file"""
@@ -90,30 +88,15 @@ class QueryClassifier:
         temperature = LLMConfig.get_temperature("M3_QUERY")
         max_tokens = LLMConfig.get_max_tokens("M3_QUERY_RESPONSE")
         
-        use_ensemble = bool(settings.__dict__.get("sarvam_api_key", os.getenv("SARVAM_API_KEY")))
-        if use_ensemble:
-            response = run_async(
-                orchestrator.call(
-                    group_name="query_intelligence",
-                    role="classifier",
-                    prompt=prompt,
-                    temperature=0.0,
-                    max_tokens=500,
-                )
-            )
-            response_text = response.get("content", "")
-            model_used = response.get("model_used", "nvidia-fallback")
-            usage_tokens = response.get("usage", {}).get("completion_tokens", 0)
-        else:
-            raw = self.client.chat.completions.create(
-                model=LLMConfig.LLM_MODEL,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            response_text = raw.choices[0].message.content
-            model_used = "nvidia-fallback"
-            usage_tokens = getattr(raw.usage, "output_tokens", getattr(raw.usage, "completion_tokens", 0))
+        result = call_claude(
+            prompt=prompt,
+            model=MODEL_HAIKU,
+            max_tokens=500,
+            temperature=0.0,
+        )
+        response_text = result["content"]
+        model_used = result["model"]
+        usage_tokens = result["usage"]["output_tokens"]
         
         # Parse response
         try:
@@ -161,8 +144,8 @@ class QueryClassifier:
                         "is_high_stakes": routing.get("is_high_stakes", False),
                         "model_attribution": {
                             "primary_model": model_used,
-                            "provider": "AIKosh India Sovereign AI Stack",
-                            "sovereign": model_used.startswith(("sarvam", "bharatgen")),
+                            "provider": "Anthropic Claude",
+                            "sovereign": False,
                         },
                     }
                 )

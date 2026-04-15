@@ -6,9 +6,10 @@ Generates regulatory documents section-by-section with inline validation
 import json
 import os
 from typing import Dict, List, Optional
-from openai import OpenAI
+
 import logging
 import hashlib
+import anthropic
 
 from app.core.config import settings
 from app.services.schema_engine import SchemaEngine, SectionSchema
@@ -30,9 +31,10 @@ from app.services.pii_detector import pii_detector
 # Gap service integrations
 from app.services.section_context_store import SectionContextStore     # Gap 15
 from app.services.prompt_version_manager import prompt_version_manager # Gap 8
-from app.services.aikosh_client import orchestrator, run_async
+from app.services.claude_client import call_claude, MODEL_SONNET
 
 logger = logging.getLogger(__name__)
+OpenAI = anthropic.Anthropic
 
 
 class DocumentGenerator:
@@ -45,10 +47,6 @@ class DocumentGenerator:
     def __init__(self):
         self.schema_engine = SchemaEngine()
         self.compliance_evaluator = ComplianceEvaluator()
-        self.client = OpenAI(
-            api_key=settings.llm_api_key or "placeholder",
-            base_url=settings.llm_base_url
-        )
     
     def generate_document(
         self,
@@ -210,34 +208,16 @@ class DocumentGenerator:
         temperature = LLMConfig.get_temperature("M2_GENERATION")
         max_tokens = LLMConfig.get_max_tokens("M2_SECTION_GEN")
         
-        use_ensemble = bool(os.getenv("SARVAM_API_KEY"))
-        if use_ensemble:
-            response = run_async(
-                orchestrator.call(
-                    group_name="document_generation",
-                    role="primary",
-                    system_prompt=SYSTEM_PROMPT_DOCGEN,
-                    prompt=full_prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-            )
-            response_text = response.get("content", "")
-            model_used = response.get("model_used", "nvidia-fallback")
-            usage_tokens = response.get("usage", {}).get("completion_tokens", 0)
-        else:
-            raw = self.client.chat.completions.create(
-                model=LLMConfig.LLM_MODEL,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT_DOCGEN},
-                    {"role": "user", "content": full_prompt}
-                ]
-            )
-            response_text = raw.choices[0].message.content
-            model_used = "nvidia-fallback"
-            usage_tokens = getattr(raw.usage, "output_tokens", getattr(raw.usage, "completion_tokens", 0))
+        result = call_claude(
+            prompt=full_prompt,
+            system_prompt=SYSTEM_PROMPT_DOCGEN,
+            model=MODEL_SONNET,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        response_text = result["content"]
+        model_used = result["model"]
+        usage_tokens = result["usage"]["output_tokens"]
         
         try:
             # Use robust JSON parser with retry
@@ -264,8 +244,8 @@ class DocumentGenerator:
                         "document_type": document_type,
                         "model_attribution": {
                             "primary_model": model_used,
-                            "provider": "AIKosh India Sovereign AI Stack",
-                            "sovereign": model_used.startswith(("sarvam", "bharatgen")),
+                            "provider": "Anthropic Claude",
+                            "sovereign": False,
                         },
                     }
                 )

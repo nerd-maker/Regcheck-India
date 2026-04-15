@@ -1,11 +1,10 @@
-"""M5 document summarisation services using the AIKosh model router."""
+"""M5 document summarisation services using Anthropic Claude."""
 
 import json
-from typing import Any, Dict, Tuple
+import tempfile
+from typing import Any, Dict
 
-from app.config.llm_config import LLMConfig
-from app.core.api_client import get_llm_client
-from app.services.aikosh_client import IndicTrans2Client, IndicWav2VecClient, orchestrator
+from app.services.claude_client import call_claude, MODEL_HAIKU
 
 
 def _parse_json(content: str) -> Any:
@@ -18,95 +17,53 @@ def _parse_json(content: str) -> Any:
 def _build_attr(
     primary_model: str,
     validator_model: str | None = None,
-    transcription_model: str | None = None,
-    translation_model: str | None = None,
 ) -> Dict[str, Any]:
     return {
         "primary_model": primary_model,
         "validator_model": validator_model,
-        "provider": "AIKosh India Sovereign AI Stack",
-        "sovereign": primary_model != "nvidia-fallback",
-        "transcription_model": transcription_model,
-        "translation_model": translation_model,
+        "provider": "Anthropic Claude",
+        "sovereign": False,
     }
 
 
 class _LLMSummariserBase:
-    def __init__(self):
-        self.translator = IndicTrans2Client()
-
-    async def _translate_if_needed(self, text: str) -> Tuple[str, str | None]:
-        detected_lang = await self.translator.detect_language(text)
-        if detected_lang != "eng_Latn":
-            translated = await self.translator.translate(text, source_lang=detected_lang, target_lang="eng_Latn")
-            return translated, "indicTrans2"
-        return text, None
-
-    async def _call_structured_group(
+    async def _call_structured(
         self,
         prompt: str,
-        role: str = "summariser",
         system_prompt: str = "Respond with valid JSON only.",
-        group_name: str = "document_summarisation",
         max_tokens: int = 1800,
     ) -> Dict[str, Any]:
-        if hasattr(get_llm_client, "return_value"):
-            client = get_llm_client()
-            response = client.chat.completions.create(
-                model=LLMConfig.LLM_MODEL,
-                temperature=0.0,
-                max_tokens=max_tokens,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-            )
-            parsed = _parse_json(response.choices[0].message.content)
-            if parsed is None:
-                parsed = {"raw": response.choices[0].message.content}
-            if isinstance(parsed, dict):
-                parsed["model_attribution"] = _build_attr(primary_model=LLMConfig.LLM_MODEL)
-                return parsed
-            return {"result": parsed, "model_attribution": _build_attr(primary_model=LLMConfig.LLM_MODEL)}
-
-        primary = await orchestrator.call(
-            group_name=group_name,
-            role=role,
-            system_prompt=system_prompt,
+        result = call_claude(
             prompt=prompt,
-            temperature=0.0,
+            system_prompt=system_prompt,
+            model=MODEL_HAIKU,
             max_tokens=max_tokens,
+            temperature=0.0,
         )
-        parsed = _parse_json(primary.get("content", ""))
-        formatter_model = None
-        if parsed is None:
-            formatter = await orchestrator.call(
-                group_name="document_summarisation",
-                role="formatter",
-                system_prompt="Convert the input into valid JSON only.",
-                prompt=f"Convert this summarisation output into structured JSON only:\n{primary.get('content', '')}",
-                temperature=0.0,
-                max_tokens=max_tokens,
-            )
-            formatter_model = formatter.get("model_used")
-            parsed = _parse_json(formatter.get("content", ""))
+        parsed = _parse_json(result["content"])
+        model_used = result["model"]
 
         if parsed is None:
-            parsed = {"raw": primary.get("content", "")}
+            # Retry with a formatting prompt
+            retry = call_claude(
+                prompt=f"Convert this summarisation output into structured JSON only:\n{result['content']}",
+                system_prompt="Convert the input into valid JSON only.",
+                model=MODEL_HAIKU,
+                max_tokens=max_tokens,
+                temperature=0.0,
+            )
+            parsed = _parse_json(retry["content"])
+
+        if parsed is None:
+            parsed = {"raw": result["content"]}
 
         if isinstance(parsed, dict):
-            parsed["model_attribution"] = _build_attr(
-                primary_model=primary.get("model_used", "nvidia-fallback"),
-                validator_model=formatter_model,
-            )
+            parsed["model_attribution"] = _build_attr(primary_model=model_used)
             return parsed
 
         return {
             "result": parsed,
-            "model_attribution": _build_attr(
-                primary_model=primary.get("model_used", "nvidia-fallback"),
-                validator_model=formatter_model,
-            ),
+            "model_attribution": _build_attr(primary_model=model_used),
         }
 
 
@@ -119,7 +76,6 @@ class SUGAMApplicationSummariser(_LLMSummariserBase):
     ]
 
     async def summarise(self, document_text: str, checklist_type: str) -> Dict[str, Any]:
-        document_text, translation_model = await self._translate_if_needed(document_text)
         prompt = f"""
         You are a CDSCO regulatory reviewer. Extract and summarise the following
         information from this SUGAM portal application document.
@@ -133,9 +89,7 @@ class SUGAMApplicationSummariser(_LLMSummariserBase):
         {document_text}
         Respond in structured JSON only.
         """
-        result = await self._call_structured_group(prompt, role="summariser")
-        result["model_attribution"]["translation_model"] = translation_model
-        return result
+        return await self._call_structured(prompt)
 
 
 class SAECaseNarrationSummariser(_LLMSummariserBase):
@@ -155,7 +109,6 @@ class SAECaseNarrationSummariser(_LLMSummariserBase):
     }
 
     async def summarise(self, sae_text: str) -> Dict[str, Any]:
-        sae_text, translation_model = await self._translate_if_needed(sae_text)
         prompt = f"""
         You are a CDSCO pharmacovigilance expert. Summarise this SAE case report.
         Extract exactly these fields: {list(self.SAE_SUMMARY_SCHEMA.keys())}
@@ -168,18 +121,11 @@ class SAECaseNarrationSummariser(_LLMSummariserBase):
         {sae_text}
         Respond in structured JSON only. No preamble.
         """
-        result = await self._call_structured_group(prompt, role="summariser")
-        result["model_attribution"]["translation_model"] = translation_model
-        return result
+        return await self._call_structured(prompt)
 
 
 class MeetingTranscriptSummariser(_LLMSummariserBase):
-    def __init__(self):
-        super().__init__()
-        self.audio_client = IndicWav2VecClient()
-
     async def summarise_transcript(self, transcript_text: str) -> Dict[str, Any]:
-        transcript_text, translation_model = await self._translate_if_needed(transcript_text)
         prompt = f"""
         Summarise this regulatory meeting transcript for CDSCO officer consumption.
         Extract:
@@ -189,22 +135,34 @@ class MeetingTranscriptSummariser(_LLMSummariserBase):
         {transcript_text}
         Respond in structured JSON only.
         """
-        result = await self._call_structured_group(
-            prompt,
-            role="summariser",
-            group_name="meeting_transcription",
-            max_tokens=1800,
-        )
-        result["model_attribution"]["translation_model"] = translation_model
-        return result
+        return await self._call_structured(prompt, max_tokens=1800)
 
     async def process_audio_bytes(self, audio_bytes: bytes) -> Dict[str, Any]:
-        transcription_result = await self.audio_client.transcribe(audio_bytes)
-        transcript = transcription_result.get("text", "")
+        """Transcribe meeting audio when Whisper is available locally."""
+        try:
+            import whisper
+        except Exception:
+            return {
+                "transcript": "",
+                "warning": "Audio transcription is unavailable because the optional Whisper dependency is not installed.",
+                "model_attribution": _build_attr(primary_model="local-whisper-unavailable"),
+            }
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+            temp_path = handle.name
+            handle.write(audio_bytes)
+
+        try:
+            model = whisper.load_model("base")
+            result = model.transcribe(temp_path)
+        finally:
+            try:
+                import os
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
         return {
-            "transcript": transcript,
-            "model_attribution": _build_attr(
-                primary_model=transcription_result.get("model_used", "nvidia-fallback"),
-                transcription_model=transcription_result.get("model_used"),
-            ),
+            "transcript": result.get("text", ""),
+            "model_attribution": _build_attr(primary_model="whisper-base"),
         }

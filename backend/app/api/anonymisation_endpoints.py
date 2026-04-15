@@ -87,11 +87,11 @@ def _build_response(session_id: str, content: str, report: dict) -> Anonymisatio
     return response
 
 
-def _with_attr(payload: dict, primary_model: str = "indicbert+sarvam-1+regex") -> dict:
+def _with_attr(payload: dict, primary_model: str = "regex+claude") -> dict:
     payload["model_attribution"] = {
         "primary_model": primary_model,
-        "provider": "AIKosh India Sovereign AI Stack",
-        "sovereign": True,
+        "provider": "Anthropic Claude",
+        "sovereign": False,
     }
     return payload
 

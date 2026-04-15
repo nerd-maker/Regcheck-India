@@ -10,8 +10,8 @@ import hashlib
 from datetime import datetime
 from typing import List, Dict, Optional
 from pathlib import Path
-import PyPDF2
 import re
+from pypdf import PdfReader
 
 from chromadb import Client
 from chromadb.config import Settings
@@ -194,7 +194,7 @@ class RegulatoryCorpusBuilder:
         """Parse PDF and extract sections based on strategy"""
         
         with open(file_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_reader = PdfReader(file)
             full_text = ""
             
             for page in pdf_reader.pages:

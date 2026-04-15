@@ -4,8 +4,8 @@ Document parser service for extracting text from PDF and DOCX files.
 import re
 from pathlib import Path
 from typing import Dict, List, Tuple
-import PyPDF2
 from docx import Document
+from pypdf import PdfReader
 
 
 class DocumentParser:
@@ -46,7 +46,7 @@ class DocumentParser:
         full_text = []
         
         with open(file_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_reader = PdfReader(file)
             
             for page in pdf_reader.pages:
                 text = page.extract_text()

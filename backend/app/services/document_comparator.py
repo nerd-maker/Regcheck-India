@@ -5,8 +5,7 @@ import json
 import re
 from typing import Any, Dict, List
 
-from app.config.llm_config import LLMConfig
-from app.core.api_client import get_llm_client
+from app.services.claude_client import call_claude, parse_claude_json, MODEL_SONNET
 
 
 class DocumentVersionComparator:
@@ -31,7 +30,7 @@ class DocumentVersionComparator:
         }
 
     async def _detect_structural_changes(self, v1: str, v2: str) -> List[Dict]:
-        headers = re.compile(r"^(?:\d+[\.\)]\s+)?[A-Z][A-Za-z0-9\-\s]{4,}$", re.MULTILINE)
+        headers = re.compile(r"^(?:\d+[\.\\)]\s+)?[A-Z][A-Za-z0-9\-\s]{4,}$", re.MULTILINE)
         s1 = set(headers.findall(v1))
         s2 = set(headers.findall(v2))
         changes = []
@@ -63,23 +62,16 @@ class DocumentVersionComparator:
         VERSION 1: {v1[:3000]}
         VERSION 2: {v2[:3000]}
         """
-        result = await self._call_llm(prompt)
-        return result if isinstance(result, list) else []
-
-    async def _call_llm(self, prompt: str):
-        client = get_llm_client()
-        response = client.chat.completions.create(
-            model=LLMConfig.LLM_MODEL,
-            temperature=0.0,
+        result = call_claude(
+            prompt=prompt,
+            system_prompt="Return JSON only.",
+            model=MODEL_SONNET,
             max_tokens=1500,
-            messages=[
-                {"role": "system", "content": "Return JSON only."},
-                {"role": "user", "content": prompt},
-            ],
+            temperature=0.0,
         )
-        content = response.choices[0].message.content
         try:
-            return json.loads(content)
+            parsed = json.loads(result["content"])
+            return parsed if isinstance(parsed, list) else []
         except Exception:
             return []
 

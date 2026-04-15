@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState } from 'react';
 import Link from 'next/link';
@@ -305,7 +305,7 @@ export default function Home() {
 
   return (
     <div className="app-shell">
-      {/* ── Mobile hamburger button ── */}
+      {/* Mobile hamburger button */}
       <button
         type="button"
         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -322,7 +322,7 @@ export default function Home() {
         )}
       </button>
 
-      {/* ── Mobile overlay ── */}
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -330,7 +330,7 @@ export default function Home() {
         />
       )}
 
-      {/* ── Fixed left sidebar ── */}
+      {/* Fixed left sidebar */}
       <aside
         className={`fixed top-0 left-0 z-50 w-72 h-screen flex flex-col transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -385,7 +385,7 @@ export default function Home() {
         </div>
       </aside>
 
-      {/* ── Main content area ── */}
+      {/* Main content area */}
       <div className="lg:ml-72 relative z-10">
         <header className="mx-auto max-w-7xl px-4 pb-6 pt-8 sm:px-6 lg:px-8">
           <div className="glass-panel-strong overflow-hidden p-6 md:p-8">
@@ -403,7 +403,7 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
-                  <span className="status-chip">India sovereign AI stack</span>
+                  <span className="status-chip">Anthropic Claude stack</span>
                   <span className="status-chip">Session-aware workflows</span>
                   <span className="status-chip">CDSCO and ICH aligned</span>
                 </div>
@@ -615,3 +615,5 @@ export default function Home() {
     </div>
   );
 }
+
+

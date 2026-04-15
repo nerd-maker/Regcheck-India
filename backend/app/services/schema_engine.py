@@ -153,8 +153,7 @@ class InspectionObservationConverter:
     """Converts unstructured observations to formal inspection report JSON."""
 
     async def convert(self, raw_observations: str, site_details: dict) -> dict:
-        from app.config.llm_config import LLMConfig
-        from app.core.api_client import get_llm_client
+        from app.services.claude_client import MODEL_SONNET, call_claude
         import json
 
         prompt = f"""
@@ -167,17 +166,14 @@ class InspectionObservationConverter:
         {site_details}
         Return structured JSON only.
         """
-        client = get_llm_client()
-        response = client.chat.completions.create(
-            model=LLMConfig.LLM_MODEL,
-            temperature=0.0,
+        result = call_claude(
+            prompt=prompt,
+            system_prompt="Return valid JSON only.",
+            model=MODEL_SONNET,
             max_tokens=1600,
-            messages=[
-                {"role": "system", "content": "Return valid JSON only."},
-                {"role": "user", "content": prompt},
-            ],
+            temperature=0.0,
         )
-        content = response.choices[0].message.content
+        content = result["content"]
         try:
             return json.loads(content)
         except Exception:

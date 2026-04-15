@@ -7,7 +7,8 @@ Assesses the impact of regulatory changes on active pharmaceutical submissions.
 import json
 import logging
 from typing import List, Dict, Any
-from openai import OpenAI
+import anthropic
+from app.services.claude_client import call_claude, MODEL_SONNET
 
 from app.core.config import settings
 from app.models.regulatory_change_schemas import (
@@ -24,6 +25,7 @@ from app.prompts.regulatory_intelligence_prompts import (
 )
 
 logger = logging.getLogger(__name__)
+OpenAI = anthropic.Anthropic
 
 
 class SubmissionImpactAssessor:
@@ -39,11 +41,7 @@ class SubmissionImpactAssessor:
     
     def __init__(self):
         """Initialize the assessor with Claude API client"""
-        self.client = OpenAI(
-            api_key=settings.llm_api_key or "placeholder",
-            base_url=settings.llm_base_url
-        )
-        self.model = settings.llm_model
+        pass
     
     
     def assess_impact(
@@ -84,17 +82,16 @@ class SubmissionImpactAssessor:
         )
         
         # Call Claude API
-        response = self.client.chat.completions.create(
-            model=self.model,
+        result = call_claude(
+            prompt=prompt,
+            system_prompt=SYSTEM_PROMPT,
+            model=MODEL_SONNET,
             max_tokens=4000,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ]
+            temperature=0.0,
         )
         
         # Parse response
-        response_text = response.choices[0].message.content
+        response_text = result["content"]
         
         # Extract JSON from response
         if "```json" in response_text:

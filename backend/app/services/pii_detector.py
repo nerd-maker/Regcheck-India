@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from app.core.config import settings
-from app.services.aikosh_client import IndicBERTClient, orchestrator
 from app.services.runtime_state_store import runtime_state_store
 
 logger = logging.getLogger(__name__)
@@ -238,7 +237,6 @@ class ContextPreservingPIIDetector:
         self.nlp_detector = NLPEntityDetector()
         self.structured_anonymiser = StructuredDataAnonymiser()
         self.audit_logger = PIIAuditLogger()
-        self.indicbert = IndicBERTClient()
     
     def detect_and_redact(
         self,
@@ -396,37 +394,24 @@ class ContextPreservingPIIDetector:
         return pseudonymised_text, report
 
     async def detect_all_pii(self, text: str) -> List[Dict]:
-        """Three-layer hybrid: regex + IndicBERT + contextual LLM."""
         regex_entities = self._regex_detect(text)
-        indicbert_entities = await self.indicbert.detect_entities(text)
-        sarvam_entities = await orchestrator.call(
-            group_name="pii_detection",
-            role="contextual_model",
-            prompt=(
-                "Identify PHI in this clinical text not already detected. "
-                "Return JSON array of text/entity_type/start_pos/end_pos.\n"
-                f"{text[:1000]}"
-            ),
-            temperature=0.0,
-            max_tokens=500,
-        )
-        llm_parsed = self._parse_json(sarvam_entities.get("content", "[]"))
-        all_entities = regex_entities + indicbert_entities + (llm_parsed if isinstance(llm_parsed, list) else [])
+        try:
+            from app.services.claude_client import call_claude, MODEL_HAIKU
+            result = call_claude(
+                prompt="Identify PHI in this clinical text. Return JSON array.\n" + text[:1000],
+                system_prompt="Return valid JSON array only.",
+                model=MODEL_HAIKU, max_tokens=500, temperature=0.0)
+            llm_parsed = self._parse_json(result["content"])
+        except Exception:
+            llm_parsed = []
+        all_entities = regex_entities + (llm_parsed if isinstance(llm_parsed, list) else [])
         return self._deduplicate_entities(all_entities)
 
     def _regex_detect(self, text: str) -> List[Dict]:
         entities = []
         for pii_type, pattern in self.hard_pii_patterns.items():
             for match in re.finditer(pattern, text, re.IGNORECASE):
-                entities.append(
-                    {
-                        "text": match.group(),
-                        "label": pii_type.upper(),
-                        "start": match.start(),
-                        "end": match.end(),
-                        "source": "regex",
-                    }
-                )
+                entities.append({"text": match.group(), "label": pii_type.upper(), "start": match.start(), "end": match.end(), "source": "regex"})
         return entities
 
     def _deduplicate_entities(self, entities: List[Dict]) -> List[Dict]:

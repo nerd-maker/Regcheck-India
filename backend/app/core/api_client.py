@@ -1,10 +1,8 @@
 """
-LLM API Client Factory
+LLM API Client Factory — Anthropic Claude
 
-Provides a pre-configured OpenAI-compatible client for NVIDIA API with:
-- Configurable timeout (default 60s)
-- Retry logic for transient failures (3 retries, exponential backoff)
-- Centralized configuration from settings
+Provides convenience wrappers around the centralized claude_client module.
+Kept for backwards compatibility with any code importing from app.core.api_client.
 
 Usage:
     from app.core.api_client import get_llm_client
@@ -14,9 +12,10 @@ Usage:
 import time
 import logging
 from functools import wraps
-from openai import OpenAI, APIError, APIConnectionError, RateLimitError
 
-from app.core.config import settings
+import anthropic
+
+from app.services.claude_client import get_claude_client
 
 logger = logging.getLogger(__name__)
 
@@ -26,24 +25,20 @@ DEFAULT_TIMEOUT = 60.0
 # Retry configuration
 MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 2.0  # seconds
-RETRYABLE_ERRORS = (APIConnectionError, RateLimitError)
+RETRYABLE_ERRORS = (anthropic.APIConnectionError, anthropic.RateLimitError)
 
 
-def get_llm_client(timeout: float = DEFAULT_TIMEOUT) -> OpenAI:
+def get_llm_client(timeout: float = DEFAULT_TIMEOUT) -> anthropic.Anthropic:
     """
-    Create a pre-configured OpenAI-compatible client for NVIDIA API.
+    Return a pre-configured Anthropic client.
     
     Args:
         timeout: Request timeout in seconds (default 60s)
     
     Returns:
-        Configured OpenAI client instance
+        Configured Anthropic client instance
     """
-    return OpenAI(
-        api_key=settings.llm_api_key or "placeholder",
-        base_url=settings.llm_base_url,
-        timeout=timeout,
-    )
+    return get_claude_client()
 
 
 def retry_on_failure(max_retries: int = MAX_RETRIES, backoff_base: float = RETRY_BACKOFF_BASE):
@@ -56,7 +51,7 @@ def retry_on_failure(max_retries: int = MAX_RETRIES, backoff_base: float = RETRY
     Usage:
         @retry_on_failure()
         def call_llm(client, prompt):
-            return client.chat.completions.create(...)
+            return client.messages.create(...)
     """
     def decorator(func):
         @wraps(func)
@@ -86,7 +81,7 @@ def retry_on_failure(max_retries: int = MAX_RETRIES, backoff_base: float = RETRY
                             extra={"error_type": type(e).__name__}
                         )
                         raise
-                except APIError as e:
+                except anthropic.APIError as e:
                     # Non-retryable API errors (auth, bad request, etc.)
                     logger.error(f"Non-retryable API error: {e}")
                     raise

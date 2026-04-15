@@ -29,8 +29,8 @@ def _with_attr(payload: dict, primary_model: str = "rule-engine") -> dict:
         return payload
     payload["model_attribution"] = {
         "primary_model": primary_model,
-        "provider": "AIKosh India Sovereign AI Stack" if primary_model != "rule-engine" else "RegCheck prioritisation engine",
-        "sovereign": primary_model != "nvidia-fallback" and primary_model != "rule-engine",
+        "provider": "Anthropic Claude" if primary_model != "rule-engine" else "RegCheck prioritisation engine",
+        "sovereign": False,
     }
     return payload
 
@@ -44,7 +44,7 @@ async def classify_sae(request: SAEClassifyRequest, x_session_id: str = Header(d
 @router.post("/sae-batch")
 async def classify_sae_batch(request: SAEBatchClassifyRequest, x_session_id: str = Header(default="default_session")):
     _ = x_session_id
-    return _with_attr({"results": [await sae_classifier.classify(t) for t in request.sae_texts]}, "bharatgen")
+    return _with_attr({"results": [await sae_classifier.classify(t) for t in request.sae_texts]}, "claude-haiku-4-20250414")
 
 
 @router.post("/duplicate-check")
