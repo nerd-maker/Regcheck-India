@@ -3,94 +3,43 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import AnonymisationTool from '@/components/AnonymisationTool';
-import ChangeMonitorDashboard from '@/components/ChangeMonitorDashboard';
 import CompletenessAssessor from '@/components/CompletenessAssessor';
-import DocumentComparator from '@/components/DocumentComparator';
-import DocumentGenerator from '@/components/DocumentGenerator';
 import DocumentSummariser from '@/components/DocumentSummariser';
 import DocumentUpload from '@/components/DocumentUpload';
 import ICHGCPChecker from '@/components/ICHGCPChecker';
 import InspectionReportGenerator from '@/components/InspectionReportGenerator';
 import MetadataForm from '@/components/MetadataForm';
-import QueryResponseAssistant from '@/components/QueryResponseAssistant';
 import RegulatoryQA from '@/components/RegulatoryQA';
 import ResultsViewer from '@/components/ResultsViewer';
 import SAEClassifier from '@/components/SAEClassifier';
 import ScheduleYChecker from '@/components/ScheduleYChecker';
 import { api, DocumentMetadata, EvaluationResponse } from '@/services/api';
 
+// The 8 correct agent modules per agents_router.py
 type Module =
-  | 'compliance'
-  | 'generator'
-  | 'query'
-  | 'regulatory'
-  | 'anonymise'
-  | 'summarise'
-  | 'comparator'
-  | 'classifier'
-  | 'completeness'
-  | 'inspection'
-  | 'reg-qa'
-  | 'schedule-y'
-  | 'ich-gcp';
+  | 'anonymise'    // M1 — PII Anonymiser       → POST /api/v1/agents/anonymise
+  | 'summarise'    // M2 — Document Summariser   → POST /api/v1/agents/summarise
+  | 'completeness' // M3 — Completeness Assessor → POST /api/v1/agents/completeness
+  | 'classifier'   // M4 — Case Classifier       → POST /api/v1/agents/classify
+  | 'inspection'   // M5 — Inspection Report Gen → POST /api/v1/agents/inspection-report
+  | 'reg-qa'       // M6 — Regulatory Q&A       → POST /api/v1/agents/qa
+  | 'schedule-y'   // M7 — Schedule Y Compliance → POST /api/v1/agents/schedule-y
+  | 'ich-gcp';     // M8 — ICH E6(R3) GCP Checker→ POST /api/v1/agents/ich-gcp
 
 type SidebarItem = {
   id: string;
   label: string;
-  module?: Module;
+  module: Module;
   icon: React.ReactNode;
-  divider?: string;  // optional section heading above this item
+  divider?: string;
 };
 
 const sidebarItems: SidebarItem[] = [
-  // ── Core Workflow ─────────────────────────────────
   {
-    id: 'compliance-command',
-    label: 'Compliance Command',
-    module: 'compliance',
-    divider: 'Core Workflow',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'document-studio',
-    label: 'Document Studio',
-    module: 'generator',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'query-desk',
-    label: 'Query Desk',
-    module: 'query',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'intelligence-radar',
-    label: 'Intelligence Radar',
-    module: 'regulatory',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-      </svg>
-    ),
-  },
-  // ── Document Tools ────────────────────────────────
-  {
-    id: 'privacy-shield',
-    label: 'Privacy Shield',
+    id: 'm1-anonymise',
+    label: 'PII Anonymiser',
     module: 'anonymise',
-    divider: 'Document Tools',
+    divider: 'Privacy & Documents',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -98,8 +47,8 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'summary-engine',
-    label: 'Summary Engine',
+    id: 'm2-summarise',
+    label: 'Document Summariser',
     module: 'summarise',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -108,30 +57,9 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'comparison-lab',
-    label: 'Comparison Lab',
-    module: 'comparator',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-      </svg>
-    ),
-  },
-  {
-    id: 'sae-triage',
-    label: 'SAE Triage',
-    module: 'classifier',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-    ),
-  },
-  // ── Compliance Agents ─────────────────────────────
-  {
-    id: 'completeness-gate',
-    label: 'Completeness Gate',
-    module: 'completeness' as Module,
+    id: 'm3-completeness',
+    label: 'Completeness Assessor',
+    module: 'completeness',
     divider: 'Compliance Agents',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,9 +68,19 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'inspection-report',
-    label: 'Inspection Report',
-    module: 'inspection' as Module,
+    id: 'm4-classifier',
+    label: 'Case Classifier',
+    module: 'classifier',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'm5-inspection',
+    label: 'Inspection Report Generator',
+    module: 'inspection',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -150,9 +88,10 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'regulatory-qa',
+    id: 'm6-reg-qa',
     label: 'Regulatory Q&A',
-    module: 'reg-qa' as Module,
+    module: 'reg-qa',
+    divider: 'Knowledge & Deep Checks',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -160,9 +99,9 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'schedule-y-check',
-    label: 'Schedule Y',
-    module: 'schedule-y' as Module,
+    id: 'm7-schedule-y',
+    label: 'Schedule Y Compliance',
+    module: 'schedule-y',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
@@ -170,9 +109,9 @@ const sidebarItems: SidebarItem[] = [
     ),
   },
   {
-    id: 'ich-gcp-check',
-    label: 'ICH GCP',
-    module: 'ich-gcp' as Module,
+    id: 'm8-ich-gcp',
+    label: 'ICH E6(R3) GCP Checker',
+    module: 'ich-gcp',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -185,234 +124,101 @@ type ModuleCard = {
   id: Module;
   name: string;
   shortName: string;
-  icon: string;
+  endpoint: string;
   description: string;
   accent: string;
   category: string;
+  isQA?: boolean;
 };
 
+// Correct 8 modules per spec — names, endpoints match agents_router.py exactly
 const modules: ModuleCard[] = [
   {
-    id: 'compliance',
-    name: 'Compliance Command',
-    shortName: 'M1',
-    icon: '01',
-    description: 'Evaluate submissions against Indian regulatory expectations with structured findings and remediation guidance.',
-    accent: '#5bc0be',
-    category: 'Core review',
-  },
-  {
-    id: 'generator',
-    name: 'Document Studio',
-    shortName: 'M2',
-    icon: '02',
-    description: 'Generate protocol-grade documentation with inline regulatory structure and reviewer-ready sections.',
-    accent: '#ffd166',
-    category: 'Drafting',
-  },
-  {
-    id: 'query',
-    name: 'Query Desk',
-    shortName: 'M3',
-    icon: '03',
-    description: 'Draft response packages for CDSCO deficiency letters with better consistency and traceability.',
-    accent: '#ff8f5a',
-    category: 'Response',
-  },
-  {
-    id: 'regulatory',
-    name: 'Intelligence Radar',
-    shortName: 'M4',
-    icon: '04',
-    description: 'Monitor regulatory movement, triage impact, and keep active submissions aligned with policy drift.',
-    accent: '#9ad1ff',
-    category: 'Monitoring',
-  },
-  {
     id: 'anonymise',
-    name: 'Privacy Shield',
-    shortName: 'M5',
-    icon: '05',
-    description: 'Run DPDP and NDHM-aligned anonymisation workflows with auditability and structured outputs.',
+    name: 'PII Anonymiser',
+    shortName: 'M1',
+    endpoint: '/api/v1/agents/anonymise',
+    description: 'Detect and anonymise patient, investigator, and site identities from regulatory documents per DPDP Act 2023 and CDSCO Schedule Y.',
     accent: '#79e1d6',
     category: 'Privacy',
   },
   {
     id: 'summarise',
-    name: 'Summary Engine',
-    shortName: 'M6',
-    icon: '06',
-    description: 'Turn dense SUGAM, SAE, and meeting inputs into concise reviewer-friendly structured summaries.',
+    name: 'Document Summariser',
+    shortName: 'M2',
+    endpoint: '/api/v1/agents/summarise',
+    description: 'Generate structured regulatory summaries of CSRs, IBs, protocols, and CDSCO correspondence per ICH E3 and CTD format.',
     accent: '#ffb26b',
     category: 'Synthesis',
   },
   {
-    id: 'comparator',
-    name: 'Comparison Lab',
-    shortName: 'M7',
-    icon: '07',
-    description: 'Inspect version drift, completeness, and substantive regulatory changes in one view.',
-    accent: '#f5d76e',
-    category: 'Diffing',
-  },
-  {
-    id: 'classifier',
-    name: 'SAE Triage',
-    shortName: 'M8',
-    icon: '08',
-    description: 'Classify safety events, surface likely duplicates, and prioritize the reviewer queue.',
-    accent: '#ff8aa1',
-    category: 'Safety',
-  },
-  {
     id: 'completeness',
-    name: 'Completeness Gate',
-    shortName: 'M9',
-    icon: '09',
-    description: 'Check whether a submission package is complete against CDSCO, Schedule Y, NDCTR 2019, and ICH requirements.',
+    name: 'Completeness Assessor',
+    shortName: 'M3',
+    endpoint: '/api/v1/agents/completeness',
+    description: 'Evaluate submissions against Form CT-04/05/06 requirements. Flags CRITICAL, MAJOR, and MINOR gaps before CDSCO filing.',
     accent: '#6ee7b7',
     category: 'Assessment',
   },
   {
+    id: 'classifier',
+    name: 'Case Classifier',
+    shortName: 'M4',
+    endpoint: '/api/v1/agents/classify',
+    description: 'Classify adverse events using ICH E2A seriousness, WHO-UMC causality, and NDCTR 2019 reporting timelines with MedDRA coding.',
+    accent: '#ff8aa1',
+    category: 'Safety',
+  },
+  {
     id: 'inspection',
-    name: 'Inspection Report',
-    shortName: 'M10',
-    icon: '10',
-    description: 'Turn raw inspection findings into structured CDSCO-style reports with observations and CAPA plans.',
+    name: 'Inspection Report Generator',
+    shortName: 'M5',
+    endpoint: '/api/v1/agents/inspection-report',
+    description: 'Generate formal CDSCO GCP inspection reports with CAPA plans, observation classification, and Schedule Y clause citations.',
     accent: '#fca5a5',
     category: 'Reporting',
   },
   {
     id: 'reg-qa',
     name: 'Regulatory Q&A',
-    shortName: 'M11',
-    icon: '11',
-    description: 'Ask regulatory questions grounded in retrieved knowledge-base context with cited answers.',
+    shortName: 'M6',
+    endpoint: '/api/v1/agents/qa',
+    description: 'Ask questions about NDCTR 2019, Schedule Y, and ICH guidelines. Answers grounded in the regulatory knowledge base.',
     accent: '#93c5fd',
     category: 'Knowledge',
+    isQA: true,
   },
   {
     id: 'schedule-y',
-    name: 'Schedule Y Check',
-    shortName: 'M12',
-    icon: '12',
-    description: 'Deep compliance review against Schedule Y and NDCTR 2019 with priority remediation actions.',
+    name: 'Schedule Y Compliance',
+    shortName: 'M7',
+    endpoint: '/api/v1/agents/schedule-y',
+    description: 'Deep compliance checks across Schedule Y Appendices I–XI and NDCTR 2019 Rules 1–105 with severity-graded findings.',
     accent: '#fde68a',
     category: 'Compliance',
   },
   {
     id: 'ich-gcp',
-    name: 'ICH GCP Check',
-    shortName: 'M13',
-    icon: '13',
-    description: 'ICH E6(R3) GCP assessment with R3-specific gap analysis and inspection readiness scoring.',
+    name: 'ICH E6(R3) GCP Checker',
+    shortName: 'M8',
+    endpoint: '/api/v1/agents/ich-gcp',
+    description: 'Full GCP evaluation against ICH E6(R3) including R3-specific QMS and Risk-Based Monitoring gaps, with inspection readiness scoring.',
     accent: '#c4b5fd',
     category: 'GCP',
   },
 ];
 
-const complianceStats = [
-  { label: 'Review modes', value: '13 modules' },
-  { label: 'Core legal stack', value: 'CDSCO + ICH' },
-  { label: 'Runtime posture', value: 'Session-aware' },
-];
-
-export default function Home() {
-  const [activeModule, setActiveModule] = useState<Module>('compliance');
-  const [activeSidebar, setActiveSidebar] = useState('compliance-command');
+export default function AppWorkspace() {
+  const [activeModule, setActiveModule] = useState<Module>('anonymise');
+  const [activeSidebar, setActiveSidebar] = useState('m1-anonymise');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileId, setFileId] = useState<string | null>(null);
-  const [metadata, setMetadata] = useState<DocumentMetadata>({
-    document_type: '',
-    sponsor_name: '',
-    drug_name: '',
-    inn: '',
-    trial_phase: '',
-    submission_target: '',
-    version: '',
-    date: '',
-  });
-  const [evaluation, setEvaluation] = useState<EvaluationResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<string>('');
 
-  const activeModuleMeta = modules.find((module) => module.id === activeModule) ?? modules[0];
+  const activeModuleMeta = modules.find((m) => m.id === activeModule) ?? modules[0];
 
   const handleSidebarClick = (item: SidebarItem) => {
     setActiveSidebar(item.id);
-    if (item.module) {
-      setActiveModule(item.module);
-    }
+    setActiveModule(item.module);
     setSidebarOpen(false);
-  };
-
-  const handleFileSelect = async (file: File) => {
-    setSelectedFile(file);
-    setFileId(null);
-    setEvaluation(null);
-    setError(null);
-    setUploadProgress('Uploading document...');
-
-    try {
-      const response = await api.uploadDocument(file);
-      setFileId(response.file_id);
-      setUploadProgress('Document uploaded and staged for evaluation.');
-      setTimeout(() => setUploadProgress(''), 3000);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to upload document');
-      setUploadProgress('');
-    }
-  };
-
-  const handleEvaluate = async () => {
-    if (!fileId) {
-      setError('Please upload a document first.');
-      return;
-    }
-
-    if (
-      !metadata.document_type ||
-      !metadata.sponsor_name ||
-      !metadata.drug_name ||
-      !metadata.trial_phase ||
-      !metadata.submission_target
-    ) {
-      setError('Please fill in all required metadata fields before running evaluation.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setEvaluation(null);
-
-    try {
-      const result = await api.evaluateDocument(fileId, metadata);
-      setEvaluation(result);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to evaluate document');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReset = () => {
-    setSelectedFile(null);
-    setFileId(null);
-    setMetadata({
-      document_type: '',
-      sponsor_name: '',
-      drug_name: '',
-      inn: '',
-      trial_phase: '',
-      submission_target: '',
-      version: '',
-      date: '',
-    });
-    setEvaluation(null);
-    setError(null);
-    setUploadProgress('');
   };
 
   return (
@@ -461,7 +267,7 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Nav items */}
+        {/* Nav items — 8 correct agents */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {sidebarItems.map((item) => {
             const isActive = activeSidebar === item.id;
@@ -508,7 +314,7 @@ export default function Home() {
       {/* Main content area */}
       <div className="lg:ml-72 relative z-10">
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {/* Active module bar */}
+          {/* Active module header bar */}
           <div className="glass-panel-strong overflow-hidden">
             <div className="flex flex-col gap-4 px-6 py-5 md:px-8 md:flex-row md:items-center md:justify-between border-b border-white/10">
               <div className="flex items-center gap-4">
@@ -520,11 +326,13 @@ export default function Home() {
                     border: `1px solid ${activeModuleMeta.accent}44`,
                   }}
                 >
-                  {activeModuleMeta.icon}
+                  {activeModuleMeta.shortName}
                 </div>
                 <div>
                   <h1 className="text-xl font-semibold text-white">{activeModuleMeta.name}</h1>
-                  <p className="text-sm text-slate-400 mt-0.5">{activeModuleMeta.description.slice(0, 90)}...</p>
+                  <p className="text-sm text-slate-400 mt-0.5">
+                    {activeModuleMeta.description.slice(0, 90)}...
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -541,103 +349,12 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Module content */}
             <div className="px-6 py-6 md:px-8 md:py-8">
-              {activeModule === 'compliance' && (
-                <div className="space-y-6">
-                  <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-                    <div className="glass-panel p-6">
-                      <div className="mb-5 flex items-start justify-between gap-4">
-                        <div>
-                          <div className="section-kicker">Step 1</div>
-                          <h3 className="mt-3 text-xl font-semibold">Upload and stage the source file</h3>
-                        </div>
-                        <span className="status-chip">PDF or DOCX</span>
-                      </div>
-                      <DocumentUpload onFileSelect={handleFileSelect} selectedFile={selectedFile} />
-                      {uploadProgress && (
-                        <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-                          {uploadProgress}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="glass-panel p-6">
-                      <div className="section-kicker">Review note</div>
-                      <h3 className="mt-3 text-xl font-semibold">Keep human oversight in the loop</h3>
-                      <p className="mt-3 text-sm leading-6 text-slate-400">
-                        This workspace accelerates review, but filing decisions should still be made
-                        by qualified regulatory professionals.
-                      </p>
-                      <div className="mt-6 grid gap-4">
-                        <div className="metric-card">
-                          <div className="metric-label">Evaluation basis</div>
-                          <div className="metric-value text-xl">NDCTR 2019</div>
-                        </div>
-                        <div className="metric-card">
-                          <div className="metric-label">Supporting frame</div>
-                          <div className="metric-value text-xl">CDSCO, Schedule Y, CTRI</div>
-                        </div>
-                        <div className="metric-card">
-                          <div className="metric-label">Workflow mode</div>
-                          <div className="metric-value text-xl">Upload, map, evaluate</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {fileId && (
-                    <div className="glass-panel p-6">
-                      <div className="mb-4">
-                        <div className="section-kicker">Step 2</div>
-                        <h3 className="mt-3 text-xl font-semibold">Document metadata</h3>
-                      </div>
-                      <MetadataForm metadata={metadata} onChange={setMetadata} />
-                    </div>
-                  )}
-
-                  {fileId && (
-                    <div className="glass-panel flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <div className="section-kicker">Step 3</div>
-                        <h3 className="mt-3 text-xl font-semibold">Run compliance evaluation</h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-400">
-                          Launch the evaluator once the source file and filing metadata are in place.
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={handleEvaluate}
-                          disabled={loading}
-                          className={`primary-button ${loading ? 'cursor-not-allowed opacity-70' : ''}`}
-                        >
-                          {loading ? 'Evaluating...' : 'Evaluate document'}
-                        </button>
-                        <button type="button" onClick={handleReset} className="secondary-button">
-                          Reset workspace
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {error && (
-                    <div className="rounded-3xl border border-rose-300/20 bg-rose-400/10 px-5 py-4 text-sm text-rose-100">
-                      {error}
-                    </div>
-                  )}
-
-                  {evaluation && <ResultsViewer evaluation={evaluation} />}
-                </div>
-              )}
-
-              {activeModule === 'generator' && <DocumentGenerator />}
-              {activeModule === 'query' && <QueryResponseAssistant />}
-              {activeModule === 'regulatory' && <ChangeMonitorDashboard />}
               {activeModule === 'anonymise' && <AnonymisationTool />}
               {activeModule === 'summarise' && <DocumentSummariser />}
-              {activeModule === 'comparator' && <DocumentComparator />}
-              {activeModule === 'classifier' && <SAEClassifier />}
               {activeModule === 'completeness' && <CompletenessAssessor />}
+              {activeModule === 'classifier' && <SAEClassifier />}
               {activeModule === 'inspection' && <InspectionReportGenerator />}
               {activeModule === 'reg-qa' && <RegulatoryQA />}
               {activeModule === 'schedule-y' && <ScheduleYChecker />}
@@ -649,5 +366,3 @@ export default function Home() {
     </div>
   );
 }
-
-

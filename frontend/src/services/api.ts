@@ -13,7 +13,7 @@ const apiClient = axios.create({
     },
 });
 
-type AgentEnvelope<T = Record<string, unknown>> = {
+export type AgentEnvelope<T = Record<string, unknown>> = {
     agent: string;
     model: string;
     result: T;
@@ -442,4 +442,38 @@ export const api = {
         });
         return unwrapAgentResult(response.data);
     },
+};
+
+// ─── Generic Agent Callers (Phase 6) ────────────────────────────────────────
+// Returns the full AgentEnvelope — callers must read from response.result
+
+/**
+ * Generic caller for M1, M2, M3, M4, M5, M7, M8.
+ * endpoint example: '/api/v1/agents/anonymise'
+ */
+export const callAgent = async (
+    endpoint: string,
+    document: string,
+    metadata: object = {}
+): Promise<AgentEnvelope> => {
+    const response = await apiClient.post<AgentEnvelope>(endpoint, {
+        document,
+        metadata,
+    });
+    return response.data; // Always read from response.result
+};
+
+/**
+ * M6 only — Regulatory Q&A has a different request shape (no document field).
+ */
+export const callQAAgent = async (
+    question: string,
+    metadata: object = {}
+): Promise<AgentEnvelope> => {
+    const response = await apiClient.post<AgentEnvelope>('/api/v1/agents/qa', {
+        question,
+        retrieved_context: '',
+        metadata,
+    });
+    return response.data; // Always read from response.result
 };

@@ -67,7 +67,7 @@ RegCheck-India/
 ### Prerequisites
 
 - Docker and Docker Compose
-- NVIDIA API Key (OpenAI-compatible)
+- Anthropic API Key (get from console.anthropic.com)
 
 ### Setup
 
@@ -82,9 +82,9 @@ RegCheck-India/
    copy .env.example .env
    ```
 
-3. **Add your NVIDIA API key** to `.env`:
+3. **Add your Anthropic API key** to `.env`:
    ```
-   LLM_API_KEY=your_nvidia_api_key_here
+   ANTHROPIC_API_KEY=your_anthropic_api_key_here
    ```
 
 4. **Start the application**:
@@ -117,7 +117,7 @@ venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 
 # Set environment variables
-set LLM_API_KEY=your_nvidia_api_key_here
+set ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
 # Run the server
 uvicorn app.main:app --reload --port 8000
@@ -212,9 +212,8 @@ The system includes sample regulatory data for testing. For production use:
 Key configuration options in `.env`:
 
 ```bash
-# LLM (NVIDIA OpenAI-compatible)
-LLM_API_KEY=your_nvidia_api_key_here
-LLM_MODEL=openai/gpt-oss-120b
+# LLM (Anthropic Claude)
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
 # Server
 BACKEND_PORT=8000
@@ -249,7 +248,7 @@ Edit `backend/app/data/sample_regulations.py` or create a new data ingestion scr
 
 **Backend:**
 - FastAPI (Python web framework)
-- NVIDIA OpenAI-compatible API (openai/gpt-oss-120b)
+- Anthropic Claude API (Haiku 4.5 + Sonnet 4.6)
 - ChromaDB (Vector database)
 - PyPDF2 & python-docx (Document parsing)
 - Pydantic (Data validation)
