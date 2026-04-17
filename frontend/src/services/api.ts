@@ -36,9 +36,16 @@ const unwrapAgentResult = <T extends Record<string, unknown>>(payload: AgentEnve
     token_usage: payload.token_usage,
 });
 
-// Inject X-Session-ID header on every request
+// Inject X-Session-ID and X-Anthropic-Api-Key headers on every request
 apiClient.interceptors.request.use((config) => {
     config.headers['X-Session-ID'] = getSessionId();
+    // Inject user's own Anthropic key so their credits are used, not ours
+    const anthropicKey = typeof window !== 'undefined'
+        ? localStorage.getItem('regcheck_anthropic_key')
+        : null;
+    if (anthropicKey) {
+        config.headers['X-Anthropic-Api-Key'] = anthropicKey;
+    }
     return config;
 });
 

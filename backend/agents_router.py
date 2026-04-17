@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import anthropic
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET, get_claude_client
+from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +68,20 @@ def call_claude(
     model: str,
     system_prompt: str,
     user_content: str,
+    api_key: str,
     max_tokens: int = 2048,
 ) -> AgentResponse:
-    """Shared Anthropic caller for the v1 agents router."""
-    client = get_claude_client()
+    """Shared Anthropic caller for the v1 agents router.
+
+    Uses the caller-supplied ``api_key`` so that each public user's own
+    Anthropic credits are consumed rather than the server key.
+    """
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="No Anthropic API key provided. Add your key via the ⚙ Settings panel in the app.",
+        )
+    client = anthropic.Anthropic(api_key=api_key)
     try:
         response = client.messages.create(
             model=model,
@@ -93,7 +103,7 @@ def call_claude(
         )
     except anthropic.AuthenticationError:
         logger.error("Anthropic auth failed for %s", agent_name)
-        raise HTTPException(status_code=401, detail="Anthropic API key invalid or missing")
+        raise HTTPException(status_code=401, detail="Anthropic API key is invalid. Please check and update your key in Settings.")
     except anthropic.RateLimitError:
         logger.warning("Anthropic rate limit hit for %s", agent_name)
         raise HTTPException(status_code=429, detail="Rate limit reached - retry after a moment")
@@ -151,62 +161,67 @@ inspection_risk_areas."""
 
 
 @router.post("/anonymise", response_model=AgentResponse, summary="Agent 01 - PII/PHI Anonymisation")
-async def anonymise_document(request: AgentRequest):
+async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     return call_claude(
         agent_name="PII_PHI_Anonymisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_01_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
 
 
 @router.post("/summarise", response_model=AgentResponse, summary="Agent 02 - Document Summarisation")
-async def summarise_document(request: AgentRequest):
+async def summarise_document(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     return call_claude(
         agent_name="Document_Summarisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_02_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        api_key=x_anthropic_api_key or "",
         max_tokens=2048,
     )
 
 
 @router.post("/completeness", response_model=AgentResponse, summary="Agent 03 - Completeness Assessment")
-async def assess_completeness(request: AgentRequest):
+async def assess_completeness(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     return call_claude(
         agent_name="Completeness_Assessment",
         model=MODEL_SONNET,
         system_prompt=AGENT_03_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        api_key=x_anthropic_api_key or "",
         max_tokens=3000,
     )
 
 
 @router.post("/classify", response_model=AgentResponse, summary="Agent 04 - Case Classification")
-async def classify_case(request: AgentRequest):
+async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     return call_claude(
         agent_name="Case_Classification",
         model=MODEL_HAIKU,
         system_prompt=AGENT_04_SYSTEM_PROMPT,
         user_content=f"Case metadata: {json.dumps(request.metadata)}\n\nCase narrative:\n{request.document}",
+        api_key=x_anthropic_api_key or "",
         max_tokens=1500,
     )
 
 
 @router.post("/inspection-report", response_model=AgentResponse, summary="Agent 05 - Inspection Report Generation")
-async def generate_inspection_report(request: AgentRequest):
+async def generate_inspection_report(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     return call_claude(
         agent_name="Inspection_Report_Generation",
         model=MODEL_SONNET,
         system_prompt=AGENT_05_SYSTEM_PROMPT,
         user_content=f"Inspection metadata: {json.dumps(request.metadata)}\n\nInspection findings:\n{request.document}",
+        api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
 
 
 @router.post("/qa", response_model=AgentResponse, summary="Agent 06 - Regulatory Q&A")
-async def regulatory_qa(request: QARequest):
+async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] = Header(None)):
     user_content = (
         f"[CONTEXT]\n{request.retrieved_context}\n[/CONTEXT]\n\n"
         f"QUESTION: {request.question}\n\nAdditional metadata: {json.dumps(request.metadata)}"
@@ -216,28 +231,31 @@ async def regulatory_qa(request: QARequest):
         model=MODEL_HAIKU,
         system_prompt=AGENT_06_SYSTEM_PROMPT,
         user_content=user_content,
+        api_key=x_anthropic_api_key or "",
         max_tokens=2048,
     )
 
 
 @router.post("/schedule-y", response_model=AgentResponse, summary="Agent 07 - Schedule Y / CDSCO Compliance")
-async def check_schedule_y(request: AgentRequest):
+async def check_schedule_y(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     return call_claude(
         agent_name="Schedule_Y_Compliance",
         model=MODEL_SONNET,
         system_prompt=AGENT_07_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        api_key=x_anthropic_api_key or "",
         max_tokens=3500,
     )
 
 
 @router.post("/ich-gcp", response_model=AgentResponse, summary="Agent 08 - ICH E6(R3) GCP Compliance")
-async def check_ich_gcp(request: AgentRequest):
+async def check_ich_gcp(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     return call_claude(
         agent_name="ICH_GCP_Compliance",
         model=MODEL_SONNET,
         system_prompt=AGENT_08_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        api_key=x_anthropic_api_key or "",
         max_tokens=3500,
     )
 

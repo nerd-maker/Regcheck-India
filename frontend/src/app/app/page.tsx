@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AnonymisationTool from '@/components/AnonymisationTool';
+import ApiKeyModal from '@/components/ApiKeyModal';
 import CompletenessAssessor from '@/components/CompletenessAssessor';
 import DocumentSummariser from '@/components/DocumentSummariser';
 import DocumentUpload from '@/components/DocumentUpload';
@@ -212,6 +213,29 @@ export default function AppWorkspace() {
   const [activeModule, setActiveModule] = useState<Module>('anonymise');
   const [activeSidebar, setActiveSidebar] = useState('m1-anonymise');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+
+  // On mount: check if a key is already stored
+  useEffect(() => {
+    const stored = localStorage.getItem('regcheck_anthropic_key');
+    if (stored) {
+      setHasApiKey(true);
+    } else {
+      setShowKeyModal(true); // auto-open on first visit
+    }
+  }, []);
+
+  const handleKeySaved = (key: string) => {
+    setHasApiKey(!!key);
+    setShowKeyModal(false);
+  };
+
+  const maskedKey = (() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('regcheck_anthropic_key') : null;
+    if (!stored) return 'No key set';
+    return stored.slice(0, 10) + '···' + stored.slice(-4);
+  })();
 
   const activeModuleMeta = modules.find((m) => m.id === activeModule) ?? modules[0];
 
@@ -223,6 +247,14 @@ export default function AppWorkspace() {
 
   return (
     <div className="app-shell">
+      {/* API Key Modal — auto-shows if no key, or when settings clicked */}
+      {showKeyModal && (
+        <ApiKeyModal
+          onKeySaved={handleKeySaved}
+          isChanging={hasApiKey}
+          onClose={hasApiKey ? () => setShowKeyModal(false) : undefined}
+        />
+      )}
       {/* Mobile hamburger button */}
       <button
         type="button"
@@ -297,17 +329,36 @@ export default function AppWorkspace() {
           })}
         </nav>
 
-        {/* Bottom section */}
-        <div className="px-4 py-4 border-t border-white/10">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold">
-              RA
-            </div>
+        {/* Bottom section — API key status + settings */}
+        <div className="px-4 py-4 border-t border-white/10 space-y-3">
+          {/* Key status indicator */}
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-lg"
+            style={{ background: hasApiKey ? 'rgba(110,231,183,0.08)' : 'rgba(248,113,113,0.08)' }}
+          >
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ background: hasApiKey ? '#6ee7b7' : '#f87171' }}
+            />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-white truncate">RA Professional</div>
-              <div className="text-xs text-slate-400 truncate">regcheck.india@gmail.com</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: hasApiKey ? '#6ee7b7' : '#f87171' }}>
+                {hasApiKey ? 'API Key Active' : 'No API Key'}
+              </div>
+              <div className="text-[10px] text-slate-500 truncate font-mono">{maskedKey}</div>
             </div>
           </div>
+          {/* Settings button */}
+          <button
+            id="api-key-settings-btn"
+            type="button"
+            onClick={() => setShowKeyModal(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+          >
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+            {hasApiKey ? 'Change API Key' : 'Set API Key'}
+          </button>
         </div>
       </aside>
 
