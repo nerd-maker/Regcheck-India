@@ -61,7 +61,7 @@ export default function CompletenessAssessor() {
           <select
             value={docType}
             onChange={(e) => setDocType(e.target.value)}
-            className="w-full max-w-xs rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-200 focus:border-teal-400/50 focus:outline-none"
+            className="w-full max-w-xs rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-200 focus:border-teal-400/50 focus:outline-none [&>option]:bg-slate-900"
           >
             <option value="clinical_protocol">Clinical Protocol</option>
             <option value="icf">Informed Consent Form</option>

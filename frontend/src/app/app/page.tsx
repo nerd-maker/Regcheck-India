@@ -315,7 +315,7 @@ export default function AppWorkspace() {
                 <button
                   type="button"
                   onClick={() => handleSidebarClick(item)}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-left leading-tight transition-all ${
                     isActive
                       ? 'border-l-4 border-secondary bg-secondary-fixed/10 text-secondary-fixed-dim ml-0 pl-3'
                       : 'text-slate-400 hover:text-white hover:bg-white/5 border-l-4 border-transparent'
