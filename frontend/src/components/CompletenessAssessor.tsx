@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import { runCompletenessAssessor } from '@/services/api';
 
 export default function CompletenessAssessor() {
   const [text, setText] = useState('');
@@ -15,10 +15,10 @@ export default function CompletenessAssessor() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.assessCompleteness(text, {
+      const response = await runCompletenessAssessor(text, {
         document_type: docType,
       });
-      setResult(response);
+      setResult(response.result);
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || 'Assessment failed');
     } finally {

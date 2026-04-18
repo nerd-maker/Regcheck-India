@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import { runPIIAnonymiser } from '@/services/api';
 
 export default function AnonymisationTool() {
   const [text, setText] = useState('');
@@ -13,8 +13,8 @@ export default function AnonymisationTool() {
   const runAnonymise = async () => {
     setLoading(true);
     try {
-      const response = await api.anonymiseText(text, mode === 'full');
-      setResult({ ...response, mode });
+      const response = await runPIIAnonymiser(text, { mode: mode === 'full' ? 'full' : 'pseudo', full_anonymisation: mode === 'full' });
+      setResult({ ...response.result, mode });
     } finally {
       setLoading(false);
     }

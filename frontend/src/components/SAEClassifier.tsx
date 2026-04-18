@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import { runCaseClassifier } from '@/services/api';
 
 const severityAccent: Record<string, string> = {
   DEATH: '#ff8aa1',
@@ -22,13 +22,8 @@ export default function SAEClassifier() {
   const run = async () => {
     setLoading(true);
     try {
-      const classificationResponse = await api.classifySAE(text);
-      setClassification(classificationResponse);
-      const duplicateResponse = await api.checkSAEDuplicate({
-        event_description: text,
-        case_id: `case_${Date.now()}`,
-      });
-      setDuplicate(duplicateResponse);
+      const classificationResponse = await runCaseClassifier(text);
+      setClassification(classificationResponse.result);
     } finally {
       setLoading(false);
     }

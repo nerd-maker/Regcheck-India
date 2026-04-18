@@ -14,7 +14,6 @@ import RegulatoryQA from '@/components/RegulatoryQA';
 import ResultsViewer from '@/components/ResultsViewer';
 import SAEClassifier from '@/components/SAEClassifier';
 import ScheduleYChecker from '@/components/ScheduleYChecker';
-import { api, DocumentMetadata, EvaluationResponse } from '@/services/api';
 
 // The 8 correct agent modules per agents_router.py
 type Module =

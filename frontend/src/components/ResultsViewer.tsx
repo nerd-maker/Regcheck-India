@@ -1,8 +1,37 @@
 'use client';
 
 import React, { useState } from 'react';
-import { EvaluationResponse, Finding } from '@/services/api';
 import ModelAttributionBadge from './ModelAttributionBadge';
+
+export interface Finding {
+    finding_id: string;
+    section: string;
+    requirement: string;
+    citation: string;
+    current_text?: string;
+    gap?: string;
+    recommended_language?: string;
+    status: 'PASS' | 'PARTIAL' | 'FAIL' | 'UNVERIFIED' | 'NOT APPLICABLE';
+    human_review_required: boolean;
+    human_review_reason?: string;
+}
+
+export interface EvaluationResponse {
+    evaluation_id: string;
+    document_type: string;
+    overall_status: string;
+    overall_risk: string;
+    total_findings: number;
+    findings_by_status: Record<string, number>;
+    findings: Finding[];
+    critical_blockers: string[];
+    missing_sections: string[];
+    evaluator_notes?: string;
+    confidence_level: string;
+    confidence_rationale: string;
+    timestamp: string;
+    model_attribution?: any;
+}
 
 interface ResultsViewerProps {
     evaluation: EvaluationResponse;

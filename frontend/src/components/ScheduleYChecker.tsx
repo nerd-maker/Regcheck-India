@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import { runScheduleYCompliance } from '@/services/api';
 
 export default function ScheduleYChecker() {
   const [text, setText] = useState('');
@@ -14,8 +14,8 @@ export default function ScheduleYChecker() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.checkScheduleY(text);
-      setResult(response);
+      const response = await runScheduleYCompliance(text);
+      setResult(response.result);
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || 'Schedule Y check failed');
     } finally {

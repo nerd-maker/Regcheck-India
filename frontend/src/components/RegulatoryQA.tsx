@@ -2,11 +2,11 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import { runRegulatoryQA } from '@/services/api';
 
 export default function RegulatoryQA() {
   const [question, setQuestion] = useState('');
-  const [context, setContext] = useState('');
+
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -15,8 +15,8 @@ export default function RegulatoryQA() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.regulatoryQA(question, context);
-      setResult(response);
+      const response = await runRegulatoryQA(question);
+      setResult(response.result);
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || 'Q&A failed');
     } finally {
@@ -61,25 +61,17 @@ export default function RegulatoryQA() {
           />
         </div>
 
-        <div className="mb-5">
-          <label className="metric-label mb-2 block">Retrieved context *</label>
-          <textarea
-            className="textarea-shell"
-            value={context}
-            onChange={(e) => setContext(e.target.value)}
-            placeholder="Paste the retrieved regulatory context from ChromaDB / knowledge base here. The agent will answer ONLY from this context."
-          />
-        </div>
+
 
         <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-slate-400">
-            The agent will state when context is insufficient. Answers include regulatory citations.
+            Answers are grounded in the NDCTR 2019, Schedule Y, and ICH regulatory knowledge base.
           </p>
           <button
             type="button"
             className="primary-button"
             onClick={runQA}
-            disabled={loading || !question.trim() || !context.trim()}
+            disabled={loading || !question.trim()}
           >
             {loading ? 'Answering...' : 'Ask question'}
           </button>

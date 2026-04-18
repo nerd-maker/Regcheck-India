@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import axios from 'axios';
 
 export default function DocumentComparator() {
   const [v1, setV1] = useState('');
@@ -13,8 +13,12 @@ export default function DocumentComparator() {
   const compare = async () => {
     setLoading(true);
     try {
-      const response = await api.compareVersions(v1, v2, 'general');
-      setResult(response);
+      const response = await axios.post((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/api/compare/versions', {
+          doc_v1_text: v1,
+          doc_v2_text: v2,
+          doc_type: 'general',
+      });
+      setResult(response.data);
     } finally {
       setLoading(false);
     }

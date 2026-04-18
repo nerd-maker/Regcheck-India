@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import { runICHGCPChecker } from '@/services/api';
 
 export default function ICHGCPChecker() {
   const [text, setText] = useState('');
@@ -14,8 +14,8 @@ export default function ICHGCPChecker() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.checkICHGCP(text);
-      setResult(response);
+      const response = await runICHGCPChecker(text);
+      setResult(response.result);
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || 'ICH GCP check failed');
     } finally {

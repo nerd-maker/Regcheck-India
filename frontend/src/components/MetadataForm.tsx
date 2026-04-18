@@ -1,7 +1,17 @@
 'use client';
 
 import React from 'react';
-import { DocumentMetadata } from '@/services/api';
+
+export interface DocumentMetadata {
+    document_type: string;
+    sponsor_name: string;
+    drug_name: string;
+    inn?: string;
+    trial_phase: string;
+    submission_target: string;
+    version?: string;
+    date?: string;
+}
 
 interface MetadataFormProps {
     metadata: DocumentMetadata;

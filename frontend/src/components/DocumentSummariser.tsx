@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import { runDocumentSummariser } from '@/services/api';
 
 type Tab = 'sugam' | 'sae' | 'meeting';
 
@@ -33,13 +33,11 @@ export default function DocumentSummariser() {
   const run = async () => {
     setLoading(true);
     try {
-      const response =
-        tab === 'sugam'
-          ? await api.summariseSugamApplication(text, 'ct04')
-          : tab === 'sae'
-            ? await api.summariseSAECase(text)
-            : await api.summariseMeeting(text);
-      setResult(response);
+      const response = await runDocumentSummariser(text, {
+        document_type: tab === 'sugam' ? 'sugam_application' : tab === 'sae' ? 'sae_case' : 'meeting_transcript',
+        checklist_type: tab === 'sugam' ? 'ct04' : undefined,
+      });
+      setResult(response.result);
     } finally {
       setLoading(false);
     }

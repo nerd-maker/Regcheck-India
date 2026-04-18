@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { api } from '@/services/api';
+import { runInspectionReportGenerator } from '@/services/api';
 
 export default function InspectionReportGenerator() {
   const [text, setText] = useState('');
@@ -15,10 +15,10 @@ export default function InspectionReportGenerator() {
     setLoading(true);
     setError('');
     try {
-      const response = await api.generateInspectionReport(text, {
+      const response = await runInspectionReportGenerator(text, {
         facility_type: facilityType,
       });
-      setResult(response);
+      setResult(response.result);
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || 'Report generation failed');
     } finally {
