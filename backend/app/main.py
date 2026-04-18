@@ -1,4 +1,4 @@
-﻿"""
+"""
 FastAPI main application for RegCheck-India.
 """
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
@@ -94,7 +94,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS registered FIRST = innermost wrapper = sees every response last,
 # guaranteeing CORS headers are added to EVERY response including errors.
 
-allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "https://regcheck-india-three.vercel.app,http://localhost:3000")
 allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",")]
 logger.info(f"CORS allowed origins: {allowed_origins}")
 
