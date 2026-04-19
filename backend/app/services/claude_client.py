@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 # Module-level singleton
 _client: Optional[anthropic.Anthropic] = None
 
-# Model constants
-MODEL_SONNET = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
-MODEL_HAIKU = os.getenv("LLM_MODEL_FAST", "claude-haiku-4-20250414")
+# Model constants — prefer ANTHROPIC_MODEL, fall back to LLM_MODEL for legacy deploys
+MODEL_SONNET = os.getenv("ANTHROPIC_MODEL", os.getenv("LLM_MODEL", "claude-sonnet-4-20250514"))
+MODEL_HAIKU  = os.getenv("ANTHROPIC_MODEL_FAST", os.getenv("LLM_MODEL_FAST", "claude-haiku-4-20250414"))
 
 
 def get_claude_client() -> anthropic.Anthropic:

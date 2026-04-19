@@ -32,7 +32,7 @@ class LLMConfig:
         "M3_CLASSIFICATION": 0.0,   # Gap 11: Deterministic classification
         "M4_INTELLIGENCE": 0.0,     # Gap 9: 0.0 for deterministic analysis
         "M4_INGESTION": 0.0,        # Gap 9: Alias for M4 ingestion operations
-        "M4_DIGEST": 0.0            # Gap 9: Alias for M4 digest operations
+        "M4_DIGEST": 0.0,           # Gap 9: Alias for M4 digest operations
     }
 
     # Rule 6: Max Token Budgets
@@ -42,12 +42,12 @@ class LLMConfig:
         "M3_QUERY_RESPONSE": 2500,  # Per query response
         "M3_CLASSIFICATION": 1500,  # Gap 11: Classification tokens
         "M4_INGESTION": 4000,       # Document ingestion
-        "M4_DIGEST": 3000           # Weekly digest
+        "M4_DIGEST": 3000,          # Weekly digest
     }
 
-    # LLM model (Anthropic Claude)
-    LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
-    LLM_MODEL_FAST = os.getenv("LLM_MODEL_FAST", "claude-haiku-4-20250414")
+    # LLM model (Anthropic Claude) — prefer ANTHROPIC_MODEL, fall back to LLM_MODEL for legacy
+    LLM_MODEL      = os.getenv("ANTHROPIC_MODEL",      os.getenv("LLM_MODEL",      "claude-sonnet-4-20250514"))
+    LLM_MODEL_FAST = os.getenv("ANTHROPIC_MODEL_FAST", os.getenv("LLM_MODEL_FAST", "claude-haiku-4-20250414"))
 
     # --- Gap 11: M3 Classification Confidence ---
     CLASSIFICATION_CONFIDENCE_THRESHOLD: float = 0.75
