@@ -21,6 +21,14 @@ class SessionTrackingMiddleware(BaseHTTPMiddleware):
     - Returns session ID in response headers
     """
     
+    # Paths under /api/ that are exempt from the session-ID requirement.
+    # Agent routes use BYOK (x-anthropic-api-key) instead of sessions.
+    SESSION_EXEMPT_PREFIXES = [
+        "/api/v1/agents/",   # All agent endpoints (BYOK auth)
+        "/api/models/",      # Model status — read-only probe
+        "/api/kb/",          # Knowledge base stats
+    ]
+
     async def dispatch(self, request: Request, call_next):
         # Skip session check for health/docs endpoints
         if request.url.path in ["/", "/health", "/ready", "/docs", "/openapi.json", "/redoc"]:
@@ -30,7 +38,11 @@ class SessionTrackingMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
         
-        # Require session ID for all API endpoints (both /api/ and /api/v1/)
+        # Skip exempt sub-paths (agent routes, model status, etc.)
+        if any(request.url.path.startswith(p) for p in self.SESSION_EXEMPT_PREFIXES):
+            return await call_next(request)
+        
+        # Require session ID for all other API endpoints
         if request.url.path.startswith("/api/"):
             session_id = request.headers.get("X-Session-ID")
             
