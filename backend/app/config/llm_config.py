@@ -45,9 +45,9 @@ class LLMConfig:
         "M4_DIGEST": 3000,          # Weekly digest
     }
 
-    # LLM model (Anthropic Claude) — prefer ANTHROPIC_MODEL, fall back to LLM_MODEL for legacy
-    LLM_MODEL      = os.getenv("ANTHROPIC_MODEL",      os.getenv("LLM_MODEL",      "claude-sonnet-4-20250514"))
-    LLM_MODEL_FAST = os.getenv("ANTHROPIC_MODEL_FAST", os.getenv("LLM_MODEL_FAST", "claude-haiku-4-20250414"))
+    # LLM model (Anthropic Claude)
+    LLM_MODEL      = os.getenv("ANTHROPIC_MODEL",      "claude-sonnet-4-20250514")
+    LLM_MODEL_FAST = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-20250414")
 
     # --- Gap 11: M3 Classification Confidence ---
     CLASSIFICATION_CONFIDENCE_THRESHOLD: float = 0.75
