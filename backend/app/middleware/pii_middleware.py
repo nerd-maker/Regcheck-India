@@ -68,15 +68,17 @@ class PIIDetectionMiddleware(BaseHTTPMiddleware):
                             }
                         )
                         
-                        # Redact PII
-                        redacted_text, redaction_map = pii_detector.redact_pii(body_text)
+                        # Redact PII — correct method is detect_and_redact()
+                        # Returns (redacted_text: str, report: dict) where
+                        # report["total_redactions"] holds the count.
+                        redacted_text, redaction_report = pii_detector.detect_and_redact(body_text)
                         
                         # Parse redacted JSON
                         redacted_json = json.loads(redacted_text)
                         
-                        # Store redaction map in request state
+                        # Store redaction report in request state
                         request.state.pii_redacted = True
-                        request.state.redaction_map = redaction_map
+                        request.state.redaction_map = redaction_report
                         request.state.pii_summary = pii_summary
                         
                         # Replace request body with redacted version
@@ -88,11 +90,12 @@ class PIIDetectionMiddleware(BaseHTTPMiddleware):
                         
                         request._receive = receive
                         
+                        redaction_count = redaction_report.get("total_redactions", 0)
                         logger.info(
-                            f"PII redacted: {len(redaction_map)} instances",
+                            f"PII redacted: {redaction_count} instances",
                             extra={
                                 "session_id": request.headers.get("X-Session-ID"),
-                                "redaction_count": len(redaction_map)
+                                "redaction_count": redaction_count
                             }
                         )
                     else:
@@ -111,6 +114,8 @@ class PIIDetectionMiddleware(BaseHTTPMiddleware):
         if hasattr(request.state, "pii_redacted"):
             response.headers["X-PII-Detected"] = str(request.state.pii_redacted)
             if request.state.pii_redacted:
-                response.headers["X-PII-Redacted-Count"] = str(len(request.state.redaction_map))
+                response.headers["X-PII-Redacted-Count"] = str(
+                    request.state.redaction_map.get("total_redactions", 0)
+                )
         
         return response
