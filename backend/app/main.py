@@ -96,6 +96,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "https://regcheck-india-three.vercel.app,http://localhost:3000")
 allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",")]
+if "https://regcheck-india-three.vercel.app" not in allowed_origins:
+    allowed_origins.append("https://regcheck-india-three.vercel.app")
 logger.info(f"CORS allowed origins: {allowed_origins}")
 
 app.add_middleware(
