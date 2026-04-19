@@ -29,7 +29,7 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: ALLOWED_ORIGINS
-        value: https://regcheck-india.vercel.app
+        value: https://regcheck-india-three.vercel.app,https://regcheck-india.vercel.app,http://localhost:3000
       - key: UPLOAD_DIR
         value: /app/uploads
       - key: MAX_UPLOAD_SIZE_MB
