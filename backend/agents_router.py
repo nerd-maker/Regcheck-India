@@ -168,6 +168,12 @@ Return JSON only with: gcp_compliance, findings, r3_gaps, strengths, inspection_
 inspection_risk_areas."""
 
 
+@router.get("/anonymise/health", summary="Agent 01 - Anonymise Health Check")
+async def anonymise_health():
+    """Lightweight CORS smoke-test endpoint — no API key required, no LLM call."""
+    return {"status": "ok", "agent": "PII_PHI_Anonymisation", "endpoint": "/api/v1/agents/anonymise"}
+
+
 @router.post("/anonymise", response_model=AgentResponse, summary="Agent 01 - PII/PHI Anonymisation")
 async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     return call_claude(

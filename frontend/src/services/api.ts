@@ -2,16 +2,21 @@ import axios from 'axios';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+/** Read the Anthropic API key from localStorage (safe for SSR). */
+const getStoredKey = (): string =>
+  (typeof window !== 'undefined' ? localStorage.getItem('regcheck_anthropic_key') : null) ?? '';
+
 // ─── Generic agent caller — used by M1, M2, M3, M4, M5, M7, M8 ──────────────
 export const callAgent = async (
   endpoint: string,
   document: string,
   metadata: Record<string, unknown> = {}
 ) => {
-  const response = await axios.post(`${BACKEND_URL}${endpoint}`, {
-    document,
-    metadata,
-  });
+  const response = await axios.post(
+    `${BACKEND_URL}${endpoint}`,
+    { document, metadata },
+    { headers: { 'x-anthropic-api-key': getStoredKey() } }
+  );
   return response.data;
 };
 
@@ -21,11 +26,11 @@ export const callQAAgent = async (
   question: string,
   metadata: Record<string, unknown> = {}
 ) => {
-  const response = await axios.post(`${BACKEND_URL}/api/v1/agents/qa`, {
-    question,
-    retrieved_context: '',
-    metadata,
-  });
+  const response = await axios.post(
+    `${BACKEND_URL}/api/v1/agents/qa`,
+    { question, retrieved_context: '', metadata },
+    { headers: { 'x-anthropic-api-key': getStoredKey() } }
+  );
   return response.data;
 };
 
