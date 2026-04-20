@@ -84,7 +84,9 @@ export default function AnonymisationTool() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div className="metric-card">
                 <div className="metric-label">Detected entities</div>
-                <div className="metric-value">{result.entities_detected ?? 0}</div>
+                <div className="metric-value">
+                  {Array.isArray(result.entities_detected) ? result.entities_detected.length : (result.entities_detected ?? 0)}
+                </div>
               </div>
               <div className="metric-card">
                 <div className="metric-label">Anonymised entities</div>
@@ -104,49 +106,94 @@ export default function AnonymisationTool() {
               </div>
             </div>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-5 space-y-6">
               <div>
                 <div className="metric-label">Framework coverage</div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {(Array.isArray(result.compliance_frameworks)
-                    ? result.compliance_frameworks
-                    : result.compliance_frameworks
-                      ? Object.values(result.compliance_frameworks)
-                      : []
-                  ).map((framework: any, idx: number) => (
+                  {(result.compliance_frameworks || []).map((framework: any, idx: number) => (
                     <span key={`fw-${idx}`} className="status-chip">
-                      {typeof framework === 'object' ? JSON.stringify(framework) : String(framework ?? '')}
+                      {String(framework ?? '')}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div>
-                <div className="metric-label">Audit log entries</div>
-                <div className="mt-3 space-y-2">
-                  {(Array.isArray(result.audit_log)
-                    ? result.audit_log
-                    : result.audit_log
-                      ? Object.values(result.audit_log)
-                      : []
-                  ).slice(0, 4).map((entry: any, index: number) => (
-                    <div key={`audit-${index}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-                      <div className="font-semibold text-slate-100">
-                        {String(entry?.entity_type ?? entry?.action ?? 'Entity')}
-                      </div>
-                      <div className="mt-1 text-slate-400">
-                        {String(entry?.value ?? entry?.original_value ?? '—')}
-                      </div>
-                      {(entry?.pii_category || entry?.legal_basis) && (
-                        <div className="mt-1 text-xs text-slate-500">
-                          {String(entry?.pii_category ?? entry?.legal_basis ?? '')}
-                          {entry?.sensitivity ? ` · ${String(entry.sensitivity)}` : ''}
+              {Array.isArray(result.entities_detected) && result.entities_detected.length > 0 && (
+                <div>
+                  <div className="metric-label">Detected Entities</div>
+                  <div className="mt-3 space-y-2">
+                    {result.entities_detected.map((entity: any, index: number) => (
+                      <div key={`entity-${index}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+                        <div className="font-semibold text-slate-100">
+                          {String(entity.entity_type)}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        <div className="mt-1 text-slate-400">
+                          Value: {String(entity.value)}
+                        </div>
+                        <div className="mt-1 flex gap-2 text-xs text-slate-500">
+                          <span className="rounded bg-teal-400/10 px-2 py-0.5 text-teal-400">{String(entity.category)}</span>
+                          <span className="rounded bg-slate-800 px-2 py-0.5">{String(entity.position)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {result.audit_log && (
+                <div>
+                  <div className="metric-label">Audit Log</div>
+                  <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    <div className="flex justify-between border-b border-white/10 pb-2">
+                      <span className="text-slate-500">Timestamp</span>
+                      <span className="text-slate-200">{String(result.audit_log.timestamp ?? '')}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-white/10 pb-2">
+                      <span className="text-slate-500">Mode</span>
+                      <span className="text-slate-200">{String(result.audit_log.mode ?? '')}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-white/10 pb-2">
+                      <span className="text-slate-500">Entities Processed</span>
+                      <span className="text-slate-200">{String(result.audit_log.entities_processed ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-white/10 pb-2">
+                      <span className="text-slate-500">Method</span>
+                      <span className="text-slate-200">{String(result.audit_log.anonymisation_method ?? '')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Status</span>
+                      <span className="text-teal-400">{String(result.audit_log.status ?? '')}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {result.anonymisation_report && (
+                <div>
+                  <div className="metric-label">Anonymisation Report</div>
+                  <div className="mt-3 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    <p className="font-medium text-slate-200">{String(result.anonymisation_report.summary ?? '')}</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-xs text-slate-500">PII Removed</div>
+                        <div className="font-semibold text-slate-200">{String(result.anonymisation_report.pii_removed ?? 0)}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500">PHI Removed</div>
+                        <div className="font-semibold text-slate-200">{String(result.anonymisation_report.phi_removed ?? 0)}</div>
+                      </div>
+                    </div>
+                    <div className="rounded border border-indigo-500/20 bg-indigo-500/10 p-3 text-indigo-300">
+                      <strong>Clinical Integrity:</strong> {String(result.anonymisation_report.clinical_integrity ?? '')}
+                    </div>
+                    {result.anonymisation_report.notes && (
+                      <div className="text-xs italic text-slate-400">
+                        Note: {String(result.anonymisation_report.notes)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
