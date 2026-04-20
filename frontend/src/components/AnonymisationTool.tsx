@@ -113,9 +113,9 @@ export default function AnonymisationTool() {
                     : result.compliance_frameworks
                       ? Object.values(result.compliance_frameworks)
                       : []
-                  ).map((framework: string) => (
-                    <span key={framework} className="status-chip">
-                      {framework}
+                  ).map((framework: any, idx: number) => (
+                    <span key={`fw-${idx}`} className="status-chip">
+                      {typeof framework === 'object' ? JSON.stringify(framework) : String(framework ?? '')}
                     </span>
                   ))}
                 </div>
@@ -130,11 +130,19 @@ export default function AnonymisationTool() {
                       ? Object.values(result.audit_log)
                       : []
                   ).slice(0, 4).map((entry: any, index: number) => (
-                    <div key={`${entry.timestamp}-${index}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-                      <div className="font-semibold text-slate-100">{entry.entity_type}</div>
-                      <div className="mt-1 text-slate-400">
-                        {entry.action} under {entry.legal_basis}
+                    <div key={`audit-${index}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+                      <div className="font-semibold text-slate-100">
+                        {String(entry?.entity_type ?? entry?.action ?? 'Entity')}
                       </div>
+                      <div className="mt-1 text-slate-400">
+                        {String(entry?.value ?? entry?.original_value ?? '—')}
+                      </div>
+                      {(entry?.pii_category || entry?.legal_basis) && (
+                        <div className="mt-1 text-xs text-slate-500">
+                          {String(entry?.pii_category ?? entry?.legal_basis ?? '')}
+                          {entry?.risk_level ? ` · ${String(entry.risk_level)}` : ''}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -145,7 +153,11 @@ export default function AnonymisationTool() {
           <div className="glass-panel p-6">
             <div className="metric-label">Anonymised output</div>
             <pre className="mt-4 overflow-auto rounded-[24px] border border-white/10 bg-slate-950/50 p-5 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
-              {result.anonymised_content}
+              {typeof result.anonymised_content === 'string'
+                ? result.anonymised_content
+                : result.anonymised_content != null
+                  ? JSON.stringify(result.anonymised_content, null, 2)
+                  : ''}
             </pre>
           </div>
         </div>
