@@ -108,7 +108,12 @@ export default function AnonymisationTool() {
               <div>
                 <div className="metric-label">Framework coverage</div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {(result.compliance_frameworks || []).map((framework: string) => (
+                  {(Array.isArray(result.compliance_frameworks)
+                    ? result.compliance_frameworks
+                    : result.compliance_frameworks
+                      ? Object.values(result.compliance_frameworks)
+                      : []
+                  ).map((framework: string) => (
                     <span key={framework} className="status-chip">
                       {framework}
                     </span>
@@ -119,7 +124,12 @@ export default function AnonymisationTool() {
               <div>
                 <div className="metric-label">Audit log entries</div>
                 <div className="mt-3 space-y-2">
-                  {(result.audit_log || []).slice(0, 4).map((entry: any, index: number) => (
+                  {(Array.isArray(result.audit_log)
+                    ? result.audit_log
+                    : result.audit_log
+                      ? Object.values(result.audit_log)
+                      : []
+                  ).slice(0, 4).map((entry: any, index: number) => (
                     <div key={`${entry.timestamp}-${index}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
                       <div className="font-semibold text-slate-100">{entry.entity_type}</div>
                       <div className="mt-1 text-slate-400">
