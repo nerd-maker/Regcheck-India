@@ -1,10 +1,22 @@
 """
 PII Detection Middleware
 Implements Rule 8: Strip PII before LLM API calls
+
+Implemented as a pure ASGI class middleware (not BaseHTTPMiddleware) so that
+the request body can be buffered, inspected, and replayed safely without
+hitting Starlette's "Unexpected message received: http.request" crash.
+
+Root cause of the old crash:
+  BaseHTTPMiddleware wraps the receive stream internally.  Re-assigning
+  request._receive has no effect — Starlette ignores the patched attribute
+  and the body ends up consumed with no way to restore it.
+
+Fix:
+  Own the entire ASGI receive coroutine.  Buffer all body chunks from the
+  *real* receive, run PII detection, then hand the downstream app a synthetic
+  receive callable that replays the (possibly redacted) body exactly once.
 """
 
-from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
 import json
 import logging
 
@@ -12,124 +24,165 @@ from app.services.pii_detector import pii_detector
 
 logger = logging.getLogger(__name__)
 
+# Endpoints that require PII detection
+_PII_CHECK_PATHS = [
+    "/api/evaluate",        # M1: Compliance checker
+    "/api/generate/",       # M2: Document generator
+    "/api/query/",          # M3: Query response
+    "/api/regulatory/",     # M4: Regulatory intelligence
+    "/api/v1/",             # Production safety endpoints
+]
 
-class PIIDetectionMiddleware(BaseHTTPMiddleware):
+
+class PIIDetectionMiddleware:
     """
-    Middleware to detect and redact PII in requests
+    Pure-ASGI middleware to detect and redact PII in requests.
 
-    - Scans request body for PII
-    - Redacts PII before processing
-    - Stores redaction report in request state
-    - Logs PII detection events
-
-    Applied to M1 and M2 endpoints only (document processing)
+    - Buffers the entire request body from the real ASGI receive stream.
+    - Scans the body for PII.
+    - Redacts PII before the request reaches the route handler.
+    - Stores a redaction report in the ASGI scope (under scope["state"]) so
+      downstream handlers can inspect it via request.state.
+    - Adds X-PII-Detected / X-PII-Redacted-Count response headers.
+    - Applies only to POST/PUT requests on the configured path prefixes.
     """
 
-    # Endpoints that require PII detection
-    PII_CHECK_PATHS = [
-        "/api/evaluate",         # M1: Compliance checker
-        "/api/generate/",        # M2: Document generator
-        "/api/query/",           # M3: Query response
-        "/api/regulatory/",      # M4: Regulatory intelligence
-        "/api/v1/",              # Production safety endpoints
-    ]
+    def __init__(self, app):
+        self.app = app
 
-    async def dispatch(self, request: Request, call_next):
-        # Check if this endpoint requires PII detection
-        requires_pii_check = any(
-            request.url.path.startswith(path)
-            for path in self.PII_CHECK_PATHS
+    async def __call__(self, scope, receive, send):
+        # Pass non-HTTP scopes (websocket, lifespan) straight through.
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        method = scope.get("method", "")
+        path = scope.get("path", "")
+
+        requires_pii_check = method in ("POST", "PUT") and any(
+            path.startswith(p) for p in _PII_CHECK_PATHS
         )
 
-        if requires_pii_check and request.method in ["POST", "PUT"]:
-            # Read request body — this exhausts the ASGI receive stream.
-            # We MUST restore it in every code path before calling call_next().
-            body = await request.body()
+        # ------------------------------------------------------------------ #
+        # Initialise state bucket that Starlette exposes as request.state.    #
+        # ------------------------------------------------------------------ #
+        if "state" not in scope:
+            scope["state"] = {}
 
-            if body:
-                try:
-                    # Parse JSON body
-                    body_str = body.decode("utf-8")
-                    body_json = json.loads(body_str)
+        scope["state"]["pii_redacted"] = False
+        scope["state"]["redaction_map"] = {}
+        scope["state"]["pii_summary"] = {}
 
-                    # Convert to string for PII detection
-                    body_text = json.dumps(body_json)
+        if not requires_pii_check:
+            # No PII work needed — pass the original receive through untouched.
+            await self.app(scope, receive, send)
+            return
 
-                    # Detect PII
-                    if pii_detector.has_pii(body_text):
-                        pii_summary = pii_detector.get_pii_summary(body_text)
+        # ------------------------------------------------------------------ #
+        # Buffer the entire body from the real ASGI receive stream.           #
+        # This is the ONLY safe way to read-then-replay the body;             #
+        # request._receive patching does NOT work with BaseHTTPMiddleware.    #
+        # ------------------------------------------------------------------ #
+        body_parts = []
+        more_body = True
+        while more_body:
+            message = await receive()
+            body_parts.append(message.get("body", b""))
+            more_body = message.get("more_body", False)
 
-                        logger.warning(
-                            f"PII detected in request to {request.url.path}",
-                            extra={
-                                "path": request.url.path,
-                                "pii_types": list(pii_summary.keys()),
-                                "pii_count": sum(pii_summary.values()),
-                                "session_id": request.headers.get("X-Session-ID"),
-                            },
-                        )
+        full_body = b"".join(body_parts)
 
-                        # Redact PII — returns (redacted_text: str, report: dict)
-                        redacted_text, redaction_report = pii_detector.detect_and_redact(body_text)
+        # ------------------------------------------------------------------ #
+        # PII detection and optional redaction.                               #
+        # ------------------------------------------------------------------ #
+        final_body = full_body  # default: pass through as-is
 
-                        # Re-encode redacted JSON to bytes
-                        redacted_json = json.loads(redacted_text)
-                        redacted_body = json.dumps(redacted_json).encode("utf-8")
+        if full_body:
+            try:
+                body_str = full_body.decode("utf-8")
+                body_json = json.loads(body_str)
+                body_text = json.dumps(body_json)
 
-                        # Store redaction report in request state
-                        request.state.pii_redacted = True
-                        request.state.redaction_map = redaction_report
-                        request.state.pii_summary = pii_summary
+                if pii_detector.has_pii(body_text):
+                    pii_summary = pii_detector.get_pii_summary(body_text)
 
-                        # Restore stream with REDACTED body so the route handler
-                        # can read it. more_body=False stops Starlette reading a
-                        # second chunk (which raises "Unexpected message received").
-                        async def receive_redacted():
-                            return {"type": "http.request", "body": redacted_body, "more_body": False}
+                    logger.warning(
+                        f"PII detected in request to {path}",
+                        extra={
+                            "path": path,
+                            "pii_types": list(pii_summary.keys()),
+                            "pii_count": sum(pii_summary.values()),
+                            "session_id": dict(scope.get("headers", [])).get(
+                                b"x-session-id", b""
+                            ).decode("utf-8", errors="ignore"),
+                        },
+                    )
 
-                        request._receive = receive_redacted
+                    # Redact PII — returns (redacted_text: str, report: dict)
+                    redacted_text, redaction_report = pii_detector.detect_and_redact(body_text)
 
-                        redaction_count = redaction_report.get("total_redactions", 0)
-                        logger.info(
-                            f"PII redacted: {redaction_count} instances",
-                            extra={
-                                "session_id": request.headers.get("X-Session-ID"),
-                                "redaction_count": redaction_count,
-                            },
-                        )
+                    # Re-encode redacted JSON to bytes
+                    redacted_json = json.loads(redacted_text)
+                    final_body = json.dumps(redacted_json).encode("utf-8")
 
-                    else:
-                        # No PII — restore original body so the route handler
-                        # can still read it (stream was consumed above).
-                        request.state.pii_redacted = False
-                        request.state.redaction_map = {}
+                    # Store redaction report in scope["state"] (→ request.state)
+                    scope["state"]["pii_redacted"] = True
+                    scope["state"]["redaction_map"] = redaction_report
+                    scope["state"]["pii_summary"] = pii_summary
 
-                        async def receive_clean():
-                            return {"type": "http.request", "body": body, "more_body": False}
+                    redaction_count = redaction_report.get("total_redactions", 0)
+                    logger.info(
+                        f"PII redacted: {redaction_count} instances",
+                        extra={
+                            "session_id": dict(scope.get("headers", [])).get(
+                                b"x-session-id", b""
+                            ).decode("utf-8", errors="ignore"),
+                            "redaction_count": redaction_count,
+                        },
+                    )
+                else:
+                    scope["state"]["pii_redacted"] = False
+                    scope["state"]["redaction_map"] = {}
 
-                        request._receive = receive_clean
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.warning(f"Could not parse request body for PII detection: {e}")
+                scope["state"]["pii_redacted"] = False
+                scope["state"]["redaction_map"] = {}
+                # final_body remains full_body — raw bytes pass through
 
-                except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                    logger.warning(f"Could not parse request body for PII detection: {e}")
-                    request.state.pii_redacted = False
-                    request.state.redaction_map = {}
+        # ------------------------------------------------------------------ #
+        # Synthetic receive callable that replays the (possibly redacted)     #
+        # body exactly once, then signals end-of-stream on subsequent calls.  #
+        # ------------------------------------------------------------------ #
+        replayed = False
 
-                    # Restore original body even on parse failure so the route
-                    # handler still receives the raw bytes it needs.
-                    async def receive_passthrough():
-                        return {"type": "http.request", "body": body, "more_body": False}
+        async def receive_with_body():
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {"type": "http.request", "body": final_body, "more_body": False}
+            # After the body has been delivered, block indefinitely or return
+            # disconnect — this satisfies any client-disconnect polling.
+            return {"type": "http.disconnect"}
 
-                    request._receive = receive_passthrough
-
-        # Process request
-        response = await call_next(request)
-
-        # Add PII detection header to response
-        if hasattr(request.state, "pii_redacted"):
-            response.headers["X-PII-Detected"] = str(request.state.pii_redacted)
-            if request.state.pii_redacted:
-                response.headers["X-PII-Redacted-Count"] = str(
-                    request.state.redaction_map.get("total_redactions", 0)
+        # ------------------------------------------------------------------ #
+        # Intercept send so we can inject PII response headers.               #
+        # ------------------------------------------------------------------ #
+        async def send_with_pii_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                pii_redacted = scope["state"].get("pii_redacted", False)
+                headers.append(
+                    (b"x-pii-detected", str(pii_redacted).encode("utf-8"))
                 )
+                if pii_redacted:
+                    count = scope["state"].get("redaction_map", {}).get(
+                        "total_redactions", 0
+                    )
+                    headers.append(
+                        (b"x-pii-redacted-count", str(count).encode("utf-8"))
+                    )
+                message = {**message, "headers": headers}
+            await send(message)
 
-        return response
+        await self.app(scope, receive_with_body, send_with_pii_headers)
