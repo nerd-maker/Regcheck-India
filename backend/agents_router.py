@@ -56,11 +56,11 @@ def _parse_json_block(raw_text: str) -> Any:
             text = text.strip()
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        return {
-            "raw_output": raw_text,
-            "parse_error": "Model did not return valid JSON",
-        }
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Model did not return valid JSON: {exc}"
+        )
 
 
 def call_claude(
@@ -126,9 +126,35 @@ def call_claude(
 AGENT_01_SYSTEM_PROMPT = """You are the RegCheck-India PII and PHI anonymisation agent.
 Detect personally identifiable information in Indian pharmaceutical and clinical documents.
 Keep clinical and regulatory meaning intact. Replace patient identifiers, investigator identifiers,
-institution details, and hard IDs with placeholders. Return JSON only with:
-anonymised_content, entities_detected, entities_anonymised, compliance_frameworks,
-audit_log, anonymisation_report."""
+institution details, and hard IDs with placeholders.
+
+You MUST return a JSON object with EXACTLY this structure — no extra fields, no renamed fields:
+
+{
+  "anonymised_content": "string with placeholders",
+  "entities_detected": [
+    {"entity_type": "string", "value": "string", "category": "PII|PHI", "position": "string"}
+  ],
+  "entities_anonymised": 8,
+  "compliance_frameworks": ["string", "string"],
+  "audit_log": {
+    "timestamp": "ISO string",
+    "mode": "string",
+    "entities_processed": 8,
+    "anonymisation_method": "string",
+    "status": "COMPLETED|FAILED"
+  },
+  "anonymisation_report": {
+    "summary": "string",
+    "pii_removed": 0,
+    "phi_removed": 0,
+    "clinical_integrity": "string",
+    "notes": "string"
+  }
+}
+
+Return ONLY valid JSON. No markdown. No explanation. No extra fields.
+"""
 
 AGENT_02_SYSTEM_PROMPT = """You are the RegCheck-India document summarisation agent.
 Summarise regulatory documents into structured reviewer-friendly JSON.
