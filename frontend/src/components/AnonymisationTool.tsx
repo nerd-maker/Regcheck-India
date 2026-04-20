@@ -140,7 +140,7 @@ export default function AnonymisationTool() {
                       {(entry?.pii_category || entry?.legal_basis) && (
                         <div className="mt-1 text-xs text-slate-500">
                           {String(entry?.pii_category ?? entry?.legal_basis ?? '')}
-                          {entry?.risk_level ? ` · ${String(entry.risk_level)}` : ''}
+                          {entry?.sensitivity ? ` · ${String(entry.sensitivity)}` : ''}
                         </div>
                       )}
                     </div>
