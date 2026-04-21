@@ -69,7 +69,7 @@ def call_claude(
     system_prompt: str,
     user_content: str,
     api_key: str,
-    max_tokens: int = 2048,
+    max_tokens: int = 4096,
 ) -> AgentResponse:
     """Shared Anthropic caller for the v1 agents router.
 
@@ -539,7 +539,7 @@ async def summarise_document(request: AgentRequest, x_anthropic_api_key: Optiona
         system_prompt=AGENT_02_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
         api_key=x_anthropic_api_key or "",
-        max_tokens=2048,
+        max_tokens=4096,
     )
 
 
@@ -551,7 +551,7 @@ async def assess_completeness(request: AgentRequest, x_anthropic_api_key: Option
         system_prompt=AGENT_03_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
         api_key=x_anthropic_api_key or "",
-        max_tokens=3000,
+        max_tokens=4096,
     )
 
 
@@ -563,7 +563,7 @@ async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str
         system_prompt=AGENT_04_SYSTEM_PROMPT,
         user_content=f"Case metadata: {json.dumps(request.metadata)}\n\nCase narrative:\n{request.document}",
         api_key=x_anthropic_api_key or "",
-        max_tokens=1500,
+        max_tokens=4096,
     )
 
 
@@ -581,8 +581,45 @@ async def generate_inspection_report(request: AgentRequest, x_anthropic_api_key:
 
 @router.post("/qa", response_model=AgentResponse, summary="Agent 06 - Regulatory Q&A")
 async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] = Header(None)):
+    retrieved_context = request.retrieved_context
+    if not retrieved_context or len(retrieved_context.strip()) < 50:
+        try:
+            import os
+            import chromadb
+            from chromadb.utils import embedding_functions
+            
+            chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
+            client = chromadb.PersistentClient(path=chromadb_path)
+            embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+            
+            collection = client.get_collection(name="regulatory_documents", embedding_function=embedding_fn)
+            results = collection.query(
+                query_texts=[request.question],
+                n_results=5
+            )
+            
+            if results and results["documents"] and results["documents"][0]:
+                retrieved_context = "\n\n".join(results["documents"][0])
+        except Exception as e:
+            logger.warning(f"ChromaDB retrieval failed: {e}")
+
+    if not retrieved_context or len(retrieved_context.strip()) < 50:
+        context_section = """[CONTEXT]
+Note: No documents were found in the knowledge base for this query. 
+Answer using your comprehensive built-in knowledge of Indian pharmaceutical regulations including:
+- New Drugs and Clinical Trials Rules (NDCTR) 2019
+- Schedule Y of Drugs and Cosmetics Act
+- CDSCO guidelines and circulars
+- ICH guidelines (E6, E2A, E3, E8, E9)
+- ICMR Guidelines for Biomedical and Health Research
+- Drugs and Cosmetics Act 1940
+Clearly state at the end that this answer is based on general regulatory knowledge and not retrieved documents.
+[/CONTEXT]"""
+    else:
+        context_section = f"[CONTEXT]\n{retrieved_context}\n[/CONTEXT]"
+
     user_content = (
-        f"[CONTEXT]\n{request.retrieved_context}\n[/CONTEXT]\n\n"
+        f"{context_section}\n\n"
         f"QUESTION: {request.question}\n\nAdditional metadata: {json.dumps(request.metadata)}"
     )
     return call_claude(
@@ -591,7 +628,7 @@ async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] =
         system_prompt=AGENT_06_SYSTEM_PROMPT,
         user_content=user_content,
         api_key=x_anthropic_api_key or "",
-        max_tokens=2048,
+        max_tokens=4096,
     )
 
 
@@ -603,7 +640,7 @@ async def check_schedule_y(request: AgentRequest, x_anthropic_api_key: Optional[
         system_prompt=AGENT_07_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
         api_key=x_anthropic_api_key or "",
-        max_tokens=3500,
+        max_tokens=4096,
     )
 
 
@@ -615,7 +652,7 @@ async def check_ich_gcp(request: AgentRequest, x_anthropic_api_key: Optional[str
         system_prompt=AGENT_08_SYSTEM_PROMPT,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
         api_key=x_anthropic_api_key or "",
-        max_tokens=3500,
+        max_tokens=4096,
     )
 
 

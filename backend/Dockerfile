@@ -57,21 +57,18 @@ COPY . .
 RUN mkdir -p /app/uploads /app/data/chromadb /app/data/runtime /app/logs \
     && chown -R regcheck:regcheck /app
 
+# Create startup script
+RUN printf '#!/bin/bash\necho "Loading regulatory documents into ChromaDB..."\npython /app/knowledge_base/load_documents.py\necho "Starting server..."\nexec gunicorn app.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:10000\n' > /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Switch to non-root user
 USER regcheck
 
 # Expose port
-EXPOSE 8000
+EXPOSE 10000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:10000/health')" || exit 1
 
-# Run with gunicorn for production
-CMD gunicorn app.main:app \
-    --bind 0.0.0.0:$PORT \
-    --workers 1 \
-    --worker-class uvicorn.workers.UvicornWorker \
-    --timeout 120 \
-    --access-logfile - \
-    --error-logfile -
+CMD ["/app/start.sh"]
