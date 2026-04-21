@@ -113,8 +113,8 @@ app.add_middleware(
 # Other middleware (registered AFTER CORS)
 from app.middleware.request_id_middleware import RequestIDMiddleware
 app.add_middleware(RequestIDMiddleware)
-# app.add_middleware(PIIDetectionMiddleware)  # temporarily disabled - middleware stack conflict
 app.add_middleware(SessionTrackingMiddleware)
+app.add_middleware(PIIDetectionMiddleware)
 
 # Register critical gap solution endpoints (Gaps 2-16)
 from app.gap_endpoints import router as gap_router
