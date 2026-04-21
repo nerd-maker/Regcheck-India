@@ -77,8 +77,8 @@ export default function SAEClassifier() {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <span className="status-chip">Priority {classification.priority_score ?? 'NA'}</span>
-                    <span className="status-chip">{classification.reporting_timeline || 'Timeline pending'}</span>
-                    <span className="status-chip">{classification.causality || 'Causality pending'}</span>
+                    <span className="status-chip">{classification.reporting_timeline?.timeline || classification.reporting_timeline?.status || classification.reporting_timeline?.assessment || 'Timeline pending'}</span>
+                    <span className="status-chip">{classification.causality?.assessment || classification.causality?.who_umc_category || 'Causality pending'}</span>
                   </div>
                 </div>
 
@@ -92,14 +92,32 @@ export default function SAEClassifier() {
                   <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
                     <div className="metric-label">Triggered seriousness criteria</div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {(classification.seriousness_criteria || []).map((criterion: string) => (
-                        <span key={criterion} className="status-chip">
-                          {criterion}
-                        </span>
+                      {Object.entries(classification.seriousness_criteria || {}).map(([key, value]) => (
+                        <div key={key} className="flex gap-2 text-sm text-slate-300 w-full mb-1">
+                          <span className="capitalize w-48">{key.replace(/_/g, ' ')}</span>
+                          <span className={value ? 'text-error font-medium' : 'text-slate-500'}>{value ? 'Yes' : 'No'}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
                 </div>
+
+                {(classification.secondary_categories || classification.flags || classification.regulatory_actions_required) && (
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
+                    <div className="metric-label">Tags & Actions</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {Array.isArray(classification.secondary_categories) && classification.secondary_categories.map((cat: string) => (
+                        <span key={cat} className="status-chip">{cat}</span>
+                      ))}
+                      {Array.isArray(classification.flags) && classification.flags.map((flag: string) => (
+                        <span key={flag} className="status-chip text-error">{flag}</span>
+                      ))}
+                      {Array.isArray(classification.regulatory_actions_required) && classification.regulatory_actions_required.map((action: string) => (
+                        <span key={action} className="status-chip text-amber-500">{action}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
