@@ -4,6 +4,22 @@ import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
 import { runRegulatoryQA } from '@/services/api';
 
+const safeRender = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(safeRender).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const statusColor = (status: string) => {
+  const upper = String(status).toUpperCase();
+  if (['COMPLIANT','COMPLETE','READY','PASSED','LOW','COMPLETED','PROBABLE','HIGH'].includes(upper)) return 'text-green-400 bg-green-400/10'
+  if (['PARTIAL','NEEDS_REVISION','MEDIUM','POSSIBLE'].includes(upper)) return 'text-amber-400 bg-amber-400/10'
+  return 'text-red-400 bg-red-400/10'
+}
+
 export default function RegulatoryQA() {
   const [question, setQuestion] = useState('');
 
@@ -88,57 +104,75 @@ export default function RegulatoryQA() {
         <div className="glass-panel p-6">
           <ModelAttributionBadge attribution={result?.model_attribution} />
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-3">
-            <div className="metric-card">
-              <div className="metric-label">Confidence</div>
-              <div className={`metric-value ${confidenceColor(result.confidence)}`}>
-                {result.confidence ?? '—'}
+          <div className="border-b border-white/10 pb-4 mb-6 mt-4">
+            <h2 className="text-xl font-bold uppercase tracking-wider text-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
+              Regulatory Answer
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-400 font-normal">{safeRender(result.query_type || 'General')}</span>
+                <span className={`status-chip text-sm normal-case font-medium ${statusColor(result.confidence)}`} style={{ padding: '4px 12px' }}>
+                  Confidence: {safeRender(result.confidence ?? '—')}
+                </span>
               </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Citations</div>
-              <div className="metric-value">
-                {Array.isArray(result.regulatory_citations) ? result.regulatory_citations.length : 0}
-              </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Follow-up suggested</div>
-              <div className={`metric-value text-lg ${result.follow_up_suggested ? 'text-amber-300' : 'text-emerald-300'}`}>
-                {result.follow_up_suggested ? 'Yes' : 'No'}
-              </div>
-            </div>
+            </h2>
           </div>
 
-          <div className="mt-5">
-            <div className="metric-label mb-3">Answer</div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm leading-7 text-slate-200">
-              {result.answer ?? 'No answer generated.'}
+          <div className="mb-6">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Answer</div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-inner">
+              <p className="text-base text-slate-200 leading-relaxed font-medium whitespace-pre-wrap">
+                {safeRender(result.answer ?? 'No answer generated.')}
+              </p>
+              {result.confidence_reason && (
+                <p className="text-sm text-slate-400 mt-4 pt-4 border-t border-white/5 italic">
+                  {safeRender(result.confidence_reason)}
+                </p>
+              )}
             </div>
           </div>
-
-          {result.confidence_reason && (
-            <div className="mt-4">
-              <div className="metric-label mb-2">Confidence reason</div>
-              <p className="text-sm text-slate-400">{result.confidence_reason}</p>
-            </div>
-          )}
 
           {Array.isArray(result.regulatory_citations) && result.regulatory_citations.length > 0 && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">Regulatory citations</div>
+            <div className="mb-6">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Regulatory Basis & Citations</div>
               <div className="flex flex-wrap gap-2">
                 {result.regulatory_citations.map((cite: string, i: number) => (
-                  <span key={i} className="rounded-full bg-blue-400/15 px-3 py-1 text-xs font-semibold text-blue-300">
-                    {cite}
+                  <span key={i} className="rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1.5 text-xs font-medium text-blue-300 shadow-sm flex items-center gap-1.5">
+                    <svg className="w-3 h-3 opacity-70" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" /></svg>
+                    {safeRender(cite)}
                   </span>
                 ))}
               </div>
             </div>
           )}
 
+          {result.follow_up_suggested && (
+            <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 flex gap-3 items-start">
+              <div className="text-amber-400 mt-0.5">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <div>
+                <div className="text-sm font-bold text-amber-300 uppercase tracking-wider mb-1">Follow-up Suggested</div>
+                <div className="text-sm text-amber-200/80">Additional context or clarification may be required for a complete assessment.</div>
+              </div>
+            </div>
+          )}
+
           {result.disclaimer && (
-            <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-5 py-3 text-sm text-amber-200">
-              ⚠ {result.disclaimer}
+            <div className="mt-6 mb-2 text-xs italic text-slate-500 border-l-2 border-slate-700 pl-3">
+              Disclaimer: {safeRender(result.disclaimer)}
+            </div>
+          )}
+
+          {result.audit_log && (
+            <div className="mt-4 border-t border-white/5 pt-4">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                <span className="font-semibold uppercase tracking-wider">Audit Log:</span>
+                <span>{safeRender(result.audit_log.timestamp)}</span>
+                {result.audit_log.sources_consulted && <span>• Sources: {safeRender(result.audit_log.sources_consulted)}</span>}
+                <span>•</span>
+                <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>
+                  {safeRender(result.audit_log.status)}
+                </span>
+              </div>
             </div>
           )}
         </div>

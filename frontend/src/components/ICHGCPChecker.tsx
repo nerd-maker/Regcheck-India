@@ -4,6 +4,22 @@ import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
 import { runICHGCPChecker } from '@/services/api';
 
+const safeRender = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(safeRender).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const statusColor = (status: string) => {
+  const upper = String(status).toUpperCase();
+  if (['COMPLIANT','COMPLETE','READY','PASSED','LOW','COMPLETED','PROBABLE','HIGH','STRONG','YES'].includes(upper)) return 'text-green-400 bg-green-400/10'
+  if (['PARTIAL','NEEDS_REVISION','MEDIUM','POSSIBLE','MINOR'].includes(upper)) return 'text-amber-400 bg-amber-400/10'
+  return 'text-red-400 bg-red-400/10'
+}
+
 export default function ICHGCPChecker() {
   const [text, setText] = useState('');
   const [result, setResult] = useState<any>(null);
@@ -76,36 +92,52 @@ export default function ICHGCPChecker() {
         <div className="glass-panel p-6">
           <ModelAttributionBadge attribution={result?.model_attribution} />
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            {result.gcp_compliance && (
-              <div className="metric-card">
-                <div className="metric-label">GCP compliance</div>
-                <div className="metric-value text-lg">
-                  {typeof result.gcp_compliance === 'string' ? result.gcp_compliance : 'See details'}
-                </div>
+          <div className="border-b border-white/10 pb-4 mb-6 mt-4">
+            <h2 className="text-xl font-bold uppercase tracking-wider text-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
+              ICH E6(R3) Compliance
+              <div className="flex items-center gap-2">
+                <span className={`status-chip text-sm normal-case font-medium ${statusColor(result.inspection_readiness)}`} style={{ padding: '4px 12px' }}>
+                  Readiness: {safeRender(result.inspection_readiness)}
+                </span>
               </div>
-            )}
-            {result.inspection_readiness && (
-              <div className="metric-card">
-                <div className="metric-label">Inspection readiness</div>
-                <div className={`metric-value text-lg ${readinessColor(
-                  typeof result.inspection_readiness === 'string' ? result.inspection_readiness : ''
-                )}`}>
-                  {typeof result.inspection_readiness === 'string'
-                    ? result.inspection_readiness
-                    : JSON.stringify(result.inspection_readiness)}
-                </div>
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4 flex flex-col justify-center items-center text-center">
+              <div className="text-xs text-indigo-400 uppercase font-bold mb-1">GCP Compliance</div>
+              <div className={`text-lg font-bold mt-1 ${statusColor(result.gcp_compliance)}`} style={{ background: 'transparent' }}>
+                {safeRender(result.gcp_compliance)}
               </div>
-            )}
+            </div>
+            <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-4 flex flex-col justify-center items-center text-center">
+              <div className="text-xs text-violet-400 uppercase font-bold mb-1">R3 Specific Gaps</div>
+              <div className="text-2xl font-bold text-violet-300">
+                {Array.isArray(result.r3_gaps) ? result.r3_gaps.length : 0}
+              </div>
+            </div>
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col justify-center items-center text-center">
+              <div className="text-xs text-amber-400 uppercase font-bold mb-1">Findings</div>
+              <div className="text-2xl font-bold text-amber-300">
+                {Array.isArray(result.findings) ? result.findings.length : 0}
+              </div>
+            </div>
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 flex flex-col justify-center items-center text-center">
+              <div className="text-xs text-red-400 uppercase font-bold mb-1">Risk Areas</div>
+              <div className="text-2xl font-bold text-red-300">
+                {Array.isArray(result.inspection_risk_areas) ? result.inspection_risk_areas.length : 0}
+              </div>
+            </div>
           </div>
 
           {Array.isArray(result.strengths) && result.strengths.length > 0 && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">Strengths</div>
+            <div className="mb-6">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Process Strengths</div>
               <div className="flex flex-wrap gap-2">
                 {result.strengths.map((s: string, i: number) => (
-                  <span key={i} className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-300">
-                    {s}
+                  <span key={i} className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 flex items-center gap-1.5">
+                    <span className="text-emerald-500">✓</span>
+                    {safeRender(s)}
                   </span>
                 ))}
               </div>
@@ -113,16 +145,14 @@ export default function ICHGCPChecker() {
           )}
 
           {Array.isArray(result.r3_gaps) && result.r3_gaps.length > 0 && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">R3-specific gaps ({result.r3_gaps.length})</div>
-              <div className="space-y-3">
+            <div className="mb-6">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">R3 Specific Gaps</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {result.r3_gaps.map((gap: any, i: number) => (
-                  <div key={i} className="rounded-2xl border border-rose-300/20 bg-rose-400/10 px-5 py-4 text-sm text-rose-200">
-                    <div className="font-semibold text-rose-100">
-                      {gap.section || gap.title || `Gap ${i + 1}`}
-                    </div>
-                    <div className="mt-1 text-rose-300">
-                      {gap.description || gap.detail || (typeof gap === 'string' ? gap : JSON.stringify(gap))}
+                  <div key={i} className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-4 flex flex-col justify-between">
+                    <div>
+                      <div className="text-sm font-bold text-violet-300 mb-1">{safeRender(gap.section || gap.title || `Gap ${i + 1}`)}</div>
+                      <div className="text-xs text-slate-300 leading-relaxed">{safeRender(gap.description || gap.detail || gap)}</div>
                     </div>
                   </div>
                 ))}
@@ -130,32 +160,48 @@ export default function ICHGCPChecker() {
             </div>
           )}
 
-          {Array.isArray(result.findings) && result.findings.length > 0 && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">Findings ({result.findings.length})</div>
-              <div className="space-y-3">
-                {result.findings.map((f: any, i: number) => (
-                  <div key={i} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm text-slate-300">
-                    <div className="font-semibold text-slate-100">{f.section || f.title || `Finding ${i + 1}`}</div>
-                    <div className="mt-1 text-slate-400">{f.description || f.detail || JSON.stringify(f)}</div>
-                  </div>
-                ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            {Array.isArray(result.findings) && result.findings.length > 0 && (
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">General Findings</div>
+                <div className="space-y-3">
+                  {result.findings.map((f: any, i: number) => (
+                    <div key={i} className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex gap-3 items-start text-sm">
+                      <div className="text-amber-500 mt-0.5">•</div>
+                      <div>
+                        <div className="font-semibold text-amber-200">{safeRender(f.section || f.title || `Finding ${i + 1}`)}</div>
+                        <div className="text-slate-300 text-xs mt-0.5">{safeRender(f.description || f.detail || f)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {Array.isArray(result.inspection_risk_areas) && result.inspection_risk_areas.length > 0 && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">Inspection risk areas</div>
-              <div className="space-y-2">
-                {result.inspection_risk_areas.map((risk: any, i: number) => (
-                  <div key={i} className="flex items-start gap-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400/30 text-xs font-bold">
-                      !
-                    </span>
-                    <span>{typeof risk === 'string' ? risk : risk.description || JSON.stringify(risk)}</span>
-                  </div>
-                ))}
+            {Array.isArray(result.inspection_risk_areas) && result.inspection_risk_areas.length > 0 && (
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Inspection Risk Areas</div>
+                <div className="space-y-3">
+                  {result.inspection_risk_areas.map((risk: any, i: number) => (
+                    <div key={i} className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 flex gap-3 items-start text-sm">
+                      <div className="text-red-500 mt-0.5 font-bold">!</div>
+                      <div className="text-red-200/90">{safeRender(risk.description || risk.title || risk)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {result.audit_log && (
+            <div className="mt-4 border-t border-white/10 pt-4">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                <span className="font-semibold uppercase tracking-wider">Audit Log:</span>
+                <span>{safeRender(result.audit_log.timestamp)}</span>
+                <span>•</span>
+                <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>
+                  {safeRender(result.audit_log.status)}
+                </span>
               </div>
             </div>
           )}

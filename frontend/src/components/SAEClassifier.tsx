@@ -22,6 +22,13 @@ const safeRender = (value: unknown): string => {
   return String(value);
 };
 
+const statusColor = (status: string) => {
+  const upper = String(status).toUpperCase();
+  if (['COMPLIANT','COMPLETE','READY','PASSED','LOW','COMPLETED','PROBABLE'].includes(upper)) return 'text-green-400 bg-green-400/10'
+  if (['PARTIAL','NEEDS_REVISION','MEDIUM','POSSIBLE'].includes(upper)) return 'text-amber-400 bg-amber-400/10'
+  return 'text-red-400 bg-red-400/10'
+}
+
 export default function SAEClassifier() {
   const [text, setText] = useState('');
   const [classification, setClassification] = useState<any>(null);
@@ -74,169 +81,204 @@ export default function SAEClassifier() {
       </div>
 
       {(classification || duplicate) && (
-        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-6">
-            {classification && (
-              <div className="glass-panel p-6">
-                <ModelAttributionBadge attribution={classification?.model_attribution} />
-                <div className="mt-5 rounded-[28px] border p-5" style={{ borderColor: `${accent}55`, backgroundColor: `${accent}14` }}>
-                  <div className="metric-label">Primary severity</div>
-                  <div className="mt-3 text-3xl font-semibold" style={{ color: accent }}>
-                    {category}
+        <div className="space-y-6">
+          {classification && (
+            <div className="glass-panel p-6">
+              <ModelAttributionBadge attribution={classification?.model_attribution} />
+
+              <div className="border-b border-white/10 pb-4 mb-6 mt-4">
+                <h2 className="text-xl font-bold uppercase tracking-wider text-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                  Case Classification
+                  <div className="flex items-center gap-2">
+                    <span className="status-chip text-sm font-normal normal-case">{safeRender(classification.primary_category)}</span>
+                    <span className="status-chip text-sm font-normal normal-case">Priority: {safeRender(classification.priority_score)}/10</span>
+                    <span className={`status-chip text-sm font-medium ${classification.requires_expedited_reporting ? 'text-red-400 bg-red-400/10' : 'text-slate-400 bg-white/5'}`} style={{ padding: '4px 12px' }}>
+                      {classification.requires_expedited_reporting ? 'EXPEDITED REPORTING REQUIRED' : 'ROUTINE REPORTING'}
+                    </span>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="status-chip">Priority {safeRender(classification.priority_score ?? 'NA')}</span>
-                    <span className="status-chip">{safeRender(classification.reporting_timeline?.timeline || classification.reporting_timeline?.status || classification.reporting_timeline?.assessment || 'Timeline pending')}</span>
-                    <span className="status-chip">{safeRender(classification.causality?.assessment || classification.causality?.who_umc_category || 'Causality pending')}</span>
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Classification Overview</div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+                    <div>
+                      <div className="text-xs text-slate-400">Primary Category</div>
+                      <div className="text-2xl font-bold mt-1 text-slate-100">{safeRender(classification.primary_category)}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-xs text-slate-400">Confidence</div>
+                        <div className="text-lg font-semibold mt-1">{safeRender(classification.confidence)}%</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-400">Priority Score</div>
+                        <div className="text-lg font-semibold mt-1">{safeRender(classification.priority_score)} / 10</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-400">Expedited Reporting</div>
+                      <div className="text-lg font-semibold mt-1">{classification.requires_expedited_reporting ? 'YES' : 'NO'}</div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-3">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div className="metric-label">Rationale</div>
-                    <p className="mt-2 text-sm leading-6 text-slate-300">
-                      {safeRender(classification.classification_rationale || 'No rationale returned.')}
-                    </p>
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Seriousness Criteria</div>
+                  <div className="flex flex-col gap-2">
+                    {Array.isArray(classification.seriousness_criteria)
+                      ? <div className="flex flex-wrap gap-2">{classification.seriousness_criteria.map((item: string, i: number) => <span key={i} className="status-chip text-red-300 bg-red-400/10">{safeRender(item)}</span>)}</div>
+                      : Object.entries(classification.seriousness_criteria || {}).map(([key, value]) => (
+                          <div key={key} className="flex gap-2 text-sm text-slate-300 w-full justify-between border-b border-white/5 pb-1">
+                            <span className="capitalize">{key.replace(/_/g, ' ')}</span>
+                            <span className={value ? 'text-red-400 font-medium' : 'text-slate-500'}>
+                              {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : safeRender(value)}
+                            </span>
+                          </div>
+                        ))
+                    }
                   </div>
-
-                  {classification.seriousness_criteria && (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div className="metric-label">Triggered seriousness criteria</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {Array.isArray(classification.seriousness_criteria)
-                        ? classification.seriousness_criteria.map((item: string, i: number) => (
-                            <span key={i} className="status-chip">{String(item)}</span>
-                          ))
-                        : Object.entries(classification.seriousness_criteria || {}).map(([key, value]) => (
-                            <div key={key} className="flex gap-2 text-sm text-slate-300 w-full mb-1">
-                              <span className="capitalize w-48">{key.replace(/_/g, ' ')}</span>
-                              <span className={value ? 'text-error font-medium' : 'text-slate-500'}>
-                                {typeof value === 'boolean' ? (value ? 'Yes' : 'No') : String(value)}
-                              </span>
-                            </div>
-                          ))
-                      }
-                    </div>
-                  </div>
-                  )}
-
-                  {classification.causality && (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div className="metric-label">Causality</div>
-                    <div className="mt-3 flex flex-col gap-1">
-                      {Object.entries(classification.causality || {}).map(([key, value]) => (
-                        <div key={key} className="text-sm text-slate-300 mb-1">
-                          <span className="capitalize text-slate-400">{key.replace(/_/g, ' ')}: </span>
-                          <span>
-                            {Array.isArray(value)
-                              ? value.map((v: unknown, i: number) => <div key={i} className="ml-2">• {safeRender(v)}</div>)
-                              : safeRender(value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  )}
-
-                  {classification.reporting_timeline && (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div className="metric-label">Reporting Timeline</div>
-                    <div className="mt-3 flex flex-col gap-1">
-                      {Object.entries(classification.reporting_timeline || {}).map(([key, value]) => (
-                        <div key={key} className="flex gap-2 text-sm text-slate-300 w-full mb-1">
-                          <span className="capitalize w-48 text-slate-400">{key.replace(/_/g, ' ')}</span>
-                          <span>{safeRender(value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  )}
-
-                  {classification.product_relatedness && (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div className="metric-label">Product Relatedness</div>
-                    <div className="mt-3 flex flex-col gap-1">
-                      {Object.entries(classification.product_relatedness || {}).map(([key, value]) => (
-                        <div key={key} className="flex gap-2 text-sm text-slate-300 w-full mb-1">
-                          <span className="capitalize w-48 text-slate-400">{key.replace(/_/g, ' ')}</span>
-                          <span>{safeRender(value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  )}
-
-                  {classification.expedited_reporting_requirements && (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div className="metric-label">Expedited Reporting Requirements</div>
-                    <div className="mt-3 flex flex-col gap-1">
-                      {Object.entries(classification.expedited_reporting_requirements || {}).map(([key, value]) => (
-                        <div key={key} className="flex gap-2 text-sm text-slate-300 w-full mb-1">
-                          <span className="capitalize w-48 text-slate-400">{key.replace(/_/g, ' ')}</span>
-                          <span>{safeRender(value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  )}
-
-                  {classification.case_quality_assessment && (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div className="metric-label">Case Quality Assessment</div>
-                    <div className="mt-3 flex flex-col gap-1">
-                      {Object.entries(classification.case_quality_assessment || {}).map(([key, value]) => (
-                        <div key={key} className="flex gap-2 text-sm text-slate-300 w-full mb-1">
-                          <span className="capitalize w-48 text-slate-400">{key.replace(/_/g, ' ')}</span>
-                          <span>{Array.isArray(value) ? value.join(', ') : safeRender(value)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  )}
                 </div>
+              </div>
 
-                {(classification.secondary_categories || classification.flags || classification.regulatory_actions_required) && (
-                  <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 px-4 py-4">
-                    <div className="metric-label">Tags & Actions</div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {Array.isArray(classification.secondary_categories) && classification.secondary_categories.map((cat: string, i: number) => (
-                        <span key={i} className="status-chip">{safeRender(cat)}</span>
+              {classification.causality && (
+                <div className="mb-6">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Causality Assessment</div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                    <div className="flex flex-wrap items-center gap-3 mb-4">
+                      <span className={`status-chip font-bold ${statusColor(classification.causality.assessment)}`}>{safeRender(classification.causality.assessment)}</span>
+                      <span className="text-sm text-slate-400">WHO-UMC Category:</span>
+                      <span className="text-sm font-semibold text-slate-200">{safeRender(classification.causality.who_umc_category)}</span>
+                    </div>
+                    <p className="text-sm text-slate-300 leading-relaxed mb-4">{safeRender(classification.causality.rationale)}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      {Object.entries(classification.causality).filter(([k]) => !['assessment','who_umc_category','rationale'].includes(k)).map(([key, value]) => (
+                        <div key={key} className="border-t border-white/5 pt-2 text-slate-300">
+                          <span className="capitalize text-slate-400 block text-xs mb-1">{key.replace(/_/g, ' ')}</span>
+                          <span>{safeRender(value)}</span>
+                        </div>
                       ))}
-                      {Array.isArray(classification.flags) && classification.flags.map((flag: string, i: number) => (
-                        <span key={i} className="status-chip text-error">{safeRender(flag)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {classification.reporting_timeline && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Reporting Timeline</div>
+                    <div className="rounded-xl border-l-2 border-indigo-500 bg-white/5 p-4 space-y-3">
+                      {Object.entries(classification.reporting_timeline).map(([key, value]) => (
+                        <div key={key}>
+                          <div className="text-xs text-slate-400 capitalize">{key.replace(/_/g, ' ')}</div>
+                          <div className="text-sm mt-0.5 text-slate-200">{safeRender(value)}</div>
+                        </div>
                       ))}
-                      {Array.isArray(classification.regulatory_actions_required) && classification.regulatory_actions_required.map((action: string, i: number) => (
-                        <span key={i} className="status-chip text-amber-500">{safeRender(action)}</span>
+                    </div>
+                  </div>
+                )}
+                {classification.product_relatedness && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Product Relatedness</div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
+                      {Object.entries(classification.product_relatedness).map(([key, value]) => (
+                        <div key={key} className="flex justify-between items-center text-sm border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                          <span className="capitalize text-slate-400">{key.replace(/_/g, ' ')}</span>
+                          <span className="font-medium text-slate-200">{safeRender(value)}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-            )}
 
-            {duplicate && (
-              <div className="glass-panel p-6">
-                <div className="metric-label">Duplicate review</div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div className="metric-card">
-                    <div className="metric-label">Recommendation</div>
-                    <div className="metric-value text-xl">{safeRender(duplicate.recommendation || 'NA')}</div>
-                  </div>
-                  <div className="metric-card">
-                    <div className="metric-label">Potential duplicates</div>
-                    <div className="metric-value">{safeRender(duplicate.duplicate_count ?? 0)}</div>
+              {Array.isArray(classification.flags) && classification.flags.length > 0 && (
+                <div className="mb-6">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Flags</div>
+                  <div className="flex flex-wrap gap-2">
+                    {classification.flags.map((flag: string, i: number) => (
+                      <span key={i} className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-300">
+                        {safeRender(flag)}
+                      </span>
+                    ))}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
 
-          <div className="glass-panel p-6">
-            <div className="metric-label">Safety review payload</div>
-            <pre className="mt-4 overflow-auto rounded-[24px] border border-white/10 bg-slate-950/50 p-5 text-sm leading-7 text-slate-200 whitespace-pre-wrap">
-              {JSON.stringify({ classification, duplicate }, null, 2)}
-            </pre>
-          </div>
+              {Array.isArray(classification.regulatory_actions_required) && classification.regulatory_actions_required.length > 0 && (
+                <div className="mb-6">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Regulatory Actions Required</div>
+                  <div className="rounded-xl bg-amber-500/10 p-4 border border-amber-500/20">
+                    <ol className="list-decimal list-inside space-y-2 text-sm text-amber-200">
+                      {classification.regulatory_actions_required.map((action: string, i: number) => (
+                        <li key={i} className="pl-1 leading-relaxed">{safeRender(action)}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {classification.case_quality_assessment && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Case Quality Assessment</div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {Object.entries(classification.case_quality_assessment).map(([key, value]) => (
+                        <div key={key} className="rounded border border-white/5 bg-slate-800/50 p-2">
+                          <div className="text-xs text-slate-400 capitalize">{key.replace(/_/g, ' ')}</div>
+                          <div className="text-slate-200 mt-1">{safeRender(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {classification.expedited_reporting_requirements && (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Expedited Reporting Requirements</div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
+                      {Object.entries(classification.expedited_reporting_requirements).map(([key, value]) => (
+                        <div key={key} className="flex justify-between items-center text-sm border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                          <span className="capitalize text-slate-400">{key.replace(/_/g, ' ')}</span>
+                          <span className="font-medium text-slate-200">{safeRender(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {classification.audit_log && (
+                <div className="mt-4 border-t border-white/10 pt-4">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                    <span className="font-semibold uppercase tracking-wider">Audit Log:</span>
+                    <span>{safeRender(classification.audit_log.timestamp)}</span>
+                    <span>•</span>
+                    <span className={statusColor(classification.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>
+                      {safeRender(classification.audit_log.status)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {duplicate && (
+            <div className="glass-panel p-6">
+              <div className="metric-label">Duplicate review</div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="metric-card">
+                  <div className="metric-label">Recommendation</div>
+                  <div className="metric-value text-xl">{safeRender(duplicate.recommendation || 'NA')}</div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">Potential duplicates</div>
+                  <div className="metric-value">{safeRender(duplicate.duplicate_count ?? 0)}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
