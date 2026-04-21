@@ -4,6 +4,15 @@ import React, { useState } from 'react';
 import ModelAttributionBadge from './ModelAttributionBadge';
 import { runScheduleYCompliance } from '@/services/api';
 
+const safeRender = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(safeRender).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
 export default function ScheduleYChecker() {
   const [text, setText] = useState('');
   const [result, setResult] = useState<any>(null);
@@ -15,7 +24,7 @@ export default function ScheduleYChecker() {
     setError('');
     try {
       const response = await runScheduleYCompliance(text);
-      setResult(response.result);
+      setResult(response?.data?.result || response?.result);
     } catch (err: any) {
       setError(err?.response?.data?.detail || err.message || 'Schedule Y check failed');
     } finally {
@@ -69,72 +78,122 @@ export default function ScheduleYChecker() {
         <div className="glass-panel p-6">
           <ModelAttributionBadge attribution={result?.model_attribution} />
 
-          {result.compliance_evaluation && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">Compliance evaluation</div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm leading-7 text-slate-200">
-                {typeof result.compliance_evaluation === 'string'
-                  ? result.compliance_evaluation
-                  : JSON.stringify(result.compliance_evaluation, null, 2)}
-              </div>
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="metric-card">
+              <div className="metric-label">Status</div>
+              <div className="metric-value font-semibold text-lg">{safeRender(result.overall_compliance_status)}</div>
             </div>
-          )}
-
-          {Array.isArray(result.compliant_areas) && result.compliant_areas.length > 0 && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">Compliant areas</div>
-              <div className="flex flex-wrap gap-2">
-                {result.compliant_areas.map((area: string, i: number) => (
-                  <span key={i} className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-300">
-                    {area}
-                  </span>
-                ))}
-              </div>
+            <div className="metric-card">
+              <div className="metric-label">Score</div>
+              <div className="metric-value font-semibold text-lg">{safeRender(result.compliance_score)} / {safeRender(result.compliance_percentage)}</div>
             </div>
-          )}
+            <div className="metric-card">
+              <div className="metric-label">Readiness</div>
+              <div className="metric-value font-semibold text-lg">{safeRender(result.submission_readiness)}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Regulatory Risk</div>
+              <div className="metric-value font-semibold text-lg">{safeRender(result.regulatory_risk)}</div>
+            </div>
+          </div>
 
-          {Array.isArray(result.findings) && result.findings.length > 0 && (
+          {Array.isArray(result.compliance_checklist) && result.compliance_checklist.length > 0 && (
             <div className="mt-5">
-              <div className="metric-label mb-3">Findings ({result.findings.length})</div>
-              <div className="space-y-3">
-                {result.findings.map((f: any, i: number) => (
+              <div className="metric-label mb-3">Compliance Checklist</div>
+              <div className="space-y-4">
+                {result.compliance_checklist.map((item: any, i: number) => (
                   <div key={i} className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm text-slate-300">
-                    <div className="font-semibold text-slate-100">{f.section || f.title || `Finding ${i + 1}`}</div>
-                    <div className="mt-1 text-slate-400">{f.description || f.detail || JSON.stringify(f)}</div>
-                    {f.severity && (
-                      <span className="mt-2 inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">
-                        {f.severity}
-                      </span>
-                    )}
+                    <div className="mb-2">
+                      <span className="font-bold text-slate-100">Requirement: </span>
+                      <span>{safeRender(item.requirement)}</span>
+                    </div>
+                    <div className="mb-2">
+                      <span className="font-bold text-slate-100">Section: </span>
+                      <span>{safeRender(item.section)}</span>
+                    </div>
+                    <div className="mb-2">
+                      <span className="font-bold text-slate-100">Status: </span>
+                      <span className="status-chip ml-2">{safeRender(item.status)}</span>
+                    </div>
+                    <div className="mb-2">
+                      <span className="font-bold text-slate-100">Finding: </span>
+                      <span>{safeRender(item.finding)}</span>
+                    </div>
+                    <div className="text-amber-300">
+                      <span className="font-bold">Corrective Action: </span>
+                      <span>{safeRender(item.corrective_action)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {Array.isArray(result.priority_actions) && result.priority_actions.length > 0 && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">Priority actions</div>
-              <div className="space-y-2">
-                {result.priority_actions.map((action: any, i: number) => (
-                  <div key={i} className="flex items-start gap-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400/30 text-xs font-bold">
-                      {i + 1}
-                    </span>
-                    <span>{typeof action === 'string' ? action : action.description || JSON.stringify(action)}</span>
-                  </div>
+          {Array.isArray(result.critical_non_compliances) && result.critical_non_compliances.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-error/20 bg-error/10 px-5 py-4">
+              <div className="metric-label text-error mb-3">Critical Non-Compliances</div>
+              <div className="space-y-1 text-sm text-error">
+                {result.critical_non_compliances.map((item: string, i: number) => (
+                  <div key={i}>• {safeRender(item)}</div>
                 ))}
               </div>
             </div>
           )}
 
-          {result.estimated_remediation_effort && (
-            <div className="mt-5">
-              <div className="metric-label mb-3">Estimated remediation effort</div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm leading-7 text-slate-300">
-                {typeof result.estimated_remediation_effort === 'string'
-                  ? result.estimated_remediation_effort
-                  : JSON.stringify(result.estimated_remediation_effort, null, 2)}
+          {Array.isArray(result.major_non_compliances) && result.major_non_compliances.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4">
+              <div className="metric-label text-amber-500 mb-3">Major Non-Compliances</div>
+              <div className="space-y-1 text-sm text-amber-500">
+                {result.major_non_compliances.map((item: string, i: number) => (
+                  <div key={i}>• {safeRender(item)}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {Array.isArray(result.minor_non_compliances) && result.minor_non_compliances.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-yellow-300/20 bg-yellow-300/10 px-5 py-4">
+              <div className="metric-label text-yellow-300 mb-3">Minor Non-Compliances</div>
+              <div className="space-y-1 text-sm text-yellow-300">
+                {result.minor_non_compliances.map((item: string, i: number) => (
+                  <div key={i}>• {safeRender(item)}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {Array.isArray(result.strengths) && result.strengths.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-5 py-4">
+              <div className="metric-label text-emerald-400 mb-3">Strengths</div>
+              <div className="space-y-1 text-sm text-emerald-400">
+                {result.strengths.map((item: string, i: number) => (
+                  <div key={i}>• {safeRender(item)}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {Array.isArray(result.recommendations) && result.recommendations.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-blue-400/20 bg-blue-400/10 px-5 py-4">
+              <div className="metric-label text-blue-400 mb-3">Recommendations</div>
+              <div className="space-y-1 text-sm text-blue-400">
+                {result.recommendations.map((item: string, i: number) => (
+                  <div key={i}>• {safeRender(item)}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.audit_log && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+              <div className="metric-label mb-3">Audit Log</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-300">
+                {Object.entries(result.audit_log || {}).map(([key, value]) => (
+                  <div key={key} className="flex gap-2 w-full">
+                    <span className="capitalize w-48 text-slate-400">{key.replace(/_/g, ' ')}:</span>
+                    <span>{safeRender(value)}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
