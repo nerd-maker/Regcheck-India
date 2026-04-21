@@ -39,7 +39,7 @@ out/
 .vercel
 
 # ChromaDB
-backend/data/chromadb/
+# backend/data/chromadb/
 backend/data/runtime/
 
 # Uploaded files

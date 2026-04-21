@@ -25,18 +25,19 @@ export default function InspectionReportGenerator() {
   const [facilityType, setFacilityType] = useState('manufacturing');
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const runGeneration = async () => {
+    setError(null);
     setLoading(true);
-    setError('');
     try {
       const response = await runInspectionReportGenerator(text, {
         facility_type: facilityType,
       });
       setResult(response.result);
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || err.message || 'Report generation failed');
+    } catch (err: unknown) {
+      console.error('Report generation failed:', err);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -100,8 +101,18 @@ export default function InspectionReportGenerator() {
       </div>
 
       {error && (
-        <div className="rounded-3xl border border-rose-300/20 bg-rose-400/10 px-5 py-4 text-sm text-rose-100">
-          {error}
+        <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <span className="text-red-400 text-lg">⚠</span>
+            <div>
+              <div className="text-red-400 font-medium text-sm">Request Failed</div>
+              <div className="text-red-300 text-sm mt-1">{error}</div>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-slate-500">
+            If the server is starting up, wait 30 seconds and try again. 
+            Free tier servers sleep after 15 minutes of inactivity.
+          </div>
         </div>
       )}
 

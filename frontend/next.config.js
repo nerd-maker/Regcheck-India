@@ -1,16 +1,5 @@
 /** @type {import('next').NextConfig} */
 
-const ContentSecurityPolicy = `
-  script-src 'self' 'unsafe-eval' 'unsafe-inline';
-`;
-
-const securityHeaders = [
-  {
-    key: 'Content-Security-Policy',
-    value: ContentSecurityPolicy.replace(/\n/g, ''),
-  },
-];
-
 const nextConfig = {
     output: 'standalone',
     env: {
@@ -20,8 +9,20 @@ const nextConfig = {
         return [
             {
                 source: '/(.*)',
-                headers: securityHeaders,
-            },
+                headers: [
+                    {
+                        key: 'Content-Security-Policy',
+                        value: [
+                            "default-src 'self'",
+                            "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+                            "style-src 'self' 'unsafe-inline'",
+                            "img-src 'self' data: blob:",
+                            "font-src 'self' data:",
+                            "connect-src 'self' https://regcheck-india.onrender.com https://api.anthropic.com",
+                        ].join('; ')
+                    }
+                ]
+            }
         ];
     },
 }

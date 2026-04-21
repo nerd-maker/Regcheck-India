@@ -12,12 +12,34 @@ export const callAgent = async (
   document: string,
   metadata: Record<string, unknown> = {}
 ) => {
-  const response = await axios.post(
-    `${BACKEND_URL}${endpoint}`,
-    { document, metadata },
-    { headers: { 'x-anthropic-api-key': getStoredKey() } }
-  );
-  return response.data;
+  try {
+    const response = await axios.post(
+      `${BACKEND_URL}${endpoint}`,
+      { document, metadata },
+      { 
+        headers: { 'x-anthropic-api-key': getStoredKey() },
+        timeout: 120000
+      }
+    );
+    return response.data;
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timed out — the server took too long to respond. Please try again.');
+      }
+      if (error.response?.status === 500) {
+        const detail = error.response.data?.detail || 'Internal server error';
+        throw new Error(`Server error: ${detail}`);
+      }
+      if (error.response?.status === 400) {
+        throw new Error('Invalid request — please check your input and try again.');
+      }
+      if (!error.response) {
+        throw new Error('Cannot reach the server — it may be starting up. Please wait 30 seconds and try again.');
+      }
+    }
+    throw new Error('An unexpected error occurred. Please try again.');
+  }
 };
 
 // ─── M6 only — Q&A has different request shape ───────────────────────────────
@@ -26,12 +48,34 @@ export const callQAAgent = async (
   question: string,
   metadata: Record<string, unknown> = {}
 ) => {
-  const response = await axios.post(
-    `${BACKEND_URL}/api/v1/agents/qa`,
-    { question, retrieved_context: '', metadata },
-    { headers: { 'x-anthropic-api-key': getStoredKey() } }
-  );
-  return response.data;
+  try {
+    const response = await axios.post(
+      `${BACKEND_URL}/api/v1/agents/qa`,
+      { question, retrieved_context: '', metadata },
+      { 
+        headers: { 'x-anthropic-api-key': getStoredKey() },
+        timeout: 120000 
+      }
+    );
+    return response.data;
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timed out — the server took too long to respond. Please try again.');
+      }
+      if (error.response?.status === 500) {
+        const detail = error.response.data?.detail || 'Internal server error';
+        throw new Error(`Server error: ${detail}`);
+      }
+      if (error.response?.status === 400) {
+        throw new Error('Invalid request — please check your input and try again.');
+      }
+      if (!error.response) {
+        throw new Error('Cannot reach the server — it may be starting up. Please wait 30 seconds and try again.');
+      }
+    }
+    throw new Error('An unexpected error occurred. Please try again.');
+  }
 };
 
 // ─── Named exports for each module (call callAgent internally) ────────────────

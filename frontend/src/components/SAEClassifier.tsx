@@ -34,12 +34,17 @@ export default function SAEClassifier() {
   const [classification, setClassification] = useState<any>(null);
   const [duplicate, setDuplicate] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const run = async () => {
+    setError(null);
     setLoading(true);
     try {
       const classificationResponse = await runCaseClassifier(text);
       setClassification(classificationResponse.result);
+    } catch (err: unknown) {
+      console.error('Classification failed:', err);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -79,6 +84,22 @@ export default function SAEClassifier() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <span className="text-red-400 text-lg">⚠</span>
+            <div>
+              <div className="text-red-400 font-medium text-sm">Request Failed</div>
+              <div className="text-red-300 text-sm mt-1">{error}</div>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-slate-500">
+            If the server is starting up, wait 30 seconds and try again. 
+            Free tier servers sleep after 15 minutes of inactivity.
+          </div>
+        </div>
+      )}
 
       {(classification || duplicate) && (
         <div className="space-y-6">
