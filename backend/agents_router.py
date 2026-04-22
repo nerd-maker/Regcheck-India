@@ -9,14 +9,17 @@ from __future__ import annotations
 import io
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import anthropic
-from fastapi import APIRouter, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile, Header
 from pydantic import BaseModel, Field
 
 from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET
+from app.services.case_store import search_similar_cases, store_case
+from app.services.rule_based_pii import detect_pii, get_pii_summary, format_for_response
 
 logger = logging.getLogger(__name__)
 
@@ -215,34 +218,75 @@ Return ONLY valid JSON. No markdown. No explanation. No extra fields.
 """
 
 AGENT_02_SYSTEM_PROMPT = """You are the RegCheck-India document summarisation agent.
-Summarise regulatory documents into structured reviewer-friendly JSON.
-Preserve key findings, deadlines, safety highlights, and data integrity flags.
-Return JSON only with: document_type, document_reference, summary, word_count_original, compression_ratio.
+Summarise pharmaceutical regulatory filings, clinical trial reports, or safety narratives into structured reviewer-first packets.
+Surface compliance gaps, risk levels, and specific regulatory references.
 
 CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
-1. Return ONLY valid JSON — no markdown, no code fences (no ```json), no explanation text before or after
+1. Return ONLY valid JSON — no markdown, no code fences, no explanation text before or after
 2. Use EXACTLY the field names shown below — no renaming, no adding extra fields
 3. Arrays must always be arrays — never return an object where an array is expected
-4. Objects must always be objects — never return an array where an object is expected  
-5. String fields must always be strings — never return null, use empty string "" instead
-6. Number fields must always be numbers — never return a string like "8" where 8 is expected
-7. If uncertain about a value use a sensible default — never omit a required field
+4. String fields must always be strings — never return null, use empty string instead
+5. Never omit a required field
 
 Return EXACTLY this JSON structure:
 {
-  "summary": "string — 2-4 sentence executive summary of the document",
-  "document_type": "string — e.g. Clinical Trial Protocol, SAE Report, IB, etc.",
-  "key_sections": ["string", "string"],
-  "regulatory_references": ["string", "string"],
-  "compliance_gaps": ["string", "string"],
-  "recommendations": ["string", "string"],
-  "risk_level": "LOW|MEDIUM|HIGH|CRITICAL",
+  "document_type": "string — e.g. CT-04 Application, SAE Narrative, DSMB Report, CMC Data",
+  "summary": "string — 3-5 sentence executive summary of the document",
+  "key_sections": ["string — list of main sections or topics found"],
+  "compliance_gaps": ["string — specific areas where the document is incomplete or non-compliant"],
+  "recommendations": ["string — actionable steps for the reviewer"],
+  "risk_level": "LOW|MEDIUM|HIGH — based on the severity of gaps",
+  "regulatory_references": ["string — specific CDSCO/NDCTR/ICH rules cited or applicable"],
   "word_count_original": 0,
-  "readability_score": "string — e.g. Technical/Complex",
+  "readability_score": "string — e.g. 'Standard', 'Complex', 'Technical'",
   "audit_log": {
     "timestamp": "ISO datetime string",
     "document_pages": 0,
     "processing_time": "string",
+    "status": "COMPLETED|FAILED"
+  }
+}
+"""
+
+AGENT_02_MEETING_SYSTEM_PROMPT = """You are the RegCheck-India meeting summarisation agent.
+Summarise pharmaceutical regulatory meeting transcripts into structured actionable reports.
+Extract key decisions, action items, and next steps from clinical trial, IEC, DSMB, or regulatory meetings.
+
+CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
+1. Return ONLY valid JSON — no markdown, no code fences, no explanation text before or after
+2. Use EXACTLY the field names shown below — no renaming, no adding extra fields
+3. Arrays must always be arrays — never return an object where an array is expected
+4. String fields must always be strings — never return null, use empty string instead
+5. Never omit a required field
+
+Return EXACTLY this JSON structure:
+{
+  "meeting_type": "string — e.g. IEC Meeting, DSMB Review, Site Initiation Visit, Sponsor-CRO Call",
+  "meeting_date": "string — extracted date if mentioned, empty string if not found",
+  "participants": ["string — participant names/roles if mentioned"],
+  "summary": "string — 3-5 sentence executive summary of the meeting",
+  "key_decisions": [
+    {
+      "decision": "string — what was decided",
+      "rationale": "string — why this decision was made",
+      "regulatory_reference": "string — any regulatory basis cited, empty if none"
+    }
+  ],
+  "action_items": [
+    {
+      "action": "string — what needs to be done",
+      "owner": "string — who is responsible, 'Not assigned' if not mentioned",
+      "deadline": "string — when it needs to be done, 'Not specified' if not mentioned",
+      "priority": "HIGH|MEDIUM|LOW"
+    }
+  ],
+  "next_steps": ["string — immediate next steps in order"],
+  "regulatory_topics_discussed": ["string — regulatory frameworks or guidelines mentioned"],
+  "safety_signals": ["string — any safety concerns or signals raised, empty array if none"],
+  "follow_up_meeting": "string — next meeting date/plan if mentioned, empty string if not",
+  "audit_log": {
+    "timestamp": "ISO datetime string",
+    "transcript_word_count": 0,
     "status": "COMPLETED|FAILED"
   }
 }
@@ -289,6 +333,107 @@ Return EXACTLY this JSON structure:
   }
 }
 """
+
+AGENT_03_SAE_SYSTEM_PROMPT = """You are the RegCheck-India SAE Report Completeness Assessment agent.
+Evaluate Serious Adverse Event (SAE) reports for completeness and consistency against NDCTR 2019 Rule 19, ICH E2A, CDSCO pharmacovigilance guidelines, and Schedule Y requirements.
+
+CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
+1. Return ONLY valid JSON — no markdown, no code fences, no explanation text before or after
+2. Use EXACTLY the field names shown below — no renaming, no adding extra fields
+3. Arrays must always be arrays — never return an object where an array is expected
+4. Objects must always be objects — never return an array where an object is expected
+5. String fields must always be strings — never return null, use empty string instead
+6. Boolean fields must be true or false — never return "yes", "no", "true" as string
+7. If uncertain about a value use a sensible default — never omit a required field
+
+SAE MANDATORY FIELDS per NDCTR 2019 Rule 19 and ICH E2A:
+- Patient initials or identifier
+- Age and gender
+- Date of adverse event onset
+- Date of adverse event reporting to sponsor
+- Description of adverse event
+- Seriousness criteria met (death/disability/hospitalisation/life-threatening/congenital anomaly/other)
+- Study drug name, dose, route, frequency
+- Date of last dose before event
+- Causality assessment by investigator
+- Action taken with study drug
+- Outcome of adverse event
+- Investigator name and signature
+- Site name and address
+- Protocol number and study title
+- Ethics committee name
+- Date of IEC notification
+- Narrative description
+
+Return EXACTLY this JSON structure:
+{
+  "document_type": "SAE_REPORT",
+  "overall_completeness_score": 0.0,
+  "completeness_percentage": "string — e.g. 85%",
+  "sae_classification": {
+    "is_serious": true,
+    "seriousness_criteria_identified": ["string"],
+    "reporting_category": "SUSAR|SAE|Non-serious AE",
+    "expedited_reporting_required": true,
+    "reporting_timeline_days": 0
+  },
+  "mandatory_fields": [
+    {
+      "field_name": "string — mandatory field name",
+      "regulation": "string — NDCTR 2019 Rule X or ICH E2A Section Y",
+      "status": "PRESENT|MISSING|INCOMPLETE|INCONSISTENT",
+      "value_found": "string — what was found, empty if missing",
+      "issue": "string — specific problem if not PRESENT, empty if PRESENT"
+    }
+  ],
+  "missing_fields": ["string"],
+  "incomplete_fields": ["string"],
+  "inconsistent_fields": [
+    {
+      "field": "string",
+      "issue": "string — what is inconsistent"
+    }
+  ],
+  "critical_gaps": ["string"],
+  "timeline_compliance": {
+    "event_date_present": true,
+    "report_date_present": true,
+    "sponsor_notification_date_present": true,
+    "timeline_calculable": true,
+    "days_to_report": 0,
+    "timeline_compliant": true,
+    "timeline_issue": "string — if any"
+  },
+  "causality_assessment": {
+    "present": true,
+    "method_used": "string — WHO-UMC/Naranjo/Other",
+    "assessment_value": "string",
+    "adequate": true,
+    "issues": "string"
+  },
+  "narrative_quality": {
+    "present": true,
+    "word_count": 0,
+    "adequate_detail": true,
+    "missing_elements": ["string"]
+  },
+  "recommendations": ["string"],
+  "submission_readiness": "READY|NEEDS_REVISION|NOT_READY",
+  "regulatory_risk": "LOW|MEDIUM|HIGH|CRITICAL",
+  "audit_log": {
+    "timestamp": "ISO datetime string",
+    "fields_checked": 0,
+    "fields_present": 0,
+    "status": "COMPLETED|FAILED"
+  }
+}
+"""
+
+
+class CompletenessRequest(BaseModel):
+    document: str = Field(..., description="Raw text of the regulatory document to process")
+    metadata: Optional[dict] = Field(default_factory=dict, description="Optional document metadata")
+    document_type: Optional[str] = Field("GENERAL", description="Type of document (GENERAL, SAE_REPORT, PROTOCOL, ICF)")
 
 AGENT_04_SYSTEM_PROMPT = """You are the RegCheck-India case classification agent.
 Classify serious adverse event narratives using ICH E2A seriousness, WHO-UMC causality,
@@ -357,7 +502,8 @@ Return EXACTLY this JSON structure:
   },
   "audit_log": {
     "timestamp": "ISO datetime string",
-    "status": "COMPLETED|FAILED"
+    "status": "COMPLETED|FAILED",
+    "study_drug": "string — extract the study drug name from the narrative if mentioned, empty string if not found"
   }
 }
 """
@@ -579,7 +725,18 @@ async def anonymise_health():
 
 @router.post("/anonymise", response_model=AgentResponse, summary="Agent 01 - PII/PHI Anonymisation")
 async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
-    return call_claude(
+    # Run rule-based pre-scan
+    rule_based_matches = []
+    rule_based_summary = {}
+    try:
+        rule_based_matches = detect_pii(request.document)
+        rule_based_summary = get_pii_summary(rule_based_matches)
+        if rule_based_matches:
+            logger.info(f"Rule-based scan found {len(rule_based_matches)} PII instances before LLM")
+    except Exception as e:
+        logger.warning(f"Rule-based PII scan failed silently: {e}")
+
+    response = call_claude(
         agent_name="PII_PHI_Anonymisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_01_SYSTEM_PROMPT,
@@ -587,6 +744,40 @@ async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optiona
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
+
+    # Merge rule-based findings
+    try:
+        parsed = response.result
+        if isinstance(parsed, dict):
+            rule_based_formatted = format_for_response(rule_based_matches)
+            
+            # Add rule-based detections to the result
+            parsed["rule_based_detections"] = rule_based_formatted
+            parsed["rule_based_summary"] = rule_based_summary
+            parsed["detection_method"] = "HYBRID — Rule-based + Claude LLM"
+            
+            # Merge into entities_detected if not already captured
+            existing_values = {
+                str(e.get("value", "")).lower() 
+                for e in parsed.get("entities_detected", [])
+            }
+            for rb_match in rule_based_formatted:
+                if rb_match["value"].lower() not in existing_values:
+                    parsed.setdefault("entities_detected", []).append({
+                        "entity_type": rb_match["entity_type"],
+                        "value": rb_match["value"],
+                        "category": rb_match["category"],
+                        "position": rb_match["position"],
+                        "detection_method": "RULE_BASED"
+                    })
+                    existing_values.add(rb_match["value"].lower())
+                    
+            # Update entity count
+            parsed["entities_anonymised"] = len(parsed.get("entities_detected", []))
+    except Exception as e:
+        logger.warning(f"Rule-based merge failed silently: {e}")
+
+    return response
 
 
 @router.post("/summarise", response_model=AgentResponse, summary="Agent 02 - Document Summarisation")
@@ -602,11 +793,19 @@ async def summarise_document(request: AgentRequest, x_anthropic_api_key: Optiona
 
 
 @router.post("/completeness", response_model=AgentResponse, summary="Agent 03 - Completeness Assessment")
-async def assess_completeness(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
+async def assess_completeness(request: CompletenessRequest, x_anthropic_api_key: Optional[str] = Header(None)):
+    # Select system prompt based on document type
+    if request.document_type == "SAE_REPORT":
+        system_prompt = AGENT_03_SAE_SYSTEM_PROMPT
+        agent_name = "SAE_Report_Completeness"
+    else:
+        system_prompt = AGENT_03_SYSTEM_PROMPT
+        agent_name = "Completeness_Assessment"
+
     return call_claude(
-        agent_name="Completeness_Assessment",
+        agent_name=agent_name,
         model=MODEL_SONNET,
-        system_prompt=AGENT_03_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
@@ -615,7 +814,14 @@ async def assess_completeness(request: AgentRequest, x_anthropic_api_key: Option
 
 @router.post("/classify", response_model=AgentResponse, summary="Agent 04 - Case Classification")
 async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
-    return call_claude(
+    # Run duplicate search
+    duplicate_matches = []
+    try:
+        duplicate_matches = search_similar_cases(request.document)
+    except Exception as e:
+        logger.warning(f"Duplicate search failed silently: {e}")
+
+    response = call_claude(
         agent_name="Case_Classification",
         model=MODEL_HAIKU,
         system_prompt=AGENT_04_SYSTEM_PROMPT,
@@ -623,6 +829,246 @@ async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
+
+    # Add duplicate info to result
+    parsed = response.result
+    if isinstance(parsed, dict):
+        parsed["duplicate_detection"] = {
+            "duplicates_found": len(duplicate_matches) > 0,
+            "match_count": len(duplicate_matches),
+            "matches": duplicate_matches,
+            "recommendation": (
+                "POTENTIAL_DUPLICATE — Review matched cases before processing" 
+                if duplicate_matches else "NO_DUPLICATES — Case appears unique"
+            )
+        }
+        
+        # Store the case for future duplicate detection
+        try:
+            store_case(request.document, {
+                "primary_category": parsed.get("primary_category", ""),
+                "study_drug": parsed.get("audit_log", {}).get("study_drug", ""),
+                "priority_score": parsed.get("priority_score", 0)
+            })
+        except Exception as e:
+            logger.warning(f"Case storage failed silently: {e}")
+            
+    return response
+
+
+@router.post("/ocr", summary="OCR — Extract text from scanned or handwritten documents")
+async def extract_text_ocr(
+    file: UploadFile = File(...),
+    mode: str = "auto",  # auto | tesseract | vision
+    x_anthropic_api_key: Optional[str] = Header(None)
+):
+    """
+    Extract text from scanned PDFs, printed images, or handwritten notes.
+    Supports: PDF, PNG, JPG, JPEG, TIFF, BMP
+    Modes: auto (smart selection), tesseract (printed), vision (handwritten)
+    """
+    try:
+        from app.services.ocr_service import extract_text_from_image_bytes
+
+        content = await file.read()
+        filename = file.filename or "upload"
+
+        api_key = x_anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")
+        force_vision = (mode == "vision")
+
+        result = extract_text_from_image_bytes(
+            image_bytes=content,
+            filename=filename,
+            api_key=api_key if api_key else None,
+            force_vision=force_vision
+        )
+
+        if not result.text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="Could not extract text from file. The image may be too low quality or blank."
+            )
+
+        return {
+            "filename": filename,
+            "extracted_text": result.text,
+            "word_count": len(result.text.split()),
+            "page_count": result.page_count,
+            "ocr_method": result.method,
+            "confidence": result.confidence,
+            "warnings": result.warnings,
+            "status": "success"
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"OCR endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
+
+
+@router.get("/ocr/health")
+async def ocr_health():
+    """Check OCR service availability."""
+    tesseract_available = False
+    pdf2image_available = False
+
+    try:
+        import pytesseract
+        pytesseract.get_tesseract_version()
+        tesseract_available = True
+    except Exception:
+        pass
+
+    try:
+        import pdf2image
+        pdf2image_available = True
+    except Exception:
+        pass
+    return {
+        "status": "ok",
+        "tesseract_available": tesseract_available,
+        "pdf2image_available": pdf2image_available,
+        "claude_vision_available": True,
+        "supported_formats": ["PDF", "PNG", "JPG", "JPEG", "TIFF", "BMP"]
+    }
+
+
+@router.post("/transcribe", summary="Transcribe and summarise meeting audio")
+async def transcribe_meeting(
+    file: UploadFile = File(...),
+    language_code: str = "unknown",
+    x_anthropic_api_key: Optional[str] = Header(None),
+    x_sarvam_api_key: Optional[str] = Header(None)
+):
+    """
+    Transcribe meeting audio using Sarvam AI Saaras v3,
+    then summarise using Claude into structured meeting notes.
+    Supports: MP3, WAV, AAC, OGG, FLAC, M4A, WebM, WMA, AMR
+    """
+    try:
+        from app.services.audio_service import transcribe_audio
+
+        # Validate API keys
+        sarvam_key = x_sarvam_api_key or os.getenv("SARVAM_API_KEY", "")
+        anthropic_key = x_anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")
+
+        if not sarvam_key:
+            raise HTTPException(
+                status_code=401,
+                detail="Sarvam API key required — add it in Settings"
+            )
+        if not anthropic_key:
+            raise HTTPException(
+                status_code=401,
+                detail="Anthropic API key required — add it in Settings"
+            )
+
+        content = await file.read()
+        filename = file.filename or "audio.mp3"
+
+        logger.info(f"Transcribing audio: {filename}, size: {len(content)} bytes")
+
+        # Step 1 — Transcribe with Sarvam
+        transcription = transcribe_audio(
+            audio_bytes=content,
+            filename=filename,
+            sarvam_api_key=sarvam_key,
+            language_code=language_code
+        )
+
+        if not transcription["transcript"].strip():
+            raise HTTPException(
+                status_code=422,
+                detail="No speech detected in audio file"
+            )
+
+        logger.info(
+            f"Transcription complete: {transcription['chunk_count']} chunks, "
+            f"{transcription['duration_seconds']}s, "
+            f"language: {transcription['language_detected']}"
+        )
+
+        # Step 2 — Summarise with Claude
+        word_count = len(transcription["transcript"].split())
+        prompt = f"""Meeting transcript ({transcription['duration_seconds']}s, {word_count} words):
+
+{transcription['transcript']}
+
+Summarise this pharmaceutical regulatory meeting transcript."""
+
+        client = anthropic.Anthropic(api_key=anthropic_key)
+        response = client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            max_tokens=4096,
+            system=AGENT_02_MEETING_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        raw_text = response.content[0].text.strip()
+        parsed = _parse_json_block(raw_text)
+
+        # Inject transcription metadata
+        parsed["transcription"] = {
+            "language_detected": transcription["language_detected"],
+            "duration_seconds": transcription["duration_seconds"],
+            "word_count": word_count,
+            "chunk_count": transcription["chunk_count"],
+            "method": transcription["method"]
+        }
+
+        return AgentResponse(
+            agent="Meeting_Audio_Summarisation",
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            result=parsed,
+            timestamp=datetime.utcnow().isoformat(),
+            token_usage=TokenUsage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens
+            )
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+
+@router.get("/transcribe/health")
+async def transcribe_health():
+    """Check audio transcription service availability."""
+    pydub_available = False
+    ffmpeg_available = False
+
+    try:
+        import pydub
+        pydub_available = True
+    except ImportError:
+        pass
+
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True, timeout=5
+        )
+        ffmpeg_available = result.returncode == 0
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "pydub_available": pydub_available,
+        "ffmpeg_available": ffmpeg_available,
+        "sarvam_model": "saaras:v3",
+        "supported_formats": ["mp3", "wav", "aac", "ogg", "flac", "m4a", "webm", "wma", "amr"],
+        "max_duration": "No limit (chunked automatically)"
+    }
 
 
 @router.post("/inspection-report", response_model=AgentResponse, summary="Agent 05 - Inspection Report Generation")
@@ -728,6 +1174,168 @@ async def check_ich_gcp(request: AgentRequest, x_anthropic_api_key: Optional[str
     )
 
 
+@router.post("/compare", response_model=AgentResponse, summary="Agent 03b - Document Version Comparison")
+async def compare_documents(
+    file_a: UploadFile = File(...),
+    file_b: UploadFile = File(...),
+    x_anthropic_api_key: Optional[str] = Header(None)
+):
+    """Compare two versions of a regulatory document and identify changes with regulatory impact."""
+    try:
+        import pypdf
+        import docx as python_docx
+        import io
+
+        def extract_text(file_bytes: bytes, filename: str) -> str:
+            filename_lower = filename.lower()
+            if filename_lower.endswith(".pdf"):
+                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+                pages = []
+                for i, page in enumerate(reader.pages):
+                    text = page.extract_text()
+                    if text:
+                        pages.append(f"[Page {i+1}]\n{text}")
+                return "\n\n".join(pages)
+            elif filename_lower.endswith(".docx"):
+                doc = python_docx.Document(io.BytesIO(file_bytes))
+                return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+            else:
+                raise HTTPException(status_code=400, detail=f"Unsupported file type: {filename}. Use PDF or DOCX.")
+
+        content_a = await file_a.read()
+        content_b = await file_b.read()
+
+        text_a = extract_text(content_a, file_a.filename or "")
+        text_b = extract_text(content_b, file_b.filename or "")
+
+        if not text_a.strip():
+            raise HTTPException(status_code=422, detail="Could not extract text from Version A. File may be scanned/image-based.")
+        if not text_b.strip():
+            raise HTTPException(status_code=422, detail="Could not extract text from Version B. File may be scanned/image-based.")
+
+        # Truncate if too long — keep first 6000 words each to stay within token limits
+        words_a = text_a.split()
+        words_b = text_b.split()
+        if len(words_a) > 6000:
+            text_a = " ".join(words_a[:6000]) + "\n[Document truncated for analysis]"
+        if len(words_b) > 6000:
+            text_b = " ".join(words_b[:6000]) + "\n[Document truncated for analysis]"
+
+        api_key = x_anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            raise HTTPException(status_code=401, detail="No Anthropic API key provided. Add your key via the ⚙ Settings panel in the app.")
+
+        prompt = f"""You are comparing two versions of a pharmaceutical regulatory document.
+
+VERSION A (Original):
+{text_a}
+
+---
+
+VERSION B (Revised):
+{text_b}
+
+---
+
+Perform a detailed regulatory document comparison. Identify every substantive change between Version A and Version B.
+
+CRITICAL OUTPUT RULES:
+1. Return ONLY valid JSON — no markdown, no code fences, no explanation
+2. Use EXACTLY the field names shown below
+3. Arrays must always be arrays
+4. Objects must always be objects
+5. String fields must always be strings
+6. Never omit a required field
+
+Return EXACTLY this JSON structure:
+{{
+  "document_name_a": "string — filename or detected title of Version A",
+  "document_name_b": "string — filename or detected title of Version B",
+  "overall_change_severity": "CRITICAL|MAJOR|MINOR|NO_CHANGE",
+  "total_changes": 0,
+  "executive_summary": "string — 2-3 sentence summary of what changed and why it matters regulatorily",
+  "changes": [
+    {{
+      "change_id": "string — e.g. CHG-001",
+      "section": "string — section name or number where change occurred",
+      "change_type": "ADDED|REMOVED|MODIFIED",
+      "severity": "CRITICAL|MAJOR|MINOR",
+      "description": "string — what specifically changed",
+      "original_text": "string — relevant text from Version A (max 200 words), empty string if ADDED",
+      "revised_text": "string — relevant text from Version B (max 200 words), empty string if REMOVED",
+      "regulatory_impact": {{
+        "regulation": "string — specific regulation affected e.g. Schedule Y Section 4.2, NDCTR 2019 Rule 23, ICH E6(R3) Section 5.18",
+        "impact_description": "string — how this change affects compliance with that regulation",
+        "compliance_risk": "HIGH|MEDIUM|LOW",
+        "action_required": "string — what the applicant must do about this change"
+      }}
+    }}
+  ],
+  "critical_changes": ["string — list of the most important changes in plain language"],
+  "added_sections": ["string — sections/content present in V2 but not V1"],
+  "removed_sections": ["string — sections/content present in V1 but not V2"],
+  "regulatory_frameworks_affected": ["string — list of regulations impacted by the changes"],
+  "submission_impact": "RESUBMISSION_REQUIRED|AMENDMENT_REQUIRED|NOTIFICATION_REQUIRED|NO_ACTION",
+  "submission_impact_rationale": "string — why this submission impact level was assigned",
+  "audit_log": {{
+    "timestamp": "ISO datetime string",
+    "file_a": "string — filename of Version A",
+    "file_b": "string — filename of Version B",
+    "pages_a": 0,
+    "pages_b": 0,
+    "status": "COMPLETED|FAILED"
+  }}
+}} """
+
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=MODEL_SONNET,
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        raw_text = response.content[0].text.strip()
+        parsed = _parse_json_block(raw_text)
+
+        return AgentResponse(
+            agent="Document_Version_Comparison",
+            model=MODEL_SONNET,
+            result=parsed,
+            timestamp=_utc_timestamp(),
+            token_usage={
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Document comparison error: {e}")
+        raise HTTPException(status_code=500, detail=f"Comparison error: {str(e)}")
+
+
+@router.get("/compare/health")
+async def compare_health():
+    return {"status": "ok", "agent": "Document_Version_Comparison", "endpoint": "/api/v1/agents/compare"}
+
+
+@router.get("/classify/store/health")
+async def case_store_health():
+    """Check how many cases are stored for duplicate detection."""
+    try:
+        from app.services.case_store import get_case_collection
+        collection = get_case_collection()
+        count = collection.count() if collection else 0
+        return {
+            "status": "ok",
+            "cases_stored": count,
+            "collection": "sae_cases"
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+
 @router.get("/health", summary="Agents Health Check")
 async def agents_health():
     return {
@@ -741,6 +1349,7 @@ async def agents_health():
             {"id": "06", "name": "Regulatory_QA_RAG", "endpoint": "/qa", "model": MODEL_HAIKU},
             {"id": "07", "name": "Schedule_Y_Compliance", "endpoint": "/schedule-y", "model": MODEL_SONNET},
             {"id": "08", "name": "ICH_GCP_Compliance", "endpoint": "/ich-gcp", "model": MODEL_SONNET},
+            {"id": "03b", "name": "Document_Version_Comparison", "endpoint": "/compare", "model": MODEL_SONNET},
         ],
         "anthropic_client": "initialised",
         "timestamp": _utc_timestamp(),

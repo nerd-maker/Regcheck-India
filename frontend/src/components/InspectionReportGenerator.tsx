@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import FileUpload from '@/components/FileUpload';
 import ModelAttributionBadge from './ModelAttributionBadge';
-import { runInspectionReportGenerator } from '@/services/api';
+import { runInspectionReportGenerator, extractTextFromFileOCR } from '@/services/api';
 
 const safeRender = (value: unknown): string => {
   if (value === null || value === undefined) return '';
@@ -28,10 +28,14 @@ export default function InspectionReportGenerator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [inputMode, setInputMode] = useState<'text' | 'scan' | 'handwritten'>('text');
+  const [ocrResult, setOcrResult] = useState<{method: string, confidence: number, warnings: string[]} | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
 
   const handleTextExtracted = (extractedText: string, _filename: string) => {
     setText(extractedText);
     setUploadError(null);
+    setOcrResult(null);
   };
 
   const handleUploadError = (uploadMessage: string) => {
@@ -94,7 +98,117 @@ export default function InspectionReportGenerator() {
           </select>
         </div>
 
-        <FileUpload onTextExtracted={handleTextExtracted} onError={handleUploadError} disabled={loading} />
+        <div className="mb-4">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">
+            Input Method
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'text', label: '✏️ Type / Paste Text' },
+              { value: 'scan', label: '📄 Scanned Document (OCR)' },
+              { value: 'handwritten', label: '✍️ Handwritten Notes (AI Vision)' },
+            ].map((mode) => (
+              <button
+                key={mode.value}
+                onClick={() => setInputMode(mode.value as 'text' | 'scan' | 'handwritten')}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  inputMode === mode.value
+                    ? 'bg-teal-600 text-white'
+                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                }`}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {(inputMode === 'scan' || inputMode === 'handwritten') && (
+          <div className="mb-4">
+            <input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setOcrLoading(true)
+                setError(null)
+                setOcrResult(null)
+                try {
+                  const mode = inputMode === 'handwritten' ? 'vision' : 'auto'
+                  const result = await extractTextFromFileOCR(file, mode)
+                  setText(result.extracted_text)
+                  setOcrResult({
+                    method: result.ocr_method,
+                    confidence: result.confidence,
+                    warnings: result.warnings
+                  })
+                } catch (err: unknown) {
+                  setError(err instanceof Error ? err.message : 'OCR failed')
+                } finally {
+                  setOcrLoading(false)
+                }
+              }}
+              className="hidden"
+              id="ocr-upload"
+            />
+            <label
+              htmlFor="ocr-upload"
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm cursor-pointer transition-all ${
+                ocrLoading
+                  ? 'border-white/10 text-slate-500 cursor-wait'
+                  : 'border-white/20 text-slate-300 hover:border-teal-400/50 hover:text-teal-400'
+              }`}
+            >
+              {ocrLoading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                  {inputMode === 'handwritten' ? 'AI reading handwriting...' : 'Scanning document...'}
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                  </svg>
+                  {inputMode === 'handwritten'
+                    ? 'Upload handwritten notes (PNG, JPG, PDF)'
+                    : 'Upload scanned document (PDF, PNG, JPG, TIFF)'
+                  }
+                </>
+              )}
+            </label>
+
+            {ocrResult && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full font-medium">
+                    {ocrResult.method}
+                  </span>
+                  <span className="text-slate-400">
+                    Confidence: {Math.round(ocrResult.confidence * 100)}%
+                  </span>
+                </div>
+                {ocrResult.warnings.length > 0 && (
+                  <div className="space-y-1">
+                    {ocrResult.warnings.map((w, i) => (
+                      <div key={i} className="text-xs text-amber-400 flex items-center gap-1">
+                        <span>⚠</span> {w}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {inputMode === 'text' && (
+          <FileUpload onTextExtracted={handleTextExtracted} onError={handleUploadError} disabled={loading} />
+        )}
+        
         {uploadError && (
           <div className="mb-2 flex items-center gap-1 text-xs text-red-400">
             <span>⚠</span> {uploadError}

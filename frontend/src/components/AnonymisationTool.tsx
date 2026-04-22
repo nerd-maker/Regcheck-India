@@ -124,20 +124,18 @@ export default function AnonymisationTool() {
               <div className="text-red-300 text-sm mt-1">{error}</div>
             </div>
           </div>
-          <div className="mt-3 text-xs text-slate-500">
-            If the server is starting up, wait 30 seconds and try again. 
-            Free tier servers sleep after 15 minutes of inactivity.
-          </div>
         </div>
       )}
 
       {result && (
-        <div className="glass-panel p-6">
+        <div className="glass-panel p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <ModelAttributionBadge attribution={result?.model_attribution} />
 
           <div className="border-b border-white/10 pb-4 mb-6 mt-4">
-            <h2 className="text-xl font-bold uppercase tracking-wider text-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
-              PII DETECTION & ANONYMISATION
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <h2 className="text-xl font-bold uppercase tracking-wider text-slate-100">
+                PII DETECTION & ANONYMISATION
+              </h2>
               <div className="flex items-center gap-2">
                 <span className="status-chip text-sm normal-case font-medium">
                   {safeRender(result.entities_anonymised)} Entities Removed
@@ -146,7 +144,15 @@ export default function AnonymisationTool() {
                   Risk: {safeRender(result.risk_level || 'LOW')}
                 </span>
               </div>
-            </h2>
+            </div>
+            
+            {result.detection_method && (
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-teal-400 bg-teal-400/10 px-3 py-1 rounded-lg border border-teal-500/20">
+                  {safeRender(result.detection_method)}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="mb-6">
@@ -161,11 +167,12 @@ export default function AnonymisationTool() {
               <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">[ENTITIES REMOVED]</div>
               <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
                 <table className="w-full text-left text-sm text-slate-300">
-                  <thead className="border-b border-white/10 text-xs uppercase text-slate-400">
+                  <thead className="border-b border-white/10 text-[10px] uppercase text-slate-400 tracking-wider">
                     <tr>
                       <th className="px-4 py-3 font-semibold w-1/4">Entity Type</th>
-                      <th className="px-4 py-3 font-semibold w-1/3">Original Value</th>
+                      <th className="px-4 py-3 font-semibold w-1/4">Original Value</th>
                       <th className="px-4 py-3 font-semibold">Category</th>
+                      <th className="px-4 py-3 font-semibold">Method</th>
                       <th className="px-4 py-3 font-semibold">Position</th>
                     </tr>
                   </thead>
@@ -177,16 +184,59 @@ export default function AnonymisationTool() {
                           <td className="px-4 py-3 font-medium text-slate-200">{safeRender(entity.entity_type)}</td>
                           <td className="px-4 py-3 font-mono text-xs">{safeRender(entity.value)}</td>
                           <td className="px-4 py-3">
-                            <span className={`status-chip ${isPHI ? 'text-blue-400 bg-blue-400/10' : 'text-amber-400 bg-amber-400/10'}`}>
+                            <span className={`status-chip text-[10px] ${isPHI ? 'text-blue-400 bg-blue-400/10' : 'text-amber-400 bg-amber-400/10'}`}>
                               {safeRender(entity.category)}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-slate-500">{safeRender(entity.position)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              entity.detection_method === 'RULE_BASED' 
+                                ? 'bg-blue-500/20 text-blue-400' 
+                                : 'text-slate-500 bg-white/5'
+                            }`}>
+                              {entity.detection_method === 'RULE_BASED' ? 'RULE-BASED' : 'AI'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 text-xs">{safeRender(entity.position)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {result.rule_based_summary && result.rule_based_summary.total_detections > 0 && (
+            <div className="mb-6 rounded-2xl border border-blue-500/20 bg-blue-500/5 px-5 py-4">
+              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-4">
+                Rule-Based Pre-Scan Results
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                  <div className="text-xl font-bold text-blue-400">
+                    {safeRender(result.rule_based_summary.total_detections)}
+                  </div>
+                  <div className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">Total Detected</div>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-amber-400">
+                    {safeRender(result.rule_based_summary.pii_count)}
+                  </div>
+                  <div className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">PII Items</div>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-purple-400">
+                    {safeRender(result.rule_based_summary.phi_count)}
+                  </div>
+                  <div className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">PHI Items</div>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-green-400">
+                    {safeRender(result.rule_based_summary.high_confidence)}
+                  </div>
+                  <div className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">High Confidence</div>
+                </div>
               </div>
             </div>
           )}
@@ -210,17 +260,17 @@ export default function AnonymisationTool() {
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div className="rounded-xl border border-white/5 bg-slate-800/50 p-4">
-                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">PII Removed</div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">PII Removed</div>
                     <div className="mt-1 text-2xl font-bold text-slate-100">{safeRender(result.anonymisation_report.pii_removed)}</div>
                   </div>
                   <div className="rounded-xl border border-white/5 bg-slate-800/50 p-4">
-                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">PHI Removed</div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">PHI Removed</div>
                     <div className="mt-1 text-2xl font-bold text-slate-100">{safeRender(result.anonymisation_report.phi_removed)}</div>
                   </div>
                   <div className="rounded-xl border border-white/5 bg-slate-800/50 p-4">
-                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Clinical Integrity</div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Clinical Integrity</div>
                     <div className="mt-2">
-                      <span className={statusColor(result.anonymisation_report.clinical_integrity)} style={{ padding: '4px 12px', borderRadius: '4px' }}>
+                      <span className={statusColor(result.anonymisation_report.clinical_integrity)} style={{ padding: '4px 12px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
                         {safeRender(result.anonymisation_report.clinical_integrity)}
                       </span>
                     </div>
@@ -241,12 +291,12 @@ export default function AnonymisationTool() {
           {result.audit_log && (
             <div className="mt-4 border-t border-white/10 pt-4">
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                <span className="font-semibold uppercase tracking-wider">Audit Log:</span>
+                <span className="font-semibold uppercase tracking-wider text-slate-400">Audit Log</span>
                 <span>{safeRender(result.audit_log.timestamp)}</span>
                 <span>•</span>
                 <span>Mode: {safeRender(result.audit_log.mode)}</span>
                 <span>•</span>
-                <span>Method: {safeRender(result.audit_log.anonymisation_method)}</span>
+                <span>LLM: {safeRender(result.audit_log.anonymisation_method)}</span>
                 <span>•</span>
                 <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>
                   {safeRender(result.audit_log.status)}

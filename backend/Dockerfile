@@ -18,6 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ffmpeg \
     git \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
+    libpoppler-cpp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -42,6 +46,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     ffmpeg \
     libgomp1 \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed Python environment from builder

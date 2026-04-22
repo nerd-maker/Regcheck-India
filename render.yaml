@@ -12,6 +12,8 @@ services:
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false  # Set manually in Render dashboard
+      - key: SARVAM_API_KEY
+        sync: false  # Set manually in Render dashboard
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-4-20250514
       - key: ANTHROPIC_MODEL_FAST

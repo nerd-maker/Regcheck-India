@@ -3,8 +3,11 @@ import axios from 'axios';
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 /** Read the Anthropic API key from localStorage (safe for SSR). */
-const getStoredKey = (): string =>
+export const getStoredKey = (): string =>
   (typeof window !== 'undefined' ? localStorage.getItem('regcheck_anthropic_key') : null) ?? '';
+
+export const getSarvamKey = (): string =>
+  (typeof window !== 'undefined' ? localStorage.getItem('sarvam_api_key') : null) ?? '';
 
 // ─── Generic agent caller — used by M1, M2, M3, M4, M5, M7, M8 ──────────────
 export const callAgent = async (
@@ -87,8 +90,20 @@ export const runPIIAnonymiser = (document: string, metadata = {}) =>
 export const runDocumentSummariser = (document: string, metadata = {}) =>
   callAgent('/api/v1/agents/summarise', document, metadata);
 
-export const runCompletenessAssessor = (document: string, metadata = {}) =>
-  callAgent('/api/v1/agents/completeness', document, metadata);
+export const runCompletenessAssessor = (document: string, document_type: string = 'GENERAL', metadata = {}) => {
+  try {
+    return axios.post(
+      `${BACKEND_URL}/api/v1/agents/completeness`,
+      { document, document_type, metadata },
+      { 
+        headers: { 'x-anthropic-api-key': getStoredKey() },
+        timeout: 120000
+      }
+    ).then(r => r.data);
+  } catch (error: unknown) {
+    throw error;
+  }
+};
 
 export const runCaseClassifier = (document: string, metadata = {}) =>
   callAgent('/api/v1/agents/classify', document, metadata);
@@ -144,6 +159,137 @@ export const extractTextFromFile = async (
     throw new Error('Failed to process file. Please try again.');
   }
 };
+
+export const extractTextFromFileOCR = async (
+  file: File,
+  mode: 'auto' | 'tesseract' | 'vision' = 'auto'
+): Promise<{
+  extracted_text: string
+  filename: string
+  word_count: number
+  page_count: number
+  ocr_method: string
+  confidence: number
+  warnings: string[]
+  status: string
+}> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('mode', mode)
+
+  try {
+    const response = await axios.post(
+      `${BACKEND_URL}/api/v1/agents/ocr`,
+      formData,
+      {
+        headers: {
+          'x-anthropic-api-key': getStoredKey(),
+        },
+        timeout: 120000
+      }
+    )
+    return response.data
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('OCR timed out — large files may take up to 2 minutes.')
+      }
+      if (error.response?.status === 422) {
+        throw new Error('Could not extract text — image may be too low quality or blank.')
+      }
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data?.detail || 'Unsupported file type.')
+      }
+      if (!error.response) {
+        throw new Error('Cannot reach server — please wait 30 seconds and try again.')
+      }
+    }
+    throw new Error('OCR failed. Please try again.')
+  }
+}
+
+export const compareDocuments = async (
+  fileA: File,
+  fileB: File,
+): Promise<any> => {
+  const formData = new FormData();
+  formData.append('file_a', fileA);
+  formData.append('file_b', fileB);
+
+  try {
+    const response = await axios.post(
+      `${BACKEND_URL}/api/v1/agents/compare`,
+      formData,
+      {
+        headers: {
+          'x-anthropic-api-key': getStoredKey(),
+        },
+        timeout: 180000, // 3-minute timeout for heavy document comparison
+      }
+    );
+    return response.data;
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timed out — document comparison is a heavy process. Please try again or use smaller files.');
+      }
+      if (error.response?.status === 422) {
+        throw new Error('Could not extract text from one of the files. They may be scanned or image-based.');
+      }
+      if (error.response?.status === 401) {
+        throw new Error('Anthropic API key is invalid or missing. Please check your Settings.');
+      }
+      if (error.response?.status === 500) {
+        const detail = error.response.data?.detail || 'Internal server error';
+        throw new Error(`Comparison failed: ${detail}`);
+      }
+      if (!error.response) {
+        throw new Error('Cannot reach the server. Please wait 30 seconds and try again.');
+      }
+    }
+    throw new Error('Failed to compare documents. Please try again.');
+  }
+};
+
+export const transcribeMeetingAudio = async (
+  file: File,
+  languageCode: string = 'unknown'
+): Promise<any> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('language_code', languageCode)
+
+  try {
+    const response = await axios.post(
+      `${BACKEND_URL}/api/v1/agents/transcribe`,
+      formData,
+      {
+        headers: {
+          'x-anthropic-api-key': getStoredKey(),
+          'x-sarvam-api-key': getSarvamKey(),
+        },
+        timeout: 300000  // 5 minutes for long audio files
+      }
+    )
+    return response.data
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Transcription timed out — try a shorter audio file.')
+      }
+      if (error.response?.status === 401) {
+        throw new Error(error.response.data?.detail || 'API key required — add Sarvam key in Settings.')
+      }
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data?.detail || 'Invalid audio file or format.')
+      }
+      if (!error.response) {
+        throw new Error('Cannot reach server — please wait 30 seconds and try again.')
+      }
+    }
+    throw new Error('Transcription failed. Please try again.')
+  }
+}
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 export const checkAgentsHealth = () =>
