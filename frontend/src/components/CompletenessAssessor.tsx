@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import FileUpload from '@/components/FileUpload';
 import ModelAttributionBadge from './ModelAttributionBadge';
 import { runCompletenessAssessor } from '@/services/api';
 
@@ -26,6 +27,16 @@ export default function CompletenessAssessor() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleTextExtracted = (extractedText: string, _filename: string) => {
+    setText(extractedText);
+    setUploadError(null);
+  };
+
+  const handleUploadError = (uploadMessage: string) => {
+    setUploadError(uploadMessage);
+  };
 
   const runAssessment = async () => {
     setError(null);
@@ -89,6 +100,12 @@ export default function CompletenessAssessor() {
           </select>
         </div>
 
+        <FileUpload onTextExtracted={handleTextExtracted} onError={handleUploadError} disabled={loading} />
+        {uploadError && (
+          <div className="mb-2 flex items-center gap-1 text-xs text-red-400">
+            <span>⚠</span> {uploadError}
+          </div>
+        )}
         <textarea
           className="textarea-shell"
           value={text}

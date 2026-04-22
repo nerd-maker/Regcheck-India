@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import FileUpload from '@/components/FileUpload';
 import ModelAttributionBadge from './ModelAttributionBadge';
 import { runRegulatoryQA } from '@/services/api';
 
@@ -26,6 +27,16 @@ export default function RegulatoryQA() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleTextExtracted = (extractedText: string, _filename: string) => {
+    setQuestion(extractedText);
+    setUploadError(null);
+  };
+
+  const handleUploadError = (uploadMessage: string) => {
+    setUploadError(uploadMessage);
+  };
 
   const runQA = async () => {
     setError(null);
@@ -69,6 +80,12 @@ export default function RegulatoryQA() {
 
         <div className="mb-5">
           <label className="metric-label mb-2 block">Regulatory question *</label>
+          <FileUpload onTextExtracted={handleTextExtracted} onError={handleUploadError} disabled={loading} />
+          {uploadError && (
+            <div className="mb-2 flex items-center gap-1 text-xs text-red-400">
+              <span>⚠</span> {uploadError}
+            </div>
+          )}
           <input
             type="text"
             className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:border-teal-400/50 focus:outline-none"

@@ -6,13 +6,14 @@ Provides a Claude-backed `/api/v1/agents/*` surface for the core agent workflows
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import anthropic
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET
@@ -39,6 +40,63 @@ class AgentResponse(BaseModel):
     result: Any
     timestamp: str
     token_usage: dict
+
+
+@router.post("/extract-text")
+async def extract_text_from_file(file: UploadFile = File(...)):
+    """Extract text from PDF or DOCX file for use in any agent module."""
+    try:
+        content = await file.read()
+        filename = (file.filename or "").lower()
+        extracted_text = ""
+        page_count: Optional[int] = None
+
+        if filename.endswith(".pdf"):
+            import pypdf
+
+            pdf_reader = pypdf.PdfReader(io.BytesIO(content))
+            pages_text = []
+            for i, page in enumerate(pdf_reader.pages):
+                page_text = page.extract_text()
+                if page_text:
+                    pages_text.append(f"[Page {i + 1}]\n{page_text}")
+            extracted_text = "\n\n".join(pages_text)
+            page_count = len(pdf_reader.pages)
+
+        elif filename.endswith(".docx"):
+            import docx
+
+            doc = docx.Document(io.BytesIO(content))
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+            extracted_text = "\n".join(paragraphs)
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type. Please upload PDF or DOCX files only.",
+            )
+
+        if not extracted_text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="Could not extract text from file. The file may be scanned/image-based or empty.",
+            )
+
+        return {
+            "filename": file.filename,
+            "extracted_text": extracted_text,
+            "word_count": len(extracted_text.split()),
+            "pages": page_count,
+            "status": "success",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing file: {exc}",
+        )
 
 
 def _utc_timestamp() -> str:

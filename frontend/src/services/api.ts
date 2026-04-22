@@ -105,6 +105,46 @@ export const runScheduleYCompliance = (document: string, metadata = {}) =>
 export const runICHGCPChecker = (document: string, metadata = {}) =>
   callAgent('/api/v1/agents/ich-gcp', document, metadata);
 
+export const extractTextFromFile = async (
+  file: File,
+): Promise<{
+  filename: string;
+  extracted_text: string;
+  word_count: number;
+  pages: number | null;
+  status: string;
+}> => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const response = await axios.post(
+      `${BACKEND_URL}/api/v1/agents/extract-text`,
+      formData,
+      {
+        headers: {
+          'x-anthropic-api-key': getStoredKey(),
+        },
+        timeout: 60000,
+      }
+    );
+    return response.data;
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 400) {
+        throw new Error('Unsupported file type. Please upload PDF or DOCX files only.');
+      }
+      if (error.response?.status === 422) {
+        throw new Error('Could not extract text from file. The file may be scanned or image-based.');
+      }
+      if (!error.response) {
+        throw new Error('Cannot reach the server. Please wait 30 seconds and try again.');
+      }
+    }
+    throw new Error('Failed to process file. Please try again.');
+  }
+};
+
 // ─── Health check ─────────────────────────────────────────────────────────────
 export const checkAgentsHealth = () =>
   axios.get(`${BACKEND_URL}/api/v1/agents/health`).then(r => r.data);
