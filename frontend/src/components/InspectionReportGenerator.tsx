@@ -89,7 +89,7 @@ export default function InspectionReportGenerator() {
           <select
             value={facilityType}
             onChange={(e) => setFacilityType(e.target.value)}
-            className="w-full max-w-xs rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-200 focus:border-teal-400/50 focus:outline-none [&>option]:bg-slate-900"
+            className="w-full max-w-xs rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-slate-200 focus:border-teal-400/50 focus:outline-none [&>option]:bg-[#0d2037]"
           >
             <option value="manufacturing">Manufacturing Site</option>
             <option value="clinical_site">Clinical Trial Site</option>
