@@ -587,9 +587,23 @@ async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] =
             import os
             import chromadb
             from chromadb.utils import embedding_functions
-            
+
             chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
-            client = chromadb.PersistentClient(path=chromadb_path)
+            try:
+                from chromadb.config import Settings
+
+                client = chromadb.Client(
+                    Settings(
+                        chroma_db_impl="duckdb+parquet",
+                        persist_directory=chromadb_path,
+                        anonymized_telemetry=False,
+                    )
+                )
+            except ImportError:
+                client = chromadb.PersistentClient(
+                    path=chromadb_path,
+                    settings=chromadb.Settings(anonymized_telemetry=False),
+                )
             embedding_fn = embedding_functions.DefaultEmbeddingFunction()
             
             collection = client.get_collection(name="regulatory_documents", embedding_function=embedding_fn)

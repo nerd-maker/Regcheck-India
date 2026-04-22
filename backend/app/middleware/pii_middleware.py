@@ -172,9 +172,12 @@ class PIIDetectionMiddleware:
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
                 pii_redacted = scope["state"].get("pii_redacted", False)
+                
+                # Standardize to lower() as requested by user
                 headers.append(
-                    (b"x-pii-detected", str(pii_redacted).encode("utf-8"))
+                    (b"x-pii-detected", str(pii_redacted).lower().encode("utf-8"))
                 )
+                
                 if pii_redacted:
                     count = scope["state"].get("redaction_map", {}).get(
                         "total_redactions", 0
@@ -183,6 +186,8 @@ class PIIDetectionMiddleware:
                         (b"x-pii-redacted-count", str(count).encode("utf-8"))
                     )
                 message = {**message, "headers": headers}
+            
+            # This MUST be called for ALL message types to complete the ASGI cycle
             await send(message)
 
         await self.app(scope, receive_with_body, send_with_pii_headers)
