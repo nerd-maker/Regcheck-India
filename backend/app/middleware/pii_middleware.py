@@ -96,6 +96,8 @@ class PIIDetectionMiddleware:
         # PII detection and optional redaction.                               #
         # ------------------------------------------------------------------ #
         final_body = full_body  # default: pass through as-is
+        pii_detected = False
+        redaction_count = 0
 
         if full_body:
             try:
@@ -104,6 +106,7 @@ class PIIDetectionMiddleware:
                 body_text = json.dumps(body_json)
 
                 if pii_detector.has_pii(body_text):
+                    pii_detected = True
                     pii_summary = pii_detector.get_pii_summary(body_text)
 
                     logger.warning(
@@ -168,26 +171,35 @@ class PIIDetectionMiddleware:
         # ------------------------------------------------------------------ #
         # Intercept send so we can inject PII response headers.               #
         # ------------------------------------------------------------------ #
+        response_started = False
+
         async def send_with_pii_headers(message):
+            nonlocal response_started
+
             if message["type"] == "http.response.start":
+                response_started = True
                 headers = list(message.get("headers", []))
-                pii_redacted = scope["state"].get("pii_redacted", False)
-                
-                # Standardize to lower() as requested by user
-                headers.append(
-                    (b"x-pii-detected", str(pii_redacted).lower().encode("utf-8"))
-                )
-                
-                if pii_redacted:
-                    count = scope["state"].get("redaction_map", {}).get(
-                        "total_redactions", 0
-                    )
-                    headers.append(
-                        (b"x-pii-redacted-count", str(count).encode("utf-8"))
-                    )
+                headers.append((b"x-pii-detected", b"true" if pii_detected else b"false"))
+                headers.append((b"x-redaction-count", str(redaction_count).encode()))
                 message = {**message, "headers": headers}
-            
-            # This MUST be called for ALL message types to complete the ASGI cycle
+
             await send(message)
 
-        await self.app(scope, receive_with_body, send_with_pii_headers)
+        try:
+            await self.app(scope, receive_with_body, send_with_pii_headers)
+        except Exception as e:
+            logger.error(f"Error in PIIMiddleware app call: {e}")
+            if not response_started:
+                error_response = {
+                    "type": "http.response.start",
+                    "status": 500,
+                    "headers": [(b"content-type", b"application/json")],
+                }
+                await send(error_response)
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": b'{"detail": "Internal server error"}',
+                        "more_body": False,
+                    }
+                )
