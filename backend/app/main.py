@@ -114,7 +114,7 @@ app.add_middleware(
 from app.middleware.request_id_middleware import RequestIDMiddleware
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SessionTrackingMiddleware)
-app.add_middleware(PIIDetectionMiddleware)
+# app.add_middleware(PIIDetectionMiddleware)  # disabled - ASGI stack conflict
 
 # Register critical gap solution endpoints (Gaps 2-16)
 from app.gap_endpoints import router as gap_router
