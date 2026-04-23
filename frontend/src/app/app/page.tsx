@@ -289,11 +289,11 @@ export default function AppWorkspace() {
         {/* Logo */}
         <div className="px-6 pt-6 pb-4">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-white/10 flex items-center justify-center rounded-lg">
+            <div className="w-9 h-9 bg-teal-600 flex items-center justify-center rounded-lg">
               <span className="text-white font-black text-base">R</span>
             </div>
             <span className="text-lg font-bold tracking-tight text-white">
-              RegCheck<span className="text-secondary-fixed-dim">-India</span>
+              RegCheck<span className="text-teal-400">-India</span>
             </span>
           </Link>
         </div>
@@ -316,8 +316,8 @@ export default function AppWorkspace() {
                   onClick={() => handleSidebarClick(item)}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-left leading-tight transition-all ${
                     isActive
-                      ? 'border-l-4 border-secondary bg-secondary-fixed/10 text-secondary-fixed-dim ml-0 pl-3'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5 border-l-4 border-transparent'
+                      ? 'border-l-2 border-teal-500 bg-teal-600/15 text-teal-400 ml-0 pl-3'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
                   }`}
                 >
                   {item.icon}
@@ -333,14 +333,14 @@ export default function AppWorkspace() {
           {/* Key status indicator */}
           <div
             className="flex items-center gap-2 px-3 py-2 rounded-lg"
-            style={{ background: hasApiKey ? 'rgba(110,231,183,0.08)' : 'rgba(248,113,113,0.08)' }}
+            style={{ background: hasApiKey ? 'rgba(20, 184, 166, 0.2)' : 'rgba(248, 113, 113, 0.08)' }}
           >
             <span
               className="w-2 h-2 rounded-full flex-shrink-0"
-              style={{ background: hasApiKey ? '#6ee7b7' : '#f87171' }}
+              style={{ background: hasApiKey ? '#2dd4bf' : '#f87171' }}
             />
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: hasApiKey ? '#6ee7b7' : '#f87171' }}>
+              <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: hasApiKey ? '#2dd4bf' : '#f87171' }}>
                 {hasApiKey ? 'API Key Active' : 'No API Key'}
               </div>
               <div className="text-[10px] text-slate-500 truncate font-mono">{maskedKey}</div>

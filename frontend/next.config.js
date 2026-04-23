@@ -20,6 +20,7 @@ const nextConfig = {
                             "img-src 'self' data: blob: https:",
                             "connect-src 'self' https://regcheck-india.onrender.com https://api.anthropic.com",
                             "worker-src 'self' blob:",
+                            "frame-src 'self' https://docs.google.com https://forms.google.com",
                         ].join('; ')
                     }
                 ]
