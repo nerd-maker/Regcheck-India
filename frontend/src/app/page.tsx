@@ -3,128 +3,163 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 
-// Counter animation hook
 function useCountUp(target: number, duration: number = 2000, trigger: boolean = false) {
   const [count, setCount] = useState(0)
+
   useEffect(() => {
     if (!trigger) return
     let startTime: number
+
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp
       const progress = Math.min((timestamp - startTime) / duration, 1)
       setCount(Math.floor(progress * target))
       if (progress < 1) requestAnimationFrame(animate)
     }
+
     requestAnimationFrame(animate)
   }, [trigger, target, duration])
+
   return count
 }
 
 export default function LandingPage() {
-  const [announcementVisible, setAnnouncementVisible] = useState(true)
   const [navScrolled, setNavScrolled] = useState(false)
   const [statsVisible, setStatsVisible] = useState(false)
   const statsRef = useRef<HTMLDivElement>(null)
-  const [earlyAccessData, setEarlyAccessData] = useState({ name: '', email: '', org: '', role: '' })
   const documentsReviewed = useCountUp(218, 1400, statsVisible)
   const activeAgents = useCountUp(8, 900, statsVisible)
   const frameworksCovered = useCountUp(9, 1000, statsVisible)
 
-  // Nav shadow on scroll
   useEffect(() => {
     const handleScroll = () => setNavScrolled(window.scrollY > 20)
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Scroll-triggered animations
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            entry.target.classList.add('animate-visible')
+            entry.target.classList.add('is-visible')
           }
         })
       },
       { threshold: 0.1 }
     )
-    document.querySelectorAll('.animate-on-scroll').forEach((el) => observer.observe(el))
+
+    document.querySelectorAll('.fade-up').forEach((el) => observer.observe(el))
     return () => observer.disconnect()
   }, [])
 
-  // Stats counter trigger
   useEffect(() => {
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setStatsVisible(true) },
+      ([entry]) => {
+        if (entry.isIntersecting) setStatsVisible(true)
+      },
       { threshold: 0.3 }
     )
+
     if (statsRef.current) observer.observe(statsRef.current)
     return () => observer.disconnect()
   }, [])
 
-  const handleEarlyAccess = () => {
-    window.location.href = `mailto:regcheck.india@gmail.com?subject=Early Access Request - ${earlyAccessData.org}&body=Name: ${earlyAccessData.name}%0AOrg: ${earlyAccessData.org}%0ARole: ${earlyAccessData.role}`
-  }
-
   return (
-    <div className="bg-surface text-on-surface font-body">
+    <div className="bg-white text-gray-900" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Serif+Display&display=swap');
 
-      {/* SECTION 1: Announcement Bar */}
-      {announcementVisible && (
-        <div className="bg-primary text-secondary-fixed-dim py-3 px-4 text-center text-xs font-medium tracking-wider uppercase relative">
-          AI-powered regulatory compliance engine for pharma / clinical trials in India
-          <button
-            onClick={() => setAnnouncementVisible(false)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
-            aria-label="Dismiss announcement"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
+        .fade-up {
+          opacity: 0;
+          transform: translateY(32px);
+          transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .fade-up.is-visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .fade-up:nth-child(2) { transition-delay: 0.1s; }
+        .fade-up:nth-child(3) { transition-delay: 0.2s; }
+        .fade-up:nth-child(4) { transition-delay: 0.3s; }
+        .fade-up:nth-child(5) { transition-delay: 0.4s; }
+        .fade-up:nth-child(6) { transition-delay: 0.5s; }
+        .fade-up:nth-child(7) { transition-delay: 0.6s; }
+        .fade-up:nth-child(8) { transition-delay: 0.7s; }
 
-      {/* SECTION 2: Navigation */}
-      <header className={`sticky top-0 z-50 bg-white/90 backdrop-blur-md transition-shadow ${navScrolled ? 'shadow-ambient' : ''}`}>
-        <nav className="max-w-7xl mx-auto flex justify-between items-center px-6 h-20">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary flex items-center justify-center rounded-lg">
-              <span className="text-white font-black text-lg">R</span>
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-12px); }
+        }
+        .animate-float { animation: float 4s ease-in-out infinite; }
+
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .marquee-track {
+          display: flex;
+          animation: marquee 30s linear infinite;
+          width: max-content;
+        }
+
+        .agent-card:hover .agent-icon {
+          transform: scale(1.1);
+          transition: transform 0.3s ease;
+        }
+
+        .hero-gradient {
+          background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 30%, #f8fafc 60%, #f0fdf4 100%);
+        }
+
+        .section-divider {
+          height: 1px;
+          background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+        }
+
+        iframe {
+          color-scheme: light;
+        }
+      `}</style>
+
+      <header
+        className={`fixed left-0 right-0 top-0 z-50 transition-all duration-300 ${
+          navScrolled
+            ? 'border-b border-gray-100 bg-white/95 shadow-sm backdrop-blur-sm'
+            : 'bg-transparent'
+        }`}
+      >
+        <nav className="mx-auto flex h-18 max-w-7xl items-center justify-between px-6 py-4">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 shadow-sm">
+              <span className="text-base font-black text-white">R</span>
             </div>
-            <span className="text-xl font-bold tracking-tight text-primary">RegCheck<span className="text-secondary">-India</span></span>
+            <span className="text-lg font-bold tracking-tight">
+              <span className="text-teal-700">RegCheck</span>
+              <span className="text-gray-400">-India</span>
+            </span>
           </Link>
-          <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-on-surface-variant">
-            <a href="#platform" className="hover:text-secondary transition-colors">Platform</a>
-            <a href="#solutions" className="hover:text-secondary transition-colors">Solutions</a>
-            <a href="#ai-stack" className="hover:text-secondary transition-colors">Technology</a>
-            <a href="#early-access" className="hover:text-secondary transition-colors">Early Access</a>
+
+          <div className="hidden items-center gap-8 text-sm font-medium text-gray-600 md:flex">
+            <a href="#platform" className="transition-colors hover:text-teal-600">Platform</a>
+            <a href="#solutions" className="transition-colors hover:text-teal-600">Solutions</a>
+            <a href="#trust" className="transition-colors hover:text-teal-600">Trust & Security</a>
+            <a href="#contact" className="transition-colors hover:text-teal-600">Contact</a>
           </div>
-          <div className="flex items-center gap-4">
+
+          <div className="flex items-center gap-3">
             <a
-              href="https://github.com/nerd-maker/Regcheck-India"
-              target="_blank" rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium hover:bg-surface-container-low rounded-xl transition-colors text-on-surface-variant"
-            >
-              {/* GitHub icon */}
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.79-.26.79-.58v-2.23c-3.34.72-4.03-1.42-4.03-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.19.69.8.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/>
-              </svg>
-              GitHub
-            </a>
-            <a
-              href="mailto:regcheck.india@gmail.com?subject=RegCheck-India Demo Request"
-              className="hidden sm:flex items-center gap-1 px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-secondary transition-colors"
+              href="#contact"
+              className="hidden px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:text-teal-600 sm:block"
             >
               Request Demo
             </a>
             <Link
               href="/app"
-              className="bg-primary text-white px-6 py-2.5 rounded-lg text-sm font-bold shadow-ambient hover:shadow-ambient-lg transition-all active:scale-95 flex items-center gap-2"
+              className="flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700"
             >
               Launch App
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             </Link>
@@ -132,456 +167,443 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* SECTION 3: Hero */}
-      <section className="relative pt-12 pb-24 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          {/* Left column */}
-          <div className="z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant text-[10px] font-bold uppercase tracking-widest mb-6">
-              <span className="w-2 h-2 rounded-full bg-on-tertiary-container animate-pulse"></span>
-              India&apos;s First CDSCO-Native AI Compliance Platform
-            </div>
-            <h1 className="text-5xl lg:text-7xl font-extrabold text-primary leading-[1.1] tracking-tight mb-6">
-              Automate <span className="text-secondary">Pharmaceutical</span> Regulatory Compliance.
-            </h1>
-            <p className="text-lg text-on-surface-variant leading-relaxed mb-10 max-w-xl">
-              Harness the power of Claude AI to navigate CDSCO, NDCTR 2019, Schedule Y, and ICH E6(R3) regulations with precision. Eight specialised regulatory agents built for the Indian pharmaceutical ecosystem.
-            </p>
-            <div className="flex flex-wrap gap-4 mb-12">
-              <Link href="/app" className="btn-primary-gradient text-white px-8 py-4 rounded-xl font-bold shadow-xl flex items-center gap-3">
-                Try Free Demo
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </Link>
-              <a href="#early-access" className="bg-surface-container-high text-primary px-8 py-4 rounded-xl font-bold flex items-center gap-3 hover:bg-surface-container transition-colors">
-                Request Pilot Access
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </a>
-            </div>
-            <div ref={statsRef} className="grid grid-cols-3 gap-8">
-              <div>
-                <div className="text-3xl font-extrabold text-primary">{documentsReviewed}+</div>
-                <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Regulatory Checks Run</div>
+      <section className="hero-gradient overflow-hidden pt-32 pb-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-2">
+            <div>
+              <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-500"></span>
+                India&apos;s First CDSCO-Native AI Compliance Platform
               </div>
-              <div>
-                <div className="text-3xl font-extrabold text-primary">{activeAgents}</div>
-                <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Active Agents</div>
-              </div>
-              <div>
-                <div className="text-3xl font-extrabold text-primary">{frameworksCovered}+</div>
-                <div className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Regulatory Frameworks</div>
-              </div>
-            </div>
-            <p className="text-xs text-on-surface-variant mt-6">
-              Free pilot access | Claude-backed review support | Qualified RA review required
-            </p>
-          </div>
 
-          {/* Right column: floating compliance card */}
-          <div className="relative">
-            <div className="absolute -inset-10 bg-secondary/5 blur-[120px] rounded-full pointer-events-none"></div>
-            <div className="relative glass-panel-landing rounded-2xl shadow-2xl p-6 border border-white/40 animate-float">
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
-                    <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <h1
+                className="mb-6 text-5xl font-extrabold leading-[1.05] tracking-tight lg:text-6xl"
+                style={{ fontFamily: "'DM Serif Display', serif" }}
+              >
+                Pharmaceutical
+                <span className="block text-teal-600">Regulatory Compliance,</span>
+                <span className="block text-gray-400">Reimagined.</span>
+              </h1>
+
+              <p className="mb-10 max-w-lg text-lg leading-relaxed text-gray-500">
+                Eight specialised AI agents built for India&apos;s pharma ecosystem, covering
+                CDSCO, NDCTR 2019, Schedule Y, and ICH E6(R3) from document upload to compliance report.
+              </p>
+
+              <div className="mb-14 flex flex-wrap gap-4">
+                <Link
+                  href="/app"
+                  className="flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-4 text-sm font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-teal-700"
+                >
+                  Try Free Demo
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </Link>
+                <a
+                  href="#contact"
+                  className="flex items-center gap-2 rounded-xl border border-gray-200 px-8 py-4 text-sm font-semibold text-gray-700 transition-all hover:border-teal-300 hover:text-teal-600"
+                >
+                  Request Pilot Access
+                </a>
+              </div>
+
+              <div ref={statsRef} className="grid grid-cols-3 gap-8 border-t border-gray-100 pt-8">
+                <div>
+                  <div className="text-3xl font-black text-teal-600">{documentsReviewed}+</div>
+                  <div className="mt-1 text-xs font-medium uppercase tracking-wider text-gray-400">Regulatory Checks Run</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-black text-teal-600">{activeAgents}</div>
+                  <div className="mt-1 text-xs font-medium uppercase tracking-wider text-gray-400">Active Agents</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-black text-teal-600">{frameworksCovered}+</div>
+                  <div className="mt-1 text-xs font-medium uppercase tracking-wider text-gray-400">Regulatory Frameworks</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative flex justify-center">
+              <div className="absolute inset-0 rounded-full bg-teal-100/40 blur-3xl"></div>
+              <div className="animate-float relative w-full max-w-sm rounded-2xl border border-gray-100 bg-white p-6 shadow-2xl">
+                <div className="mb-6 flex items-center gap-3 border-b border-gray-50 pb-4">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50">
+                    <svg className="h-5 w-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-on-surface">Protocol_V4_Final.pdf</div>
-                    <div className="text-[10px] text-on-surface-variant">Regulatory Audit in Progress...</div>
+                    <div className="text-sm font-semibold text-gray-800">Protocol_V4_Final.pdf</div>
+                    <div className="text-xs text-gray-400">Schedule Y Compliance Check</div>
                   </div>
+                  <div className="ml-auto">
+                    <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-600">Live</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { label: 'Schedule Y Section 4.2', status: 'COMPLIANT', pct: 98, color: 'bg-teal-500', textColor: 'text-teal-600', bgColor: 'bg-teal-50' },
+                    { label: 'ICH E6(R3) Section 7.1', status: 'PARTIAL', pct: 65, color: 'bg-amber-400', textColor: 'text-amber-600', bgColor: 'bg-amber-50' },
+                    { label: 'NDCTR 2019 Section 9.3', status: 'NON-COMPLIANT', pct: 20, color: 'bg-red-500', textColor: 'text-red-600', bgColor: 'bg-red-50' },
+                  ].map((item) => (
+                    <div key={item.label} className={`rounded-xl p-3 ${item.bgColor}`}>
+                      <div className="mb-2 flex justify-between">
+                        <span className="text-xs font-semibold text-gray-600">{item.label}</span>
+                        <span className={`text-xs font-bold ${item.textColor}`}>{item.status}</span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/70">
+                        <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.pct}%` }}></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 flex items-center justify-between border-t border-gray-100 pt-4">
+                  <span className="text-xs text-gray-400">3 items require attention</span>
+                  <button className="flex items-center gap-1 text-xs font-semibold text-teal-600 hover:underline">
+                    Generate Report
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-              <div className="space-y-4">
-                <div className="p-4 bg-surface-container-lowest rounded-xl border-l-4 border-on-tertiary-container">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-[10px] font-bold uppercase text-on-tertiary-container">Schedule Y Section 4.2</span>
-                    <span className="text-[10px] font-bold text-on-tertiary-container">COMPLIANT</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
-                    <div className="h-full bg-on-tertiary-container w-[98%] rounded-full"></div>
-                  </div>
-                </div>
-                <div className="p-4 bg-surface-container-lowest rounded-xl border-l-4 border-amber-500">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-[10px] font-bold uppercase text-amber-700">ICH E6(R3) Section 7.1</span>
-                    <span className="text-[10px] font-bold text-amber-700">PARTIAL</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-500 w-[65%] rounded-full"></div>
-                  </div>
-                </div>
-                <div className="p-4 bg-surface-container-lowest rounded-xl border-l-4 border-error">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-[10px] font-bold uppercase text-error">NDCTR 2019 Section 9.3</span>
-                    <span className="text-[10px] font-bold text-error">NON-COMPLIANT</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
-                    <div className="h-full bg-error w-[20%] rounded-full"></div>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-8 pt-6 border-t border-surface-container flex justify-between items-center">
-                <span className="text-xs text-on-surface-variant">Gap Analysis: 3 items require attention</span>
-                <button className="text-xs font-bold text-secondary flex items-center gap-1 hover:underline">
-                  Generate Report
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-auto mt-20 max-w-7xl px-6">
+          <div className="flex items-center gap-4 overflow-hidden">
+            <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-gray-400">Aligned with</span>
+            <div className="flex-1 overflow-hidden">
+              <div className="marquee-track">
+                {[
+                  'NDCTR 2019', 'Schedule Y', 'ICH E6(R3)', 'ICH E2A', 'CDSCO GCP',
+                  'CTRI', 'DPDP Act 2023', 'NDHM', 'ICMR Ethics', 'D&C Act',
+                  'NDCTR 2019', 'Schedule Y', 'ICH E6(R3)', 'ICH E2A', 'CDSCO GCP',
+                  'CTRI', 'DPDP Act 2023', 'NDHM', 'ICMR Ethics', 'D&C Act',
+                ].map((framework, i) => (
+                  <span key={i} className="mx-3 whitespace-nowrap rounded-full bg-gray-100 px-4 py-1.5 text-xs font-medium text-gray-600">
+                    {framework}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 4: Frameworks Marquee */}
-      <section className="py-12 bg-surface-container-low border-y border-outline-variant/10 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.2em] mb-8">
-            Aligned with Official Indian &amp; International Regulatory Frameworks
-          </div>
-          <div className="marquee-container">
-            {['NDCTR 2019', 'Schedule Y', 'ICH E6(R3) 2023', 'ICH E2A', 'CDSCO GCP', 'CTRI Requirements', 'DPDP Act 2023', 'NDHM Guidelines', 'ICMR Ethics', 'Drugs & Cosmetics Act', 'Pharmacovigilance Rules', 'Medical Devices Rules 2017',
-              'NDCTR 2019', 'Schedule Y', 'ICH E6(R3) 2023', 'ICH E2A', 'CDSCO GCP', 'CTRI Requirements', 'DPDP Act 2023', 'NDHM Guidelines', 'ICMR Ethics', 'Drugs & Cosmetics Act', 'Pharmacovigilance Rules', 'Medical Devices Rules 2017',
-            ].map((framework, i) => (
-              <span key={i} className="mx-6 px-6 py-3 bg-white rounded-full text-xs font-bold shadow-sm text-primary whitespace-nowrap flex-shrink-0">
-                {framework}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
+      <div className="section-divider"></div>
 
-      {/* SECTION 5: Problem */}
-      <section className="py-24 max-w-7xl mx-auto px-6">
-        <div className="grid lg:grid-cols-2 gap-20 items-center">
-          <div className="animate-on-scroll">
-            <div className="text-xs font-bold text-error uppercase tracking-widest mb-4">The Challenge</div>
-            <h2 className="text-4xl font-extrabold text-primary leading-tight mb-8">
-              Indian Pharma Regulatory Compliance Is Broken
+      <section id="platform" className="bg-gray-50 py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="fade-up mb-16 text-center">
+            <div className="mb-3 text-xs font-bold uppercase tracking-widest text-teal-600">Platform</div>
+            <h2 className="mb-4 text-4xl font-extrabold" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              A Regulatory Intelligence Platform
             </h2>
-            <p className="text-on-surface-variant leading-relaxed text-lg mb-6">
-              India&apos;s pharmaceutical industry operates under one of the most complex regulatory environments globally. The CDSCO enforces NDCTR 2019, Schedule Y, and increasingly stringent ICH harmonisation requirements all at once.
-            </p>
-            <p className="text-on-surface-variant leading-relaxed mb-6">
-              A single clinical trial application requires upward of 40 regulatory documents, each checked against overlapping checklists. A missed mandatory field in an Informed Consent Form triggers a deficiency letter, delaying the trial by months and costing lakhs in senior RA professional time.
-            </p>
-            <p className="text-on-surface-variant leading-relaxed">
-              Global tools like Veeva Vault and MasterControl are not trained on CDSCO-specific frameworks. RegCheck-India closes this gap with an AI compliance platform built on India&apos;s pharmaceutical regulatory corpus.
+            <p className="mx-auto max-w-2xl text-lg text-gray-500">
+              Eight specialised AI agents covering the full pharmaceutical regulatory lifecycle in India.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-4 animate-on-scroll">
-            <div className="p-8 bg-white shadow-ambient rounded-2xl">
-              <div className="text-4xl font-black text-primary mb-2">45%</div>
-              <div className="text-sm font-semibold text-on-surface-variant">Application Rejection Rate</div>
-            </div>
-            <div className="p-8 bg-surface-container text-primary rounded-2xl">
-              <div className="text-4xl font-black mb-2">12mo</div>
-              <div className="text-sm font-semibold">Avg Approval Cycle</div>
-            </div>
-            <div className="p-8 bg-primary text-white rounded-2xl">
-              <div className="text-4xl font-black mb-2">3,000+</div>
-              <div className="text-sm font-semibold opacity-80">Pharma Companies in India</div>
-            </div>
-            <div className="p-8 bg-secondary text-white rounded-2xl">
-              <div className="text-4xl font-black mb-2">INR 0</div>
-              <div className="text-sm font-semibold opacity-80">CDSCO-specific AI tools (before RegCheck)</div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* SECTION 6: Platform Modules */}
-      <section id="platform" className="py-24 bg-surface-container-low">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="mb-16 animate-on-scroll">
-            <div className="text-xs font-bold text-secondary uppercase tracking-widest mb-4">Platform</div>
-            <h2 className="text-4xl font-extrabold text-primary mb-4">A Regulatory Intelligence Platform</h2>
-            <p className="text-on-surface-variant text-lg">Eight specialised AI agents covering the full pharmaceutical regulatory lifecycle.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Agent 01 */}
-            <div className="group bg-white p-8 rounded-2xl hover:shadow-2xl transition-all border border-transparent hover:border-secondary/20">
-              <span className="material-symbols-outlined text-secondary text-4xl mb-6 group-hover:scale-110 transition-transform">manage_accounts</span>
-              <h3 className="text-xl font-bold text-primary mb-3">PII Anonymiser</h3>
-              <p className="text-sm text-on-surface-variant leading-relaxed">Detects and anonymises patient and investigator identities per the DPDP Act 2023 and CDSCO Schedule Y.</p>
-            </div>
-            {/* Agent 02 */}
-            <div className="group bg-white p-8 rounded-2xl hover:shadow-2xl transition-all border border-transparent hover:border-secondary/20">
-              <span className="material-symbols-outlined text-secondary text-4xl mb-6 group-hover:scale-110 transition-transform">summarize</span>
-              <h3 className="text-xl font-bold text-primary mb-3">Document Summariser</h3>
-              <p className="text-sm text-on-surface-variant leading-relaxed">Produces structured regulatory summaries of CSRs, IBs, protocols, and CDSCO correspondence per ICH E3 and CTD format.</p>
-            </div>
-            {/* Agent 03 */}
-            <div className="group bg-white p-8 rounded-2xl hover:shadow-2xl transition-all border border-transparent hover:border-secondary/20">
-              <span className="material-symbols-outlined text-secondary text-4xl mb-6 group-hover:scale-110 transition-transform">checklist</span>
-              <h3 className="text-xl font-bold text-primary mb-3">Completeness Assessor</h3>
-              <p className="text-sm text-on-surface-variant leading-relaxed">Evaluates submissions against Form CT-04/05/06 requirements and flags CRITICAL, MAJOR, and MINOR gaps before CDSCO filing.</p>
-            </div>
-            {/* Agent 04 */}
-            <div className="group bg-white p-8 rounded-2xl hover:shadow-2xl transition-all border border-transparent hover:border-secondary/20">
-              <span className="material-symbols-outlined text-secondary text-4xl mb-6 group-hover:scale-110 transition-transform">category</span>
-              <h3 className="text-xl font-bold text-primary mb-3">Case Classifier</h3>
-              <p className="text-sm text-on-surface-variant leading-relaxed">Classifies adverse events using ICH E2A seriousness criteria, WHO-UMC causality, and NDCTR 2019 reporting timelines with MedDRA coding.</p>
-            </div>
-            {/* Agent 05 */}
-            <div className="group bg-white p-8 rounded-2xl hover:shadow-2xl transition-all border border-transparent hover:border-secondary/20">
-              <span className="material-symbols-outlined text-secondary text-4xl mb-6 group-hover:scale-110 transition-transform">assignment</span>
-              <h3 className="text-xl font-bold text-primary mb-3">Inspection Report Generator</h3>
-              <p className="text-sm text-on-surface-variant leading-relaxed">Generates formal CDSCO GCP inspection reports with CAPA plans, observation classification, and Schedule Y clause citations.</p>
-            </div>
-            {/* Agent 06 */}
-            <div className="group bg-white p-8 rounded-2xl hover:shadow-2xl transition-all border border-transparent hover:border-secondary/20">
-              <span className="material-symbols-outlined text-secondary text-4xl mb-6 group-hover:scale-110 transition-transform">forum</span>
-              <h3 className="text-xl font-bold text-primary mb-3">Regulatory Q&A</h3>
-              <p className="text-sm text-on-surface-variant leading-relaxed">RAG-powered regulatory assistant grounded in your ChromaDB knowledge base, covering NDCTR 2019, Schedule Y, and ICH guidelines.</p>
-            </div>
-            {/* Agent 07 */}
-            <div className="group bg-white p-8 rounded-2xl hover:shadow-2xl transition-all border border-transparent hover:border-secondary/20">
-              <span className="material-symbols-outlined text-secondary text-4xl mb-6 group-hover:scale-110 transition-transform">policy</span>
-              <h3 className="text-xl font-bold text-primary mb-3">Schedule Y Compliance</h3>
-              <p className="text-sm text-on-surface-variant leading-relaxed">Deep compliance checks across Schedule Y Appendices I-XI and NDCTR 2019 Rules 1-105 with severity-graded findings.</p>
-            </div>
-            {/* Agent 08 */}
-            <div className="group bg-white p-8 rounded-2xl hover:shadow-2xl transition-all border border-transparent hover:border-secondary/20">
-              <span className="material-symbols-outlined text-secondary text-4xl mb-6 group-hover:scale-110 transition-transform">verified</span>
-              <h3 className="text-xl font-bold text-primary mb-3">ICH E6(R3) GCP Checker</h3>
-              <p className="text-sm text-on-surface-variant leading-relaxed">Full GCP evaluation against ICH E6(R3) including R3-specific QMS and Risk-Based Monitoring gaps, with CDSCO inspection readiness scoring.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 7: AI Stack */}
-      <section id="ai-stack" className="py-24 max-w-7xl mx-auto px-6">
-        <div className="text-center mb-16 animate-on-scroll">
-          <div className="text-xs font-bold text-secondary uppercase tracking-widest mb-4">Technology</div>
-          <h2 className="text-3xl font-extrabold text-primary mb-4">Built on Anthropic Claude</h2>
-          <p className="text-on-surface-variant max-w-2xl mx-auto">
-            Eight regulatory agents powered by Claude Haiku and Claude Sonnet, with ChromaDB as the regulatory knowledge base.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          <div className="p-6 bg-surface-container rounded-xl flex flex-col items-center justify-center text-center">
-            <div className="text-sm font-black text-primary mb-1">Claude Haiku 4.5</div>
-            <div className="text-[10px] uppercase font-bold text-on-surface-variant">Anonymisation | Summarisation | Classification | Q&A</div>
-          </div>
-          <div className="p-6 bg-surface-container rounded-xl flex flex-col items-center justify-center text-center">
-            <div className="text-sm font-black text-primary mb-1">Claude Sonnet 4.6</div>
-            <div className="text-[10px] uppercase font-bold text-on-surface-variant">Completeness | Inspection Reports | Schedule Y | GCP</div>
-          </div>
-          <div className="p-6 bg-surface-container rounded-xl flex flex-col items-center justify-center text-center">
-            <div className="text-sm font-black text-primary mb-1">ChromaDB</div>
-            <div className="text-[10px] uppercase font-bold text-on-surface-variant">Regulatory Knowledge Base</div>
-          </div>
-          <div className="p-6 bg-surface-container rounded-xl flex flex-col items-center justify-center text-center border-2 border-secondary/20 bg-white">
-            <div className="text-sm font-black text-secondary mb-1">FastAPI + Next.js</div>
-            <div className="text-[10px] uppercase font-bold text-secondary">Render | Vercel | Production</div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 8: Stakeholders */}
-      <section id="solutions" className="py-24 bg-primary text-white overflow-hidden relative">
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
-          <h2 className="text-4xl font-extrabold mb-16">Solutions for the Indian Pharma Ecosystem</h2>
-          <div className="grid lg:grid-cols-3 gap-12">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
             {[
-              { icon: '01', title: 'Pharmaceutical Companies', desc: 'Automate pre-submission compliance checks before CDSCO filing. Reduce review cycles and accelerate time-to-approval across concurrent trials.' },
-              { icon: '02', title: 'Contract Research Organisations', desc: 'Speed up protocol reviews, SAE classification, and query responses. Handle higher documentation volumes with consistent quality.' },
-              { icon: '03', title: 'RA Consultants & Firms', desc: 'Handle more client engagements with AI-assisted compliance reviews. Deliver faster turnaround with comprehensive audit trails.' },
-            ].map((item) => (
-              <div key={item.title} className="space-y-6">
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center text-sm font-black tracking-[0.2em]">{item.icon}</div>
-                <h3 className="text-2xl font-bold">{item.title}</h3>
-                <p className="opacity-70 text-sm leading-relaxed">{item.desc}</p>
+              { n: 'M1', title: 'PII Anonymiser', desc: 'Detects and anonymises patient and investigator identities per DPDP Act 2023 and CDSCO Schedule Y.', tag: 'Privacy Lane' },
+              { n: 'M2', title: 'Document Summariser', desc: 'Precis-style summarisation for protocols, SUGAM applications, SAE narratives, and meeting transcripts.', tag: 'Privacy Lane' },
+              { n: 'M3', title: 'Completeness Checker', desc: 'Checks documents against CDSCO, NDCTR 2019, and ICH requirements, flagging CRITICAL, MAJOR and MINOR gaps.', tag: 'Compliance' },
+              { n: 'M4', title: 'Case Classifier', desc: 'Classifies adverse events using ICH E2A seriousness criteria, WHO-UMC causality, and NDCTR 2019 timelines.', tag: 'Compliance' },
+              { n: 'M5', title: 'Inspection Report', desc: 'Generates CDSCO GCP inspection reports with CAPA plans, observation classification, and Schedule Y citations.', tag: 'Compliance' },
+              { n: 'M6', title: 'Regulatory Q&A', desc: 'RAG-powered assistant grounded in NDCTR 2019, Schedule Y, ICH guidelines, and ICMR ethics corpus.', tag: 'Knowledge' },
+              { n: 'M7', title: 'Schedule Y Compliance', desc: 'Deep compliance checks across Schedule Y Appendices I-XI and NDCTR 2019 Rules 1-105.', tag: 'Knowledge' },
+              { n: 'M8', title: 'ICH E6(R3) GCP', desc: 'Full GCP evaluation against ICH E6(R3) including R3-specific QMS and Risk-Based Monitoring gaps.', tag: 'Knowledge' },
+            ].map((agent) => (
+              <div
+                key={agent.n}
+                className="agent-card group fade-up rounded-2xl border border-gray-100 bg-white p-6 transition-all duration-300 hover:border-teal-200 hover:shadow-lg"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-bold text-teal-600">{agent.n}</span>
+                  <span className="text-xs text-gray-400">{agent.tag}</span>
+                </div>
+                <h3 className="mb-2 text-base font-bold text-gray-900 transition-colors group-hover:text-teal-700">
+                  {agent.title}
+                </h3>
+                <p className="text-sm leading-relaxed text-gray-500">{agent.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="fade-up mt-12 text-center">
+            <Link
+              href="/app"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-4 font-semibold text-white shadow-lg transition-colors hover:bg-teal-700"
+            >
+              Access All 8 Agents Free
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <div className="section-divider"></div>
+
+      <section className="bg-white py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="fade-up mb-16 text-center">
+            <div className="mb-3 text-xs font-bold uppercase tracking-widest text-teal-600">Process</div>
+            <h2 className="text-4xl font-extrabold" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              From Upload to Compliance Report in Minutes
+            </h2>
+          </div>
+
+          <div className="relative grid grid-cols-1 gap-6 md:grid-cols-4">
+            <div className="absolute left-[12.5%] right-[12.5%] top-10 hidden h-px bg-gradient-to-r from-transparent via-teal-200 to-transparent md:block"></div>
+            {[
+              { n: '01', title: 'Upload', desc: 'Upload PDF or DOCX, clinical protocol, ICF, SAE narrative, or any regulatory document.' },
+              { n: '02', title: 'Analyse', desc: 'AI cross-references against NDCTR 2019, Schedule Y, and ICH guidelines via RAG pipeline.' },
+              { n: '03', title: 'Report', desc: 'Receive per-section compliance status with specific gap analysis and regulatory citations.' },
+              { n: '04', title: 'Review', desc: 'Export for review by qualified RA professionals before CDSCO submission.' },
+            ].map((step) => (
+              <div key={step.n} className="fade-up text-center">
+                <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-600 text-sm font-bold text-white shadow-lg">
+                  {step.n}
+                </div>
+                <h4 className="mb-2 text-lg font-bold text-gray-900">{step.title}</h4>
+                <p className="text-sm leading-relaxed text-gray-500">{step.desc}</p>
               </div>
             ))}
           </div>
         </div>
-        <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none text-[400px] font-black text-white select-none">R</div>
       </section>
 
-      {/* SECTION 9: Process Timeline */}
-      <section className="py-24 max-w-7xl mx-auto px-6">
-        <h2 className="text-4xl font-extrabold text-primary text-center mb-20 animate-on-scroll">
-          From Document Upload to Compliance Report in Minutes
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
-          <div className="absolute top-1/2 left-0 w-full h-0.5 bg-surface-container hidden md:block -translate-y-1/2 pointer-events-none"></div>
-          {[
-            { n: 1, title: 'Upload', desc: 'Upload PDF or DOCX clinical trial protocol, ICF, or regulatory document.' },
-            { n: 2, title: 'Evaluate', desc: 'AI cross-references against NDCTR 2019, Schedule Y, and ICH guidelines via RAG pipeline.' },
-            { n: 3, title: 'Report', desc: 'Receive per-section compliance status with specific gap analysis and regulatory citations.' },
-            { n: 4, title: 'Review', desc: 'Export compliance report for review by qualified RA professionals before CDSCO submission.' },
-          ].map((step) => (
-            <div key={step.n} className="relative bg-white p-8 rounded-2xl shadow-sm border border-surface-container text-center animate-on-scroll">
-              <div className="w-12 h-12 bg-secondary text-white rounded-full flex items-center justify-center mx-auto mb-6 relative z-10 font-bold text-lg">
-                {step.n}
+      <div className="section-divider"></div>
+
+      <section id="solutions" className="relative overflow-hidden bg-gray-900 py-24 text-white">
+        <div className="pointer-events-none absolute bottom-0 right-0 select-none text-[400px] font-black leading-none text-white/[0.02]">
+          R
+        </div>
+        <div className="relative z-10 mx-auto max-w-7xl px-6">
+          <div className="fade-up mb-16">
+            <div className="mb-3 text-xs font-bold uppercase tracking-widest text-teal-400">Solutions</div>
+            <h2 className="text-4xl font-extrabold" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              Built for the Indian Pharma Ecosystem
+            </h2>
+          </div>
+
+          <div className="grid gap-10 lg:grid-cols-3">
+            {[
+              { n: '01', title: 'Pharmaceutical Companies', desc: 'Automate pre-submission compliance checks before CDSCO filing. Reduce review cycles and accelerate time-to-approval across concurrent trials.' },
+              { n: '02', title: 'Contract Research Organisations', desc: 'Speed up protocol reviews, SAE classification, and query responses. Handle higher documentation volumes with consistent quality.' },
+              { n: '03', title: 'RA Consultants & Firms', desc: 'Handle more client engagements with AI-assisted compliance reviews. Deliver faster turnaround with comprehensive audit trails.' },
+            ].map((item) => (
+              <div key={item.title} className="fade-up rounded-2xl border border-white/10 p-8 transition-colors hover:border-teal-500/50">
+                <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/20 text-sm font-bold tracking-widest text-teal-400">
+                  {item.n}
+                </div>
+                <h3 className="mb-4 text-xl font-bold">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-gray-400">{item.desc}</p>
               </div>
-              <h4 className="font-bold text-primary mb-2">{step.title}</h4>
-              <p className="text-xs text-on-surface-variant leading-relaxed">{step.desc}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* SECTION 10: Trust */}
-      <section className="py-24 bg-surface-container-high">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col lg:flex-row gap-16 items-center">
-          <div className="lg:w-1/2 animate-on-scroll">
-            <h2 className="text-3xl font-extrabold text-primary mb-6">Built for Regulatory Trust</h2>
-            <p className="text-on-surface-variant leading-relaxed mb-8">
-              RegCheck-India processes all regulatory documents through the Anthropic Claude API. By default, Anthropic does not use API inputs or outputs for model training. All data is automatically deleted from Anthropic servers within 7 days. Your proprietary formulations, clinical data, and patient information remain fully protected and are never used to train any AI model.
-            </p>
-            <div className="space-y-3">
-              {['All outputs clearly marked as AI-generated', 'Every finding cited to specific regulatory source', 'Designed for professional review before use', 'Never to be submitted to CDSCO without RA sign-off', 'PII/PHI detection on all processed documents', 'DPDP Act 2023 compliant data handling'].map((point) => (
-                <div key={point} className="flex items-center gap-3">
-                  <svg className="w-5 h-5 text-secondary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-sm font-medium text-on-surface">{point}</span>
+      <div className="section-divider"></div>
+
+      <section id="trust" className="bg-white py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="grid items-center gap-20 lg:grid-cols-2">
+            <div className="fade-up">
+              <div className="mb-4 text-xs font-bold uppercase tracking-widest text-teal-600">Trust & Security</div>
+              <h2 className="mb-6 text-4xl font-extrabold" style={{ fontFamily: "'DM Serif Display', serif" }}>
+                Built for Regulatory Trust
+              </h2>
+              <p className="mb-8 leading-relaxed text-gray-500">
+                RegCheck-India processes all documents through the Anthropic Claude API. Anthropic does not
+                use API inputs or outputs for model training. Data is automatically deleted from Anthropic
+                servers within 7 days. Your proprietary formulations, clinical data, and patient information
+                remain fully protected.
+              </p>
+              <div className="space-y-3">
+                {[
+                  'All outputs clearly marked as AI-generated',
+                  'Every finding cited to specific regulatory source',
+                  'Designed for professional review before use',
+                  'Never to be submitted to CDSCO without RA sign-off',
+                  'PII/PHI detection on all processed documents',
+                  'DPDP Act 2023 compliant data handling',
+                ].map((point) => (
+                  <div key={point} className="flex items-center gap-3">
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-50">
+                      <svg className="h-3 w-3 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="text-sm text-gray-600">{point}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="fade-up grid grid-cols-2 gap-4">
+              {['NDCTR 2019', 'Schedule Y', 'ICH E6(R3)', 'DPDP Act 2023', 'NDHM Guidelines', 'ICMR Ethics'].map((framework) => (
+                <div key={framework} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-100">
+                    <svg className="h-4 w-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-semibold text-gray-700">{framework}</span>
                 </div>
               ))}
             </div>
           </div>
-          <div className="lg:w-1/2 grid grid-cols-2 gap-6 animate-on-scroll">
-            {['NDCTR 2019', 'Schedule Y', 'ICH E6(R3)', 'DPDP Act 2023', 'NDHM Guidelines', 'ICMR Ethics'].map((framework) => (
-              <div key={framework} className="bg-white rounded-2xl p-6 flex items-center gap-3 shadow-ambient">
-                <div className="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                </div>
-                <span className="text-sm font-bold text-primary">{framework}</span>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
-      {/* SECTION 11: Early Access Form */}
-      <section id="early-access" className="py-24 max-w-5xl mx-auto px-6">
-        <div className="bg-primary-container p-12 lg:p-20 rounded-[40px] text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-secondary/20 blur-[100px] rounded-full pointer-events-none"></div>
-          <div className="relative z-10 text-center max-w-2xl mx-auto">
-            <h2 className="text-4xl font-extrabold mb-6">Join the Early Access Program</h2>
-            <p className="opacity-80 mb-10">
-              Be among the first Indian pharmaceutical companies, CROs, and RA consultancies to automate your regulatory workflow with RegCheck-India.
+      <div className="section-divider"></div>
+
+      <section id="contact" className="bg-gray-50 py-24">
+        <div className="mx-auto max-w-5xl px-6">
+          <div className="fade-up mb-12 text-center">
+            <div className="mb-3 text-xs font-bold uppercase tracking-widest text-teal-600">Get in Touch</div>
+            <h2 className="mb-4 text-4xl font-extrabold" style={{ fontFamily: "'DM Serif Display', serif" }}>
+              Request Demo or Pilot Access
+            </h2>
+            <p className="mx-auto max-w-xl text-gray-500">
+              Be among the first Indian pharmaceutical companies, CROs, and RA consultancies to
+              automate your regulatory workflow with RegCheck-India.
             </p>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="text" placeholder="Full Name"
-                  value={earlyAccessData.name}
-                  onChange={(e) => setEarlyAccessData(p => ({...p, name: e.target.value}))}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-secondary transition-all"
-                />
-                <input
-                  type="email" placeholder="Work Email"
-                  value={earlyAccessData.email}
-                  onChange={(e) => setEarlyAccessData(p => ({...p, email: e.target.value}))}
-                  className="w-full bg-white/10 border border-white/20 rounded-xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-secondary transition-all"
-                />
+          </div>
+
+          <div className="fade-up overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+            <div className="grid lg:grid-cols-5">
+              <div className="bg-teal-600 p-10 text-white lg:col-span-2">
+                <h3 className="mb-6 text-xl font-bold">Why RegCheck-India?</h3>
+                <div className="space-y-6">
+                  {[
+                    { icon: 'ðŸš€', title: 'Free Pilot', desc: 'No commitment during pilot phase' },
+                    { icon: 'ðŸ‡®ðŸ‡³', title: 'India-First', desc: 'Built on CDSCO & NDCTR 2019 corpus' },
+                    { icon: 'ðŸ¤–', title: 'Claude-Powered', desc: '8 specialised regulatory agents' },
+                    { icon: 'ðŸ”’', title: 'Secure', desc: 'DPDP Act 2023 compliant' },
+                  ].map((item) => (
+                    <div key={item.title} className="flex items-start gap-3">
+                      <span className="text-xl">{item.icon}</span>
+                      <div>
+                        <div className="text-sm font-semibold">{item.title}</div>
+                        <div className="mt-0.5 text-xs text-teal-200">{item.desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-10 border-t border-teal-500 pt-8">
+                  <div className="mb-2 text-xs text-teal-200">Direct founder contact</div>
+                  <a href="mailto:rushikeshbork000@gmail.com" className="text-sm font-medium text-white transition-colors hover:text-teal-200">
+                    rushikeshbork000@gmail.com
+                  </a>
+                </div>
               </div>
-              <input
-                type="text" placeholder="Organisation Name"
-                value={earlyAccessData.org}
-                onChange={(e) => setEarlyAccessData(p => ({...p, org: e.target.value}))}
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-secondary transition-all"
-              />
-              <select
-                value={earlyAccessData.role}
-                onChange={(e) => setEarlyAccessData(p => ({...p, role: e.target.value}))}
-                className="w-full bg-white/10 border border-white/20 rounded-xl px-6 py-4 text-white focus:outline-none focus:border-secondary transition-all"
-              >
-                <option value="" className="text-on-surface">Select Your Role</option>
-                <option value="RA Professional" className="text-on-surface">RA Professional</option>
-                <option value="CRO" className="text-on-surface">CRO</option>
-                <option value="Pharma Company" className="text-on-surface">Pharma Company</option>
-                <option value="Consultant" className="text-on-surface">Regulatory Consultant</option>
-                <option value="Other" className="text-on-surface">Other</option>
-              </select>
-              <button
-                onClick={handleEarlyAccess}
-                className="w-full rounded-xl bg-white px-6 py-4 font-bold text-primary transition-transform hover:-translate-y-0.5 hover:bg-surface"
-              >
-                Apply for Pilot Access
-              </button>
-              <p className="text-[10px] opacity-40">Free during pilot | No commitment | Direct line to the founder</p>
+
+              <div className="p-4 lg:col-span-3">
+                <iframe
+                  src="https://docs.google.com/forms/d/e/1FAIpQLSelrgr29tF7x115l80KIWfQvXMz5HIPuujB8r_e2MKm0AJolQ/viewform?embedded=true"
+                  width="100%"
+                  height="600"
+                  frameBorder="0"
+                  marginHeight={0}
+                  marginWidth={0}
+                  className="rounded-xl"
+                  title="RegCheck-India Contact Form"
+                >
+                  Loading form...
+                </iframe>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 12: Footer */}
-      <footer className="bg-surface pt-24 pb-12 border-t border-outline-variant/10">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-20">
-            <div>
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-8 h-8 bg-primary flex items-center justify-center rounded">
-                  <span className="text-white font-black text-sm">R</span>
+      <footer className="bg-gray-900 pt-16 pb-8 text-white">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="mb-12 grid grid-cols-1 gap-12 border-b border-white/10 pb-12 md:grid-cols-4">
+            <div className="md:col-span-2">
+              <div className="mb-4 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500">
+                  <span className="text-sm font-black text-white">R</span>
                 </div>
-                <span className="text-lg font-bold tracking-tight text-primary">RegCheck-India</span>
+                <span className="text-lg font-bold">RegCheck-India</span>
               </div>
-              <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
-                Bridging pharmaceutical excellence and regulatory velocity through Claude-powered regulatory workflows.
+              <p className="mb-6 max-w-sm text-sm leading-relaxed text-gray-400">
+                Bridging pharmaceutical domain expertise and regulatory velocity through Claude-powered
+                AI agents, built from inside India&apos;s pharma ecosystem.
               </p>
               <div className="flex gap-3">
-                <a href="https://github.com/nerd-maker/Regcheck-India" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center hover:bg-secondary hover:text-white transition-all text-on-surface-variant">
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.79-.26.79-.58v-2.23c-3.34.72-4.03-1.42-4.03-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.19.69.8.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/></svg>
+                <a
+                  href="https://github.com/nerd-maker/Regcheck-India"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-teal-600"
+                >
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.79-.26.79-.58v-2.23c-3.34.72-4.03-1.42-4.03-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.19.69.8.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z" />
+                  </svg>
                 </a>
-                <a href="mailto:regcheck.india@gmail.com" className="w-10 h-10 rounded-full bg-surface-container-low flex items-center justify-center hover:bg-secondary hover:text-white transition-all text-on-surface-variant">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                <a
+                  href="mailto:rushikeshbork000@gmail.com"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 transition-colors hover:bg-teal-600"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
                 </a>
               </div>
             </div>
+
             <div>
-              <h5 className="font-bold text-primary mb-6">Platform</h5>
-              <ul className="space-y-3 text-sm text-on-surface-variant">
-                {['Compliance Evaluator', 'Document Generator', 'Query Assistant', 'Regulatory Intelligence'].map(l => (
-                  <li key={l}><Link href="/app" className="hover:text-secondary transition-colors">{l}</Link></li>
+              <h5 className="mb-4 text-sm font-semibold text-gray-300">Platform</h5>
+              <ul className="space-y-3">
+                {['PII Anonymiser', 'Document Summariser', 'Case Classifier', 'Schedule Y Compliance', 'ICH E6(R3) GCP', 'Regulatory Q&A'].map((label) => (
+                  <li key={label}>
+                    <Link href="/app" className="text-sm text-gray-500 transition-colors hover:text-teal-400">
+                      {label}
+                    </Link>
+                  </li>
                 ))}
               </ul>
             </div>
+
             <div>
-              <h5 className="font-bold text-primary mb-6">Regulatory</h5>
-              <ul className="space-y-3 text-sm text-on-surface-variant">
-                {['NDCTR 2019', 'Schedule Y', 'ICH E6(R3)', 'CDSCO Guidelines', 'DPDP Act 2023'].map(l => (
-                  <li key={l}><a href="#" className="hover:text-secondary transition-colors">{l}</a></li>
+              <h5 className="mb-4 text-sm font-semibold text-gray-300">Regulatory Frameworks</h5>
+              <ul className="space-y-3">
+                {['NDCTR 2019', 'Schedule Y', 'ICH E6(R3)', 'ICH E2A', 'CDSCO GCP', 'DPDP Act 2023'].map((label) => (
+                  <li key={label}>
+                    <span className="text-sm text-gray-500">{label}</span>
+                  </li>
                 ))}
-              </ul>
-            </div>
-            <div>
-              <h5 className="font-bold text-primary mb-6">Company</h5>
-              <ul className="space-y-3 text-sm text-on-surface-variant">
-                <li><a href="https://github.com/nerd-maker/Regcheck-India" className="hover:text-secondary transition-colors">GitHub</a></li>
-                <li><a href="mailto:regcheck.india@gmail.com" className="hover:text-secondary transition-colors">Contact</a></li>
-                <li><Link href="/app" className="hover:text-secondary transition-colors">Launch App</Link></li>
               </ul>
             </div>
           </div>
-          <div className="pt-8 border-t border-outline-variant/10 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest bg-surface-container px-4 py-2 rounded-full">
-              RegCheck-India v3.0.0 | Claude-powered | 8 agents live
+
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-teal-600/20 px-3 py-1 text-xs font-medium text-teal-400">v3.0.0</span>
+              <span className="text-xs text-gray-600">8 agents live | Claude-powered | Deployed on Vercel + Render</span>
             </div>
-            <p className="text-xs text-on-surface-variant text-center">
-              Copyright 2025 RegCheck-India. All rights reserved. Designed for the Indian pharmaceutical ecosystem.
-            </p>
-            <p className="text-[10px] text-on-surface-variant/60 text-center max-w-md">
-              Pilot tool. All outputs must be reviewed by qualified RA professionals before regulatory use.
+            <p className="text-xs text-gray-600">© 2025 RegCheck-India. Built for India&apos;s pharmaceutical ecosystem.</p>
+          </div>
+
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-700">
+              Pilot tool. All outputs must be reviewed by qualified RA professionals before regulatory submission to CDSCO.
             </p>
           </div>
         </div>
       </footer>
-
     </div>
   )
 }

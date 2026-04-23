@@ -38,13 +38,11 @@ yarn-error.log*
 out/
 .vercel
 
-# ChromaDB
-# backend/data/chromadb/
+# Data & Runtime
+data/runtime/
 backend/data/runtime/
-
-# Uploaded files
-backend/uploads/
-backend/temp/
+uploads/
+temp/
 
 # IDE
 .vscode/
