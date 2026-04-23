@@ -31,6 +31,10 @@ psutil==5.9.8
 # CORS
 python-jose[cryptography]==3.3.0
 
+# Encryption (PII mapping store — AES-256 via Fernet)
+cryptography>=41.0.0
+
+
 # Rate limiting
 slowapi==0.1.9
 

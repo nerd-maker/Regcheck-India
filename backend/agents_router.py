@@ -10,6 +10,7 @@ import io
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -20,6 +21,8 @@ from pydantic import BaseModel, Field
 from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET
 from app.services.case_store import search_similar_cases, store_case
 from app.services.rule_based_pii import detect_pii, get_pii_summary, format_for_response
+from app.services.file_cleanup import sanitize_filename, temp_file_context
+from app.services.pii_mapping_store import pii_mapping_store, PIIMappingStore
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +48,48 @@ class AgentResponse(BaseModel):
     token_usage: dict
 
 
+class DeAnonymiseRequest(BaseModel):
+    text: str = Field(..., description="Pseudonymised text containing replacement tokens")
+    session_id: str = Field(..., description="Session ID returned by the anonymise endpoint")
+
+
+def structure_prompt_input(text: str, document_type: str = "general", agent_id: str = "") -> str:
+    """
+    Convert raw text input into structured format before sending to Claude.
+    Reduces token cost, improves accuracy, strips unnecessary whitespace.
+    """
+    # Clean the text
+    cleaned = " ".join(text.split())  # normalize whitespace
+    word_count = len(cleaned.split())
+
+    # Truncate if extremely long — keep first 5000 words
+    if word_count > 5000:
+        words = cleaned.split()
+        cleaned = " ".join(words[:5000])
+        truncated = True
+    else:
+        truncated = False
+
+    structured = f"""[INPUT DOCUMENT]
+Document Type: {document_type}
+Word Count: {word_count}{"  [TRUNCATED TO 5000 WORDS]" if truncated else ""}
+Agent: {agent_id}
+
+[CONTENT]
+{cleaned}
+
+[END OF INPUT]"""
+
+    return structured
+
+
 @router.post("/extract-text")
 async def extract_text_from_file(file: UploadFile = File(...)):
     """Extract text from PDF or DOCX file for use in any agent module."""
     try:
+        filename_safe = sanitize_filename(file.filename or "upload")
         content = await file.read()
-        filename = (file.filename or "").lower()
+        filename = filename_safe.lower()
         extracted_text = ""
         page_count: Optional[int] = None
 
@@ -85,13 +124,15 @@ async def extract_text_from_file(file: UploadFile = File(...)):
                 detail="Could not extract text from file. The file may be scanned/image-based or empty.",
             )
 
-        return {
-            "filename": file.filename,
+        result = {
+            "filename": filename_safe,
             "extracted_text": extracted_text,
             "word_count": len(extracted_text.split()),
             "pages": page_count,
             "status": "success",
         }
+        del content  # hint to GC
+        return result
 
     except HTTPException:
         raise
@@ -736,11 +777,12 @@ async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optiona
     except Exception as e:
         logger.warning(f"Rule-based PII scan failed silently: {e}")
 
+    structured_text = structure_prompt_input(request.document, "clinical_document", "M1_PII_ANONYMISER")
     response = call_claude(
         agent_name="PII_PHI_Anonymisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_01_SYSTEM_PROMPT,
-        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
@@ -774,6 +816,22 @@ async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optiona
                     
             # Update entity count
             parsed["entities_anonymised"] = len(parsed.get("entities_detected", []))
+
+            # Store pseudonymisation mapping for potential reversal
+            try:
+                token_map = {}
+                for entity in parsed.get("entities_detected", []):
+                    if entity.get("value") and entity.get("entity_type"):
+                        token_key = f"[{entity['entity_type']}_001]"
+                        token_map[token_key] = entity["value"]
+                if token_map:
+                    session_id = str(uuid.uuid4())
+                    pii_mapping_store.store_mapping(session_id, token_map)
+                    parsed["pseudonymisation_session_id"] = session_id
+                    parsed["deanonymisation_available"] = True
+                    parsed["mapping_expires_hours"] = PIIMappingStore.TTL_HOURS
+            except Exception as e:
+                logger.warning(f"PII mapping storage failed silently: {e}")
     except Exception as e:
         logger.warning(f"Rule-based merge failed silently: {e}")
 
@@ -782,11 +840,12 @@ async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optiona
 
 @router.post("/summarise", response_model=AgentResponse, summary="Agent 02 - Document Summarisation")
 async def summarise_document(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
+    structured_text = structure_prompt_input(request.document, "regulatory_document", "M2_DOCUMENT_SUMMARISER")
     return call_claude(
         agent_name="Document_Summarisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_02_SYSTEM_PROMPT,
-        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
@@ -802,11 +861,12 @@ async def assess_completeness(request: CompletenessRequest, x_anthropic_api_key:
         system_prompt = AGENT_03_SYSTEM_PROMPT
         agent_name = "Completeness_Assessment"
 
+    structured_text = structure_prompt_input(request.document, "submission_document", "M3_COMPLETENESS_ASSESSOR")
     return call_claude(
         agent_name=agent_name,
         model=MODEL_SONNET,
         system_prompt=system_prompt,
-        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
@@ -821,11 +881,12 @@ async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str
     except Exception as e:
         logger.warning(f"Duplicate search failed silently: {e}")
 
+    structured_text = structure_prompt_input(request.document, "sae_narrative", "M4_CASE_CLASSIFIER")
     response = call_claude(
         agent_name="Case_Classification",
         model=MODEL_HAIKU,
         system_prompt=AGENT_04_SYSTEM_PROMPT,
-        user_content=f"Case metadata: {json.dumps(request.metadata)}\n\nCase narrative:\n{request.document}",
+        user_content=f"Case metadata: {json.dumps(request.metadata)}\n\nCase narrative:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
@@ -870,8 +931,8 @@ async def extract_text_ocr(
     try:
         from app.services.ocr_service import extract_text_from_image_bytes
 
+        filename = sanitize_filename(file.filename or "upload")
         content = await file.read()
-        filename = file.filename or "upload"
 
         api_key = x_anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")
         force_vision = (mode == "vision")
@@ -882,6 +943,7 @@ async def extract_text_ocr(
             api_key=api_key if api_key else None,
             force_vision=force_vision
         )
+        del content  # hint to GC
 
         if not result.text.strip():
             raise HTTPException(
@@ -966,8 +1028,8 @@ async def transcribe_meeting(
                 detail="Anthropic API key required — add it in Settings"
             )
 
+        filename = sanitize_filename(file.filename or "audio.mp3")
         content = await file.read()
-        filename = file.filename or "audio.mp3"
 
         logger.info(f"Transcribing audio: {filename}, size: {len(content)} bytes")
 
@@ -1073,11 +1135,12 @@ async def transcribe_health():
 
 @router.post("/inspection-report", response_model=AgentResponse, summary="Agent 05 - Inspection Report Generation")
 async def generate_inspection_report(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
+    structured_text = structure_prompt_input(request.document, "inspection_observations", "M5_INSPECTION_REPORT")
     return call_claude(
         agent_name="Inspection_Report_Generation",
         model=MODEL_SONNET,
         system_prompt=AGENT_05_SYSTEM_PROMPT,
-        user_content=f"Inspection metadata: {json.dumps(request.metadata)}\n\nInspection findings:\n{request.document}",
+        user_content=f"Inspection metadata: {json.dumps(request.metadata)}\n\nInspection findings:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
@@ -1136,9 +1199,10 @@ Clearly state at the end that this answer is based on general regulatory knowled
     else:
         context_section = f"[CONTEXT]\n{retrieved_context}\n[/CONTEXT]"
 
+    structured_question = structure_prompt_input(request.question, "regulatory_query", "M6_REGULATORY_QA")
     user_content = (
         f"{context_section}\n\n"
-        f"QUESTION: {request.question}\n\nAdditional metadata: {json.dumps(request.metadata)}"
+        f"QUESTION: {structured_question}\n\nAdditional metadata: {json.dumps(request.metadata)}"
     )
     return call_claude(
         agent_name="Regulatory_QA_RAG",
@@ -1152,11 +1216,12 @@ Clearly state at the end that this answer is based on general regulatory knowled
 
 @router.post("/schedule-y", response_model=AgentResponse, summary="Agent 07 - Schedule Y / CDSCO Compliance")
 async def check_schedule_y(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
+    structured_text = structure_prompt_input(request.document, "clinical_protocol", "M7_SCHEDULE_Y")
     return call_claude(
         agent_name="Schedule_Y_Compliance",
         model=MODEL_SONNET,
         system_prompt=AGENT_07_SYSTEM_PROMPT,
-        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
@@ -1164,11 +1229,12 @@ async def check_schedule_y(request: AgentRequest, x_anthropic_api_key: Optional[
 
 @router.post("/ich-gcp", response_model=AgentResponse, summary="Agent 08 - ICH E6(R3) GCP Compliance")
 async def check_ich_gcp(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
+    structured_text = structure_prompt_input(request.document, "gcp_document", "M8_ICH_GCP")
     return call_claude(
         agent_name="ICH_GCP_Compliance",
         model=MODEL_SONNET,
         system_prompt=AGENT_08_SYSTEM_PROMPT,
-        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{request.document}",
+        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
     )
@@ -1202,11 +1268,14 @@ async def compare_documents(
             else:
                 raise HTTPException(status_code=400, detail=f"Unsupported file type: {filename}. Use PDF or DOCX.")
 
+        filename_a = sanitize_filename(file_a.filename or "version_a")
+        filename_b = sanitize_filename(file_b.filename or "version_b")
         content_a = await file_a.read()
         content_b = await file_b.read()
 
-        text_a = extract_text(content_a, file_a.filename or "")
-        text_b = extract_text(content_b, file_b.filename or "")
+        text_a = extract_text(content_a, filename_a)
+        text_b = extract_text(content_b, filename_b)
+        del content_a, content_b  # hint to GC
 
         if not text_a.strip():
             raise HTTPException(status_code=422, detail="Could not extract text from Version A. File may be scanned/image-based.")
@@ -1318,6 +1387,28 @@ Return EXACTLY this JSON structure:
 @router.get("/compare/health")
 async def compare_health():
     return {"status": "ok", "agent": "Document_Version_Comparison", "endpoint": "/api/v1/agents/compare"}
+
+
+@router.post("/deanonymise", summary="M1 — Reverse pseudonymisation using stored encrypted mapping")
+async def deanonymise_text(request: DeAnonymiseRequest):
+    """Reverse pseudonymisation using stored encrypted mapping."""
+    result = pii_mapping_store.deanonymise(request.text, request.session_id)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Mapping not found or expired. Pseudonymisation mappings expire after 24 hours."
+        )
+    return {
+        "original_text": result,
+        "session_id": request.session_id,
+        "status": "success"
+    }
+
+
+@router.get("/mapping-store/health", summary="M1 — PII mapping store stats")
+async def mapping_store_health():
+    """Return stats about the in-memory encrypted PII mapping store."""
+    return pii_mapping_store.get_store_stats()
 
 
 @router.get("/classify/store/health")

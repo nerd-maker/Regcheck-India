@@ -115,6 +115,23 @@ from app.middleware.request_id_middleware import RequestIDMiddleware
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SessionTrackingMiddleware)
 # app.add_middleware(PIIDetectionMiddleware)  # disabled - ASGI stack conflict
+# ---------------------------------------------------------------------------
+# Upload size guard - block oversized requests before they hit any endpoint
+# ---------------------------------------------------------------------------
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
+@app.middleware('http')
+async def limit_upload_size(request: Request, call_next):
+    """Reject POST requests whose Content-Length exceeds MAX_UPLOAD_SIZE."""
+    if request.method == 'POST':
+        content_length = request.headers.get('content-length')
+        if content_length and int(content_length) > MAX_UPLOAD_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={'detail': 'File too large. Maximum upload size is 50 MB.'},
+            )
+    return await call_next(request)
 
 # Register critical gap solution endpoints (Gaps 2-16)
 from app.gap_endpoints import router as gap_router
