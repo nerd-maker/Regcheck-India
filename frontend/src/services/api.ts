@@ -2,12 +2,43 @@ import axios from 'axios';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-/** Read the Anthropic API key from localStorage (safe for SSR). */
-export const getStoredKey = (): string =>
-  (typeof window !== 'undefined' ? localStorage.getItem('regcheck_anthropic_key') : null) ?? '';
+/** 
+ * Obfuscate keys in localStorage to prevent cleartext scraping.
+ * Note: This is not encryption, just basic obfuscation.
+ */
+const obfuscate = (str: string): string => btoa(str);
+const deobfuscate = (str: string): string => {
+  try {
+    return atob(str);
+  } catch {
+    return str; // Fallback for old cleartext keys
+  }
+};
 
-export const getSarvamKey = (): string =>
-  (typeof window !== 'undefined' ? localStorage.getItem('sarvam_api_key') : null) ?? '';
+/** Read the Anthropic API key from localStorage (safe for SSR). */
+export const getStoredKey = (): string => {
+  if (typeof window === 'undefined') return '';
+  const val = localStorage.getItem('regcheck_anthropic_key') ?? '';
+  return deobfuscate(val);
+};
+
+export const storeKey = (key: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('regcheck_anthropic_key', obfuscate(key));
+  }
+};
+
+export const getSarvamKey = (): string => {
+  if (typeof window === 'undefined') return '';
+  const val = localStorage.getItem('sarvam_api_key') ?? '';
+  return deobfuscate(val);
+};
+
+export const storeSarvamKey = (key: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('sarvam_api_key', obfuscate(key));
+  }
+};
 
 export const getDemoToken = (): string =>
   (typeof window !== 'undefined' ? localStorage.getItem('demo_token') : null) ?? '';

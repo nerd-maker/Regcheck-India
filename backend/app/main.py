@@ -122,24 +122,36 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Middleware registration order
-# FastAPI processes middleware in REVERSE registration order.
-# CORS registered FIRST = innermost wrapper = sees every response last,
-# guaranteeing CORS headers are added to EVERY response including errors.
+# Production-grade CORS
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "https://regcheckindia.com,https://www.regcheckindia.com,https://regcheck-india-three.vercel.app"
+    ).split(",")
+    if origin.strip()
+]
 
-allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "https://regcheck-india-three.vercel.app,http://localhost:3000")
-allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",")]
-if "https://regcheck-india-three.vercel.app" not in allowed_origins:
-    allowed_origins.append("https://regcheck-india-three.vercel.app")
-logger.info(f"CORS allowed origins: {allowed_origins}")
+# Only add localhost in development
+if os.getenv("ENVIRONMENT", "production") == "development":
+    ALLOWED_ORIGINS.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "X-Anthropic-Api-Key",
+        "X-Sarvam-Api-Key",
+        "X-Demo-Token",
+        "X-Session-ID",
+        "X-Admin-Key",
+    ],
     max_age=3600,
 )
 
@@ -147,7 +159,35 @@ app.add_middleware(
 from app.middleware.request_id_middleware import RequestIDMiddleware
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SessionTrackingMiddleware)
-# app.add_middleware(PIIDetectionMiddleware)  # disabled - ASGI stack conflict
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+    
+    # Prevent MIME sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    
+    # XSS protection (legacy browsers)
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    
+    # Referrer policy
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    
+    # Remove server version info
+    response.headers["Server"] = "RegCheck-India"
+    
+    # Permissions policy - restrict browser features
+    response.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(self), geolocation=(), "
+        "payment=(), usb=(), magnetometer=()"
+    )
+
+    return response
+
 # ---------------------------------------------------------------------------
 # Upload size guard - block oversized requests before they hit any endpoint
 # ---------------------------------------------------------------------------
@@ -626,9 +666,6 @@ async def generate_section(request: SectionGenerationRequest):
         raise HTTPException(status_code=500, detail=f"Section generation failed: {str(e)}")
 
 
-
-
-
 @app.get("/api/schemas/{document_type}")
 async def get_document_schema(document_type: str):
     """
@@ -882,16 +919,13 @@ async def generate_weekly_digest(request: DigestGenerationRequest):
             end_date=request.end_date
         )
         
-        # Filter by urgency if requested
-        if not request.include_low_urgency:
-            changes = [c for c in changes if c.urgency in ["CRITICAL", "HIGH", "MEDIUM"]]
-        
-        # Get impact assessments for date range
-        impact_assessments = regulatory_change_store.get_all_impact_assessments(
-            start_date=request.start_date,
-            end_date=request.end_date
-        )
-        
+        # Get impact assessments for these changes
+        impact_assessments = []
+        for change in changes:
+            impact_assessments.extend(
+                regulatory_change_store.get_impacted_submissions(change.change_id)
+            )
+            
         # Generate digest
         digest = digest_generator.generate_digest(
             changes=changes,
@@ -1039,5 +1073,3 @@ app.include_router(production_router)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=settings.backend_port)
-
-

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { getStoredKey, getSarvamKey, storeKey, storeSarvamKey } from '@/services/api';
 
 interface ApiKeyModalProps {
   onKeySaved: (key: string) => void;
@@ -16,9 +17,9 @@ export default function ApiKeyModal({ onKeySaved, isChanging = false, onClose }:
   const [showSarvamKey, setShowSarvamKey] = useState(false);
 
   useEffect(() => {
-    // Load existing keys if they exist
-    const savedKey = localStorage.getItem('regcheck_anthropic_key') || '';
-    const savedSarvamKey = localStorage.getItem('sarvam_api_key') || '';
+    // Load existing keys if they exist (will be auto-deobfuscated by getters)
+    const savedKey = getStoredKey();
+    const savedSarvamKey = getSarvamKey();
     setKey(savedKey);
     setSarvamKey(savedSarvamKey);
   }, []);
@@ -30,8 +31,8 @@ export default function ApiKeyModal({ onKeySaved, isChanging = false, onClose }:
       setError('Please enter a valid Anthropic key (starts with sk-ant-) or admin override code');
       return;
     }
-    localStorage.setItem('regcheck_anthropic_key', key);
-    localStorage.setItem('sarvam_api_key', sarvamKey);
+    storeKey(key);
+    storeSarvamKey(sarvamKey);
     setError('');
     onKeySaved(key);
   };

@@ -39,6 +39,9 @@ cryptography>=41.0.0
 # Rate limiting
 slowapi==0.1.9
 
+# Security and file validation
+python-magic>=0.4.27
+
 # Testing
 pytest==7.4.4
 pytest-asyncio==0.23.3

@@ -37,32 +37,20 @@ def _ensure_session_access(session_id: str, x_session_id: str):
         raise HTTPException(status_code=403, detail="Session access denied")
 
 
+from app.services.file_cleanup import validate_file, FileValidationError
+
 async def _read_validated_upload(file: UploadFile, allowed_types: dict[str, set[str]]) -> tuple[str, bytes]:
-    suffix = Path(file.filename).suffix.lower()
-    if suffix not in allowed_types:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix or 'unknown'}")
-
-    raw = await file.read()
-    if not raw:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    if len(raw) > settings.max_upload_size_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file exceeds maximum allowed size")
-
-    content_type = (file.content_type or "").lower()
-    if content_type and content_type not in allowed_types[suffix]:
-        raise HTTPException(status_code=400, detail=f"Content type does not match file extension: {content_type}")
-
-    if suffix == ".pdf" and not raw.startswith(b"%PDF"):
-        raise HTTPException(status_code=400, detail="Invalid PDF file signature")
-    if suffix == ".docx" and not raw.startswith(b"PK"):
-        raise HTTPException(status_code=400, detail="Invalid DOCX file signature")
-    if suffix in {".txt", ".csv", ".json"}:
-        try:
-            raw.decode("utf-8")
-        except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="Structured/text uploads must be valid UTF-8")
-
-    return suffix, raw
+    """Uses robust security validation for file uploads."""
+    content = await file.read()
+    try:
+        file_info = validate_file(
+            content=content,
+            filename=file.filename or "upload",
+            allowed_extensions=list(allowed_types.keys())
+        )
+        return file_info["extension"], content
+    except FileValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 def _build_response(session_id: str, content: str, report: dict) -> AnonymisationResponse:

@@ -24,29 +24,20 @@ _AUDIO_CONTENT_TYPES = {
 }
 
 
+from app.services.file_cleanup import validate_file, FileValidationError
+
 async def _read_validated_audio(file: UploadFile) -> bytes:
-    suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in _AUDIO_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported audio type: {suffix or 'unknown'}")
-
-    raw = await file.read()
-    if not raw:
-        raise HTTPException(status_code=400, detail="Uploaded audio file is empty")
-    if len(raw) > settings.max_upload_size_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded audio file exceeds maximum allowed size")
-
-    content_type = (file.content_type or "").lower()
-    if content_type and content_type not in _AUDIO_CONTENT_TYPES[suffix]:
-        raise HTTPException(status_code=400, detail=f"Content type does not match file extension: {content_type}")
-
-    if suffix == ".wav" and raw[:4] != b"RIFF":
-        raise HTTPException(status_code=400, detail="Invalid WAV file signature")
-    if suffix == ".mp3" and not (raw.startswith(b"ID3") or raw[:2] in {b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"}):
-        raise HTTPException(status_code=400, detail="Invalid MP3 file signature")
-    if suffix == ".m4a" and b"ftyp" not in raw[:32]:
-        raise HTTPException(status_code=400, detail="Invalid M4A file signature")
-
-    return raw
+    """Uses robust security validation for audio uploads."""
+    content = await file.read()
+    try:
+        validate_file(
+            content=content,
+            filename=file.filename or "audio.wav",
+            allowed_extensions=list(_AUDIO_CONTENT_TYPES.keys())
+        )
+        return content
+    except FileValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/sugam-application")

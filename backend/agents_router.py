@@ -15,18 +15,34 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import anthropic
-from fastapi import APIRouter, File, Header, HTTPException, UploadFile
-from pydantic import BaseModel, Field
-
-from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET
-from app.services.case_store import search_similar_cases, store_case
-from app.services.rule_based_pii import detect_pii, get_pii_summary, format_for_response
-from app.services.file_cleanup import sanitize_filename, temp_file_context
 from app.services.pii_mapping_store import pii_mapping_store, PIIMappingStore
+from app.services.file_cleanup import sanitize_filename, temp_file_context, validate_file, FileValidationError
+from app.services.input_sanitizer import sanitize_input
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile, Request
+
+import re
+
+# Patterns that must never appear in logs
+_SENSITIVE_PATTERNS = [
+    (re.compile(r'sk-ant-api[A-Za-z0-9\-_]+'), 'sk-ant-***REDACTED***'),
+    (re.compile(r'sk_[A-Za-z0-9_]+'), 'sk_***REDACTED***'),
+    (re.compile(r'Bearer [A-Za-z0-9\-_\.]+'), 'Bearer ***REDACTED***'),
+    (re.compile(r'"api[_-]?key"\s*:\s*"[^"]*"', re.IGNORECASE), '"api_key": "***REDACTED***"'),
+    (re.compile(r'x-anthropic-api-key:\s*\S+', re.IGNORECASE), 'x-anthropic-api-key: ***REDACTED***'),
+]
+
+def scrub_sensitive(text: str) -> str:
+    """Remove sensitive values from text before logging."""
+    for pattern, replacement in _SENSITIVE_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 # ─────────────────────────────────────────────────────────
 # Demo quota store — token → {remaining, name, email, org}
@@ -191,11 +207,21 @@ def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
 
 
 @router.post("/extract-text")
-async def extract_text_from_file(file: UploadFile = File(...)):
+@limiter.limit("10/minute")
+async def extract_text_from_file(request: Request, file: UploadFile = File(...)):
     """Extract text from PDF or DOCX file for use in any agent module."""
     try:
-        filename_safe = sanitize_filename(file.filename or "upload")
         content = await file.read()
+        try:
+            file_info = validate_file(
+                content=content,
+                filename=file.filename or "upload",
+                allowed_extensions=['.pdf', '.docx']
+            )
+            filename_safe = file_info["safe_filename"]
+        except FileValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
         filename = filename_safe.lower()
         extracted_text = ""
         page_count: Optional[int] = None
@@ -276,17 +302,34 @@ def _attach_response_metadata(parsed: Any, model: str, has_rag_context: bool) ->
     if not isinstance(parsed, dict):
         return parsed
 
-    parsed["_metadata"] = {
-        "confidence_level": "HIGH" if has_rag_context else "MEDIUM",
-        "confidence_reason": (
-            "Based on retrieved official regulatory documents"
-            if has_rag_context
-            else "Based on Claude's training knowledge of regulations"
-        ),
-        "reviewed_by": "AI - requires qualified RA professional review",
-        "generated_at": datetime.utcnow().isoformat(),
-        "model_used": model,
-    }
+    try:
+        try:
+            # Re-verify in case it was passed as a local variable name in some contexts
+            # but usually we rely on the has_rag_context boolean argument
+            has_context = bool(has_rag_context)
+        except NameError:
+            has_context = False
+
+        parsed["_metadata"] = {
+            "confidence_level": "HIGH" if has_context else "MEDIUM",
+            "confidence_reason": (
+                "Based on retrieved official regulatory documents"
+                if has_context
+                else "Based on Claude's training knowledge of regulations"
+            ),
+            "reviewed_by": "AI — requires qualified RA professional review",
+            "generated_at": datetime.utcnow().isoformat(),
+            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        }
+    except Exception as meta_err:
+        logger.warning(f"Could not set metadata: {meta_err}")
+        parsed["_metadata"] = {
+            "confidence_level": "MEDIUM",
+            "confidence_reason": "Based on Claude's training knowledge of regulations",
+            "reviewed_by": "AI — requires qualified RA professional review",
+            "generated_at": datetime.utcnow().isoformat(),
+            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        }
     return parsed
 
 
@@ -328,10 +371,9 @@ def call_claude(
         raw_text = response.content[0].text.strip()
         parsed = _attach_response_metadata(
             _parse_json_block(raw_text),
-            MODEL_SONNET,
-            bool(regulatory_context),
+            model,
+            has_rag_context
         )
-        parsed = _attach_response_metadata(parsed, model, has_rag_context)
         return AgentResponse(
             agent=agent_name,
             model=model,
@@ -896,7 +938,19 @@ async def anonymise_health():
 
 
 @router.post("/anonymise", response_model=AgentResponse, summary="Agent 01 - PII/PHI Anonymisation")
-async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+@limiter.limit("10/minute")
+async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+    # ── Input sanitization ────────────────────────────────────────────────
+    try:
+        sanitized_text, was_modified = sanitize_input(
+            body.document,
+            context="M1_ANONYMISE"
+        )
+        if was_modified:
+            logger.info("Input was sanitized before processing")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # ── Demo quota check ──────────────────────────────────────────────────
     _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
     _is_admin = _admin_key and x_anthropic_api_key == _admin_key
@@ -928,7 +982,12 @@ async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optiona
     except Exception as e:
         logger.warning(f"Rule-based PII scan failed silently: {e}")
 
-    structured_text = structure_prompt_input(request.document, "clinical_document", "M1_PII_ANONYMISER")
+    structured_text = structure_prompt_input(sanitized_text, "clinical_document", "M1_PII_ANONYMISER")
+    try:
+        has_rag_context = bool(regulatory_context)
+    except NameError:
+        has_rag_context = False
+
     response = call_claude(
         agent_name="PII_PHI_Anonymisation",
         model=MODEL_HAIKU,
@@ -936,7 +995,7 @@ async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optiona
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
-        has_rag_context=False,
+        has_rag_context=has_rag_context,
     )
 
     # Merge rule-based findings
@@ -991,7 +1050,19 @@ async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optiona
 
 
 @router.post("/summarise", response_model=AgentResponse, summary="Agent 02 - Document Summarisation")
-async def summarise_document(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+@limiter.limit("10/minute")
+async def summarise_document(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+    # ── Input sanitization ────────────────────────────────────────────────
+    try:
+        sanitized_text, was_modified = sanitize_input(
+            body.document,
+            context="M2_SUMMARISER"
+        )
+        if was_modified:
+            logger.info("Input was sanitized before processing")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # ── Demo quota check ──────────────────────────────────────────────────
     _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
     _is_admin = _admin_key and x_anthropic_api_key == _admin_key
@@ -1012,7 +1083,12 @@ async def summarise_document(request: AgentRequest, x_anthropic_api_key: Optiona
                 _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
         logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
     # ── End quota check ──────────────────────────────────────────────────
-    structured_text = structure_prompt_input(request.document, "regulatory_document", "M2_DOCUMENT_SUMMARISER")
+    structured_text = structure_prompt_input(sanitized_text, "regulatory_document", "M2_DOCUMENT_SUMMARISER")
+    try:
+        has_rag_context = bool(regulatory_context)
+    except NameError:
+        has_rag_context = False
+
     return call_claude(
         agent_name="Document_Summarisation",
         model=MODEL_HAIKU,
@@ -1020,12 +1096,24 @@ async def summarise_document(request: AgentRequest, x_anthropic_api_key: Optiona
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
-        has_rag_context=False,
+        has_rag_context=has_rag_context,
     )
 
 
 @router.post("/completeness", response_model=AgentResponse, summary="Agent 03 - Completeness Assessment")
-async def assess_completeness(request: CompletenessRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+@limiter.limit("10/minute")
+async def assess_completeness(request: Request, body: CompletenessRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+    # ── Input sanitization ────────────────────────────────────────────────
+    try:
+        sanitized_text, was_modified = sanitize_input(
+            body.document,
+            context="M3_COMPLETENESS"
+        )
+        if was_modified:
+            logger.info("Input was sanitized before processing")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # ── Demo quota check ──────────────────────────────────────────────────
     _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
     _is_admin = _admin_key and x_anthropic_api_key == _admin_key
@@ -1047,7 +1135,7 @@ async def assess_completeness(request: CompletenessRequest, x_anthropic_api_key:
         logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
     # ── End quota check ──────────────────────────────────────────────────
     # Select system prompt based on document type
-    if request.document_type == "SAE_REPORT":
+    if body.document_type == "SAE_REPORT":
         system_prompt = AGENT_03_SAE_SYSTEM_PROMPT
         agent_name = "SAE_Report_Completeness"
     else:
@@ -1055,7 +1143,7 @@ async def assess_completeness(request: CompletenessRequest, x_anthropic_api_key:
         agent_name = "Completeness_Assessment"
 
     # RAG retrieval — get relevant regulatory context
-    rag_query = f"completeness requirements {getattr(request, 'document_type', 'general')} CDSCO NDCTR Schedule Y ICH"
+    rag_query = f"completeness requirements {getattr(body, 'document_type', 'general')} CDSCO NDCTR Schedule Y ICH"
     regulatory_context = retrieve_regulatory_context(rag_query, n_results=5)
 
     # Inject into prompt
@@ -1072,8 +1160,13 @@ The following excerpts are retrieved from official regulatory documents. Use the
     else:
         rag_section = "\n[Note: Use your built-in knowledge of NDCTR 2019, Schedule Y, and ICH guidelines]\n"
 
-    structured_text = structure_prompt_input(request.document, "submission_document", "M3_COMPLETENESS_ASSESSOR")
-    prompt = f"Assess completeness of this document:{rag_section}\nDocument metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}"
+    structured_text = structure_prompt_input(sanitized_text, "submission_document", "M3_COMPLETENESS_ASSESSOR")
+    prompt = f"Assess completeness of this document:{rag_section}\nDocument metadata: {json.dumps(body.metadata)}\n\nDocument:\n{structured_text}"
+
+    try:
+        has_rag_context = bool(regulatory_context)
+    except NameError:
+        has_rag_context = False
 
     return call_claude(
         agent_name=agent_name,
@@ -1082,12 +1175,24 @@ The following excerpts are retrieved from official regulatory documents. Use the
         user_content=prompt,
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
-        has_rag_context=bool(regulatory_context),
+        has_rag_context=has_rag_context,
     )
 
 
 @router.post("/classify", response_model=AgentResponse, summary="Agent 04 - Case Classification")
-async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+@limiter.limit("10/minute")
+async def classify_case(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+    # ── Input sanitization ────────────────────────────────────────────────
+    try:
+        sanitized_text, was_modified = sanitize_input(
+            body.document,
+            context="M4_CLASSIFIER"
+        )
+        if was_modified:
+            logger.info("Input was sanitized before processing")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # ── Demo quota check ──────────────────────────────────────────────────
     _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
     _is_admin = _admin_key and x_anthropic_api_key == _admin_key
@@ -1111,19 +1216,24 @@ async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str
     # Run duplicate search
     duplicate_matches = []
     try:
-        duplicate_matches = search_similar_cases(request.document)
+        duplicate_matches = search_similar_cases(sanitized_text)
     except Exception as e:
         logger.warning(f"Duplicate search failed silently: {e}")
 
-    structured_text = structure_prompt_input(request.document, "sae_narrative", "M4_CASE_CLASSIFIER")
+    structured_text = structure_prompt_input(sanitized_text, "sae_narrative", "M4_CASE_CLASSIFIER")
+    try:
+        has_rag_context = bool(regulatory_context)
+    except NameError:
+        has_rag_context = False
+
     response = call_claude(
         agent_name="Case_Classification",
         model=MODEL_HAIKU,
         system_prompt=AGENT_04_SYSTEM_PROMPT,
-        user_content=f"Case metadata: {json.dumps(request.metadata)}\n\nCase narrative:\n{structured_text}",
+        user_content=f"Case metadata: {json.dumps(body.metadata)}\n\nCase narrative:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
-        has_rag_context=False,
+        has_rag_context=has_rag_context,
     )
 
     # Add duplicate info to result
@@ -1141,7 +1251,7 @@ async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str
         
         # Store the case for future duplicate detection
         try:
-            store_case(request.document, {
+            store_case(sanitized_text, {
                 "primary_category": parsed.get("primary_category", ""),
                 "study_drug": parsed.get("audit_log", {}).get("study_drug", ""),
                 "priority_score": parsed.get("priority_score", 0)
@@ -1153,7 +1263,9 @@ async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str
 
 
 @router.post("/ocr", summary="OCR — Extract text from scanned or handwritten documents")
+@limiter.limit("5/minute")
 async def extract_text_ocr(
+    request: Request,
     file: UploadFile = File(...),
     mode: str = "auto",  # auto | tesseract | vision
     x_anthropic_api_key: Optional[str] = Header(None)
@@ -1166,8 +1278,16 @@ async def extract_text_ocr(
     try:
         from app.services.ocr_service import extract_text_from_image_bytes
 
-        filename = sanitize_filename(file.filename or "upload")
         content = await file.read()
+        try:
+            file_info = validate_file(
+                content=content,
+                filename=file.filename or "upload",
+                allowed_extensions=['.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp']
+            )
+            filename = file_info["safe_filename"]
+        except FileValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         api_key = x_anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")
         force_vision = (mode == "vision")
@@ -1234,7 +1354,9 @@ async def ocr_health():
 
 
 @router.post("/transcribe", summary="Transcribe and summarise meeting audio")
+@limiter.limit("3/minute")
 async def transcribe_meeting(
+    request: Request,
     file: UploadFile = File(...),
     language_code: str = "unknown",
     x_anthropic_api_key: Optional[str] = Header(None),
@@ -1247,6 +1369,17 @@ async def transcribe_meeting(
     """
     try:
         from app.services.audio_service import transcribe_audio
+
+        content = await file.read()
+        try:
+            file_info = validate_file(
+                content=content,
+                filename=file.filename or "audio.mp3",
+                allowed_extensions=['.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.webm', '.wma', '.amr']
+            )
+            filename = file_info["safe_filename"]
+        except FileValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         # Validate API keys
         sarvam_key = x_sarvam_api_key or os.getenv("SARVAM_API_KEY", "")
@@ -1262,9 +1395,6 @@ async def transcribe_meeting(
                 status_code=401,
                 detail="Anthropic API key required — add it in Settings"
             )
-
-        filename = sanitize_filename(file.filename or "audio.mp3")
-        content = await file.read()
 
         logger.info(f"Transcribing audio: {filename}, size: {len(content)} bytes")
 
@@ -1321,10 +1451,10 @@ Summarise this pharmaceutical regulatory meeting transcript."""
             model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
             result=parsed,
             timestamp=datetime.utcnow().isoformat(),
-            token_usage=TokenUsage(
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens
-            )
+            token_usage={
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens
+            }
         )
 
     except HTTPException:
@@ -1369,7 +1499,19 @@ async def transcribe_health():
 
 
 @router.post("/inspection-report", response_model=AgentResponse, summary="Agent 05 - Inspection Report Generation")
-async def generate_inspection_report(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+@limiter.limit("10/minute")
+async def generate_inspection_report(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+    # ── Input sanitization ────────────────────────────────────────────────
+    try:
+        sanitized_text, was_modified = sanitize_input(
+            body.document,
+            context="M5_INSPECTION"
+        )
+        if was_modified:
+            logger.info("Input was sanitized before processing")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # ── Demo quota check ──────────────────────────────────────────────────
     _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
     _is_admin = _admin_key and x_anthropic_api_key == _admin_key
@@ -1390,20 +1532,37 @@ async def generate_inspection_report(request: AgentRequest, x_anthropic_api_key:
                 _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
         logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
     # ── End quota check ──────────────────────────────────────────────────
-    structured_text = structure_prompt_input(request.document, "inspection_observations", "M5_INSPECTION_REPORT")
+    structured_text = structure_prompt_input(sanitized_text, "inspection_observations", "M5_INSPECTION_REPORT")
+    try:
+        has_rag_context = bool(regulatory_context)
+    except NameError:
+        has_rag_context = False
+
     return call_claude(
         agent_name="Inspection_Report_Generation",
         model=MODEL_SONNET,
         system_prompt=AGENT_05_SYSTEM_PROMPT,
-        user_content=f"Inspection metadata: {json.dumps(request.metadata)}\n\nInspection findings:\n{structured_text}",
+        user_content=f"Inspection metadata: {json.dumps(body.metadata)}\n\nInspection findings:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
-        has_rag_context=False,
+        has_rag_context=has_rag_context,
     )
 
 
 @router.post("/qa", response_model=AgentResponse, summary="Agent 06 - Regulatory Q&A")
-async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+@limiter.limit("10/minute")
+async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+    # ── Input sanitization ────────────────────────────────────────────────
+    try:
+        sanitized_text, was_modified = sanitize_input(
+            body.question,
+            context="M6_QA"
+        )
+        if was_modified:
+            logger.info("Input was sanitized before processing")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # ── Demo quota check ──────────────────────────────────────────────────
     _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
     _is_admin = _admin_key and x_anthropic_api_key == _admin_key
@@ -1424,7 +1583,7 @@ async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] =
                 _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
         logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
     # ── End quota check ──────────────────────────────────────────────────
-    retrieved_context = request.retrieved_context
+    retrieved_context = body.retrieved_context
     sources_used = []
     if not retrieved_context or len(retrieved_context.strip()) < 50:
         try:
@@ -1433,26 +1592,15 @@ async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] =
             from chromadb.utils import embedding_functions
 
             chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
-            try:
-                from chromadb.config import Settings
-
-                client = chromadb.Client(
-                    Settings(
-                        chroma_db_impl="duckdb+parquet",
-                        persist_directory=chromadb_path,
-                        anonymized_telemetry=False,
-                    )
-                )
-            except ImportError:
-                client = chromadb.PersistentClient(
-                    path=chromadb_path,
-                    settings=chromadb.Settings(anonymized_telemetry=False),
-                )
+            client = chromadb.PersistentClient(
+                path=chromadb_path,
+                settings=chromadb.Settings(anonymized_telemetry=False),
+            )
             embedding_fn = embedding_functions.DefaultEmbeddingFunction()
             
             collection = client.get_collection(name="regulatory_documents", embedding_function=embedding_fn)
             results = collection.query(
-                query_texts=[request.question],
+                query_texts=[sanitized_text],
                 n_results=5
             )
             
@@ -1490,11 +1638,16 @@ Clearly state at the end that this answer is based on general regulatory knowled
     else:
         context_section = f"[CONTEXT]\n{retrieved_context}\n[/CONTEXT]"
 
-    structured_question = structure_prompt_input(request.question, "regulatory_query", "M6_REGULATORY_QA")
+    structured_question = structure_prompt_input(sanitized_text, "regulatory_query", "M6_REGULATORY_QA")
     user_content = (
         f"{context_section}\n\n"
-        f"QUESTION: {structured_question}\n\nAdditional metadata: {json.dumps(request.metadata)}"
+        f"QUESTION: {structured_question}\n\nAdditional metadata: {json.dumps(body.metadata)}"
     )
+    try:
+        has_rag_context = bool(retrieved_context and len(retrieved_context.strip()) >= 50)
+    except NameError:
+        has_rag_context = False
+
     response = call_claude(
         agent_name="Regulatory_QA_RAG",
         model=MODEL_HAIKU,
@@ -1502,7 +1655,7 @@ Clearly state at the end that this answer is based on general regulatory knowled
         user_content=user_content,
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
-        has_rag_context=bool(retrieved_context and len(retrieved_context.strip()) >= 50),
+        has_rag_context=has_rag_context,
     )
     # Inject source citations into the response result
     if sources_used and hasattr(response, 'result') and isinstance(response.result, dict):
@@ -1517,7 +1670,19 @@ Clearly state at the end that this answer is based on general regulatory knowled
 
 
 @router.post("/schedule-y", response_model=AgentResponse, summary="Agent 07 - Schedule Y / CDSCO Compliance")
-async def check_schedule_y(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+@limiter.limit("10/minute")
+async def check_schedule_y(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+    # ── Input sanitization ────────────────────────────────────────────────
+    try:
+        sanitized_text, was_modified = sanitize_input(
+            body.document,
+            context="M7_SCHEDULE_Y"
+        )
+        if was_modified:
+            logger.info("Input was sanitized before processing")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # ── Demo quota check ──────────────────────────────────────────────────
     _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
     _is_admin = _admin_key and x_anthropic_api_key == _admin_key
@@ -1555,8 +1720,13 @@ The following excerpts are retrieved directly from Schedule Y and NDCTR 2019. Us
     else:
         rag_section = "\n[Note: Use your built-in knowledge of Schedule Y and NDCTR 2019]\n"
 
-    structured_text = structure_prompt_input(request.document, "clinical_protocol", "M7_SCHEDULE_Y")
-    prompt = f"Perform Schedule Y compliance assessment:{rag_section}\nDocument metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}"
+    structured_text = structure_prompt_input(sanitized_text, "clinical_protocol", "M7_SCHEDULE_Y")
+    prompt = f"Perform Schedule Y compliance assessment:{rag_section}\nDocument metadata: {json.dumps(body.metadata)}\n\nDocument:\n{structured_text}"
+
+    try:
+        has_rag_context = bool(regulatory_context)
+    except NameError:
+        has_rag_context = False
 
     return call_claude(
         agent_name="Schedule_Y_Compliance",
@@ -1565,12 +1735,24 @@ The following excerpts are retrieved directly from Schedule Y and NDCTR 2019. Us
         user_content=prompt,
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
-        has_rag_context=bool(regulatory_context),
+        has_rag_context=has_rag_context,
     )
 
 
 @router.post("/ich-gcp", response_model=AgentResponse, summary="Agent 08 - ICH E6(R3) GCP Compliance")
-async def check_ich_gcp(request: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+@limiter.limit("10/minute")
+async def check_ich_gcp(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+    # ── Input sanitization ────────────────────────────────────────────────
+    try:
+        sanitized_text, was_modified = sanitize_input(
+            body.document,
+            context="M8_ICH_GCP"
+        )
+        if was_modified:
+            logger.info("Input was sanitized before processing")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     # ── Demo quota check ──────────────────────────────────────────────────
     _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
     _is_admin = _admin_key and x_anthropic_api_key == _admin_key
@@ -1608,8 +1790,13 @@ The following excerpts are retrieved directly from ICH E6(R3) final guidelines. 
     else:
         rag_section = "\n[Note: Use your built-in knowledge of ICH E6(R3) GCP guidelines]\n"
 
-    structured_text = structure_prompt_input(request.document, "gcp_document", "M8_ICH_GCP")
-    prompt = f"Perform ICH E6(R3) GCP compliance assessment:{rag_section}\nDocument metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}"
+    structured_text = structure_prompt_input(sanitized_text, "gcp_document", "M8_ICH_GCP")
+    prompt = f"Perform ICH E6(R3) GCP compliance assessment:{rag_section}\nDocument metadata: {json.dumps(body.metadata)}\n\nDocument:\n{structured_text}"
+
+    try:
+        has_rag_context = bool(regulatory_context)
+    except NameError:
+        has_rag_context = False
 
     return call_claude(
         agent_name="ICH_GCP_Compliance",
@@ -1618,7 +1805,7 @@ The following excerpts are retrieved directly from ICH E6(R3) final guidelines. 
         user_content=prompt,
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
-        has_rag_context=bool(regulatory_context),
+        has_rag_context=has_rag_context,
     )
 
 
@@ -1791,7 +1978,7 @@ async def compare_health():
 async def submit_feedback(request: FeedbackRequest):
     """Log user feedback on module outputs."""
     logger.info(
-        "FEEDBACK: module=%s type=%s comment=%s result_hash=%s",
+        scrub_sensitive("FEEDBACK: module=%s type=%s comment=%s result_hash=%s"),
         request.module,
         request.type,
         (request.comment or "")[:100],
