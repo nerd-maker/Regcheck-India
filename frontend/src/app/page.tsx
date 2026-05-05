@@ -192,10 +192,10 @@ export default function LandingPage() {
 
               <div className="mb-14 flex flex-wrap gap-4">
                 <Link
-                  href="/register"
+                  href="/app"
                   className="flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-4 text-sm font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-teal-700"
                 >
-                  Try Free Demo
+                  Launch App
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
@@ -338,10 +338,10 @@ export default function LandingPage() {
 
           <div className="fade-up mt-12 text-center">
             <Link
-              href="/register"
+              href="/app"
               className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-4 font-semibold text-white shadow-lg transition-colors hover:bg-teal-700"
             >
-              Access All 8 Agents Free
+              Launch App
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>

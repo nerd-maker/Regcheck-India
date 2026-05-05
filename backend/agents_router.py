@@ -13,13 +13,10 @@ import logging
 import os
 import re
 import uuid
-import hashlib
 import time
-import threading
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from threading import Lock
 from typing import Any, Optional, List
 from contextlib import asynccontextmanager
 
@@ -64,38 +61,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
-# ─────────────────────────────────────────────────────────
-# Demo quota store — token → {remaining, name, email, org}
-# In-memory for now — upgrade to Redis/PostgreSQL in Phase 2
-# ─────────────────────────────────────────────────────────
-
-_demo_store: dict[str, dict] = {}
-_demo_lock = Lock()
-DEMO_QUOTA = 5  # free requests per user
-ADMIN_DEMO_KEY = os.getenv("ADMIN_DEMO_KEY", "")
-
-
-def _generate_token(email: str, org: str) -> str:
-    """Generate deterministic token from email + org."""
-    raw = f"{email.lower().strip()}{org.lower().strip()}"
-    return hashlib.sha256(raw.encode()).hexdigest()[:32]
-
-
-def _check_and_decrement_quota(demo_token: str) -> tuple[bool, int]:
-    """
-    Check if demo token has remaining quota and decrement.
-    Returns (allowed: bool, remaining: int)
-    """
-    with _demo_lock:
-        entry = _demo_store.get(demo_token)
-        if not entry:
-            return False, 0
-        remaining = entry["remaining"]
-        if remaining <= 0:
-            return False, 0
-        _demo_store[demo_token]["remaining"] = remaining - 1
-        return True, remaining - 1
-
 
 class AgentRequest(BaseModel):
     document: str = Field(..., description="Raw text of the regulatory document to process")
@@ -127,20 +92,6 @@ class FeedbackRequest(BaseModel):
     comment: Optional[str] = ""
     result_hash: Optional[str] = ""
     timestamp: Optional[str] = ""
-
-
-class DemoRegistrationRequest(BaseModel):
-    name: str
-    email: str
-    org: str
-    role: str  # RA Professional / CRO / Pharma Company / Consultant / Other
-
-
-class DemoQuotaResponse(BaseModel):
-    demo_token: str
-    requests_remaining: int
-    name: str
-    message: str
 
 
 def structure_prompt_input(text: str, document_type: str = "general", agent_id: str = "") -> str:
@@ -949,27 +900,6 @@ Return EXACTLY this JSON structure:
 """
 
 
-@router.post("/demo/reset-my-quota")
-async def reset_my_quota(
-    email: str,
-    org: str,
-    x_admin_key: Optional[str] = Header(None)
-):
-    """Admin endpoint to reset a user's demo quota for testing."""
-    admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    if not admin_key or x_admin_key != admin_key:
-        raise HTTPException(status_code=403, detail="Admin key required")
-
-    token = _generate_token(email, org)
-    with _demo_lock:
-        if token in _demo_store:
-            _demo_store[token]["remaining"] = 5
-            _demo_store[token]["total_used"] = 0
-            return {"status": "ok", "message": f"Quota reset to 5 for {email}"}
-
-    return {"status": "not_found", "message": "User not found — they may need to register first"}
-
-
 @router.get("/anonymise/health", summary="Agent 01 - Anonymise Health Check")
 async def anonymise_health():
     """Lightweight CORS smoke-test endpoint — no API key required, no LLM call."""
@@ -978,7 +908,7 @@ async def anonymise_health():
 
 @router.post("/anonymise", response_model=AgentResponse, summary="Agent 01 - PII/PHI Anonymisation")
 @limiter.limit("10/minute")
-async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(
@@ -990,26 +920,6 @@ async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_a
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # ── Demo quota check ──────────────────────────────────────────────────
-    _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    _is_admin = _admin_key and x_anthropic_api_key == _admin_key
-    if not _is_admin and x_demo_token:
-        _allowed, _remaining = _check_and_decrement_quota(x_demo_token)
-        if not _allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "DEMO_QUOTA_EXHAUSTED",
-                    "message": "You have used all 5 free demo requests.",
-                    "action": "Request full access at regcheckindia.com",
-                    "contact": "rushikeshbork000@gmail.com"
-                }
-            )
-        with _demo_lock:
-            if x_demo_token in _demo_store:
-                _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
-        logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
-    # ── End quota check ──────────────────────────────────────────────────
     # Run rule-based pre-scan
     rule_based_matches = []
     rule_based_summary = {}
@@ -1090,7 +1000,7 @@ async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_a
 
 @router.post("/summarise", response_model=AgentResponse, summary="Agent 02 - Document Summarisation")
 @limiter.limit("10/minute")
-async def summarise_document(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+async def summarise_document(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(
@@ -1102,26 +1012,6 @@ async def summarise_document(request: Request, body: AgentRequest, x_anthropic_a
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # ── Demo quota check ──────────────────────────────────────────────────
-    _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    _is_admin = _admin_key and x_anthropic_api_key == _admin_key
-    if not _is_admin and x_demo_token:
-        _allowed, _remaining = _check_and_decrement_quota(x_demo_token)
-        if not _allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "DEMO_QUOTA_EXHAUSTED",
-                    "message": "You have used all 5 free demo requests.",
-                    "action": "Request full access at regcheckindia.com",
-                    "contact": "rushikeshbork000@gmail.com"
-                }
-            )
-        with _demo_lock:
-            if x_demo_token in _demo_store:
-                _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
-        logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
-    # ── End quota check ──────────────────────────────────────────────────
     structured_text = structure_prompt_input(sanitized_text, "regulatory_document", "M2_DOCUMENT_SUMMARISER")
     try:
         has_rag_context = bool(regulatory_context)
@@ -1141,7 +1031,7 @@ async def summarise_document(request: Request, body: AgentRequest, x_anthropic_a
 
 @router.post("/completeness", response_model=AgentResponse, summary="Agent 03 - Completeness Assessment")
 @limiter.limit("10/minute")
-async def assess_completeness(request: Request, body: CompletenessRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+async def assess_completeness(request: Request, body: CompletenessRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(
@@ -1153,26 +1043,6 @@ async def assess_completeness(request: Request, body: CompletenessRequest, x_ant
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # ── Demo quota check ──────────────────────────────────────────────────
-    _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    _is_admin = _admin_key and x_anthropic_api_key == _admin_key
-    if not _is_admin and x_demo_token:
-        _allowed, _remaining = _check_and_decrement_quota(x_demo_token)
-        if not _allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "DEMO_QUOTA_EXHAUSTED",
-                    "message": "You have used all 5 free demo requests.",
-                    "action": "Request full access at regcheckindia.com",
-                    "contact": "rushikeshbork000@gmail.com"
-                }
-            )
-        with _demo_lock:
-            if x_demo_token in _demo_store:
-                _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
-        logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
-    # ── End quota check ──────────────────────────────────────────────────
     # Select system prompt based on document type
     if body.document_type == "SAE_REPORT":
         system_prompt = AGENT_03_SAE_SYSTEM_PROMPT
@@ -1220,7 +1090,7 @@ The following excerpts are retrieved from official regulatory documents. Use the
 
 @router.post("/classify", response_model=AgentResponse, summary="Agent 04 - Case Classification")
 @limiter.limit("10/minute")
-async def classify_case(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+async def classify_case(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(
@@ -1232,26 +1102,6 @@ async def classify_case(request: Request, body: AgentRequest, x_anthropic_api_ke
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # ── Demo quota check ──────────────────────────────────────────────────
-    _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    _is_admin = _admin_key and x_anthropic_api_key == _admin_key
-    if not _is_admin and x_demo_token:
-        _allowed, _remaining = _check_and_decrement_quota(x_demo_token)
-        if not _allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "DEMO_QUOTA_EXHAUSTED",
-                    "message": "You have used all 5 free demo requests.",
-                    "action": "Request full access at regcheckindia.com",
-                    "contact": "rushikeshbork000@gmail.com"
-                }
-            )
-        with _demo_lock:
-            if x_demo_token in _demo_store:
-                _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
-        logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
-    # ── End quota check ──────────────────────────────────────────────────
     # Run duplicate search
     duplicate_matches = []
     try:
@@ -1535,7 +1385,7 @@ async def transcribe_health():
 
 @router.post("/inspection-report", response_model=AgentResponse, summary="Agent 05 - Inspection Report Generation")
 @limiter.limit("10/minute")
-async def generate_inspection_report(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+async def generate_inspection_report(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(
@@ -1547,26 +1397,6 @@ async def generate_inspection_report(request: Request, body: AgentRequest, x_ant
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # ── Demo quota check ──────────────────────────────────────────────────
-    _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    _is_admin = _admin_key and x_anthropic_api_key == _admin_key
-    if not _is_admin and x_demo_token:
-        _allowed, _remaining = _check_and_decrement_quota(x_demo_token)
-        if not _allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "DEMO_QUOTA_EXHAUSTED",
-                    "message": "You have used all 5 free demo requests.",
-                    "action": "Request full access at regcheckindia.com",
-                    "contact": "rushikeshbork000@gmail.com"
-                }
-            )
-        with _demo_lock:
-            if x_demo_token in _demo_store:
-                _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
-        logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
-    # ── End quota check ──────────────────────────────────────────────────
     structured_text = structure_prompt_input(sanitized_text, "inspection_observations", "M5_INSPECTION_REPORT")
     try:
         has_rag_context = bool(regulatory_context)
@@ -1586,7 +1416,7 @@ async def generate_inspection_report(request: Request, body: AgentRequest, x_ant
 
 @router.post("/qa", response_model=AgentResponse, summary="Agent 06 - Regulatory Q&A")
 @limiter.limit("10/minute")
-async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: Optional[str] = Header(None)):
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(
@@ -1598,26 +1428,6 @@ async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # ── Demo quota check ──────────────────────────────────────────────────
-    _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    _is_admin = _admin_key and x_anthropic_api_key == _admin_key
-    if not _is_admin and x_demo_token:
-        _allowed, _remaining = _check_and_decrement_quota(x_demo_token)
-        if not _allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "DEMO_QUOTA_EXHAUSTED",
-                    "message": "You have used all 5 free demo requests.",
-                    "action": "Request full access at regcheckindia.com",
-                    "contact": "rushikeshbork000@gmail.com"
-                }
-            )
-        with _demo_lock:
-            if x_demo_token in _demo_store:
-                _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
-        logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
-    # ── End quota check ──────────────────────────────────────────────────
     retrieved_context = body.retrieved_context
     sources_used = []
     if not retrieved_context or len(retrieved_context.strip()) < 50:
@@ -1703,7 +1513,7 @@ Clearly state at the end that this answer is based on general regulatory knowled
 
 @router.post("/schedule-y", response_model=AgentResponse, summary="Agent 07 - Schedule Y / CDSCO Compliance")
 @limiter.limit("10/minute")
-async def check_schedule_y(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+async def check_schedule_y(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(
@@ -1715,26 +1525,6 @@ async def check_schedule_y(request: Request, body: AgentRequest, x_anthropic_api
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # ── Demo quota check ──────────────────────────────────────────────────
-    _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    _is_admin = _admin_key and x_anthropic_api_key == _admin_key
-    if not _is_admin and x_demo_token:
-        _allowed, _remaining = _check_and_decrement_quota(x_demo_token)
-        if not _allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "DEMO_QUOTA_EXHAUSTED",
-                    "message": "You have used all 5 free demo requests.",
-                    "action": "Request full access at regcheckindia.com",
-                    "contact": "rushikeshbork000@gmail.com"
-                }
-            )
-        with _demo_lock:
-            if x_demo_token in _demo_store:
-                _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
-        logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
-    # ── End quota check ──────────────────────────────────────────────────
     # RAG retrieval — specifically query Schedule Y and NDCTR 2019
     rag_query = "Schedule Y requirements clinical trial NDCTR 2019 CDSCO compliance checklist appendix"
     regulatory_context = retrieve_regulatory_context(rag_query, n_results=6)
@@ -1773,7 +1563,7 @@ The following excerpts are retrieved directly from Schedule Y and NDCTR 2019. Us
 
 @router.post("/ich-gcp", response_model=AgentResponse, summary="Agent 08 - ICH E6(R3) GCP Compliance")
 @limiter.limit("10/minute")
-async def check_ich_gcp(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None), x_demo_token: Optional[str] = Header(None)):
+async def check_ich_gcp(request: Request, body: AgentRequest, x_anthropic_api_key: Optional[str] = Header(None)):
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(
@@ -1785,26 +1575,6 @@ async def check_ich_gcp(request: Request, body: AgentRequest, x_anthropic_api_ke
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # ── Demo quota check ──────────────────────────────────────────────────
-    _admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    _is_admin = _admin_key and x_anthropic_api_key == _admin_key
-    if not _is_admin and x_demo_token:
-        _allowed, _remaining = _check_and_decrement_quota(x_demo_token)
-        if not _allowed:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "DEMO_QUOTA_EXHAUSTED",
-                    "message": "You have used all 5 free demo requests.",
-                    "action": "Request full access at regcheckindia.com",
-                    "contact": "rushikeshbork000@gmail.com"
-                }
-            )
-        with _demo_lock:
-            if x_demo_token in _demo_store:
-                _demo_store[x_demo_token]["total_used"] = _demo_store[x_demo_token].get("total_used", 0) + 1
-        logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
-    # ── End quota check ──────────────────────────────────────────────────
     # RAG retrieval — specifically query ICH E6(R3)
     rag_query = "ICH E6 R3 GCP good clinical practice quality management risk based monitoring"
     regulatory_context = retrieve_regulatory_context(rag_query, n_results=6)
@@ -2064,96 +1834,7 @@ async def case_store_health():
         return {"status": "error", "detail": str(e)}
 
 
-@router.post("/demo/register", summary="Register for demo access")
-async def register_demo_user(request: DemoRegistrationRequest):
-    """
-    Register for demo access.
-    Returns demo token with 5-request quota.
-    Logs lead information for follow-up.
-    """
-    # Validate inputs
-    if not request.email or "@" not in request.email:
-        raise HTTPException(status_code=400, detail="Valid email required")
-    if not request.name or not request.org:
-        raise HTTPException(status_code=400, detail="Name and organisation required")
 
-    token = _generate_token(request.email, request.org)
-
-    with _demo_lock:
-        if token not in _demo_store:
-            # New registration
-            _demo_store[token] = {
-                "name": request.name,
-                "email": request.email,
-                "org": request.org,
-                "role": request.role,
-                "remaining": DEMO_QUOTA,
-                "registered_at": datetime.utcnow().isoformat(),
-                "total_used": 0
-            }
-            logger.info(
-                f"NEW DEMO REGISTRATION: {request.name} | "
-                f"{request.email} | {request.org} | {request.role}"
-            )
-            message = f"Welcome {request.name}! You have {DEMO_QUOTA} free requests."
-        else:
-            # Returning user
-            remaining = _demo_store[token]["remaining"]
-            logger.info(f"RETURNING USER: {request.email} | remaining: {remaining}")
-            message = f"Welcome back {request.name}! You have {remaining} requests remaining."
-
-    entry = _demo_store[token]
-    return {
-        "demo_token": token,
-        "requests_remaining": entry["remaining"],
-        "name": entry["name"],
-        "message": message
-    }
-
-
-@router.get("/demo/quota/{token}", summary="Check demo quota")
-async def check_demo_quota(token: str):
-    """Check remaining requests for a demo token."""
-    with _demo_lock:
-        entry = _demo_store.get(token)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Token not found. Please register first.")
-    return {
-        "requests_remaining": entry["remaining"],
-        "total_used": entry.get("total_used", 0),
-        "name": entry["name"],
-        "org": entry["org"]
-    }
-
-
-@router.get("/demo/leads", summary="Get all demo registrations (admin only)")
-async def get_demo_leads(x_admin_key: Optional[str] = Header(None)):
-    """
-    Return all demo registrations for lead tracking.
-    Requires admin key.
-    """
-    admin_key = os.getenv("ADMIN_DEMO_KEY", "")
-    if not admin_key or x_admin_key != admin_key:
-        raise HTTPException(status_code=403, detail="Admin key required")
-
-    with _demo_lock:
-        leads = [
-            {
-                "name": v["name"],
-                "email": v["email"],
-                "org": v["org"],
-                "role": v["role"],
-                "registered_at": v["registered_at"],
-                "requests_used": DEMO_QUOTA - v["remaining"],
-                "requests_remaining": v["remaining"]
-            }
-            for v in _demo_store.values()
-        ]
-
-    return {
-        "total_registrations": len(leads),
-        "leads": sorted(leads, key=lambda x: x["registered_at"], reverse=True)
-    }
 
 
 @router.get("/health", summary="Agents Health Check")

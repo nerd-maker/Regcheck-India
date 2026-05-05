@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import AnonymisationTool from '@/components/AnonymisationTool';
 import ApiKeyModal from '@/components/ApiKeyModal';
 import CompletenessAssessor from '@/components/CompletenessAssessor';
@@ -212,49 +211,18 @@ const modules: ModuleCard[] = [
   },
 ];
 
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://regcheck-india.onrender.com';
 
 export default function AppWorkspace() {
-  const router = useRouter()
   const [activeModule, setActiveModule] = useState<Module>('anonymise');
   const [activeSidebar, setActiveSidebar] = useState('m1-anonymise');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
-  const [quotaChecked, setQuotaChecked] = useState(false);
-  const [requestsRemaining, setRequestsRemaining] = useState(5);
-  const [demoName, setDemoName] = useState('User');
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'waking'>('checking');
 
-  // Registration gate — redirect to /register if not registered
-  useEffect(() => {
-    const isRegistered = localStorage.getItem('demo_registered')
-    const demoToken = localStorage.getItem('demo_token')
-    if (!isRegistered || !demoToken) {
-      router.push('/register')
-      return
-    }
-    const remaining = parseInt(localStorage.getItem('demo_requests_remaining') || '5')
-    const name = localStorage.getItem('demo_name') || 'User'
-    setRequestsRemaining(remaining)
-    setDemoName(name)
-    setQuotaChecked(true)
-  }, [router])
 
-  // Re-sync quota counter when localStorage changes (e.g. after quota exhausted)
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const remaining = parseInt(localStorage.getItem('demo_requests_remaining') || '5')
-      setRequestsRemaining(remaining)
-    }
-    window.addEventListener('storage', handleStorageChange)
-    // Also poll every 2 seconds in case same-tab writes don't fire storage events
-    const interval = setInterval(handleStorageChange, 2000)
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      clearInterval(interval)
-    }
-  }, [])
 
   // On mount: check if a key is already stored
   useEffect(() => {
@@ -312,13 +280,7 @@ export default function AppWorkspace() {
     setSidebarOpen(false);
   };
 
-  if (!quotaChecked) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="text-teal-400 text-sm">Checking access...</div>
-      </div>
-    )
-  }
+
 
   return (
     <div className="app-shell">
@@ -404,51 +366,8 @@ export default function AppWorkspace() {
           })}
         </nav>
 
-        {/* Bottom section — API key status + settings + quota */}
+        {/* Bottom section — API key status + settings */}
         <div className="px-4 py-4 border-t border-white/10 space-y-3">
-          {/* Demo quota display */}
-          {requestsRemaining <= 0 ? (
-            <div className="mx-0 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
-              <div className="text-xs font-semibold text-red-400 mb-1">
-                Demo Quota Exhausted
-              </div>
-              <div className="text-xs text-slate-500 mb-2">
-                You have used all 5 free requests
-              </div>
-              <a
-                href="mailto:rushikeshbork000@gmail.com?subject=RegCheck-India Full Access Request"
-                className="block text-center text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 py-2 px-3 rounded-lg transition-colors"
-              >
-                Request Full Access →
-              </a>
-            </div>
-          ) : (
-            <div className="mx-0 p-3 rounded-xl bg-white/5 border border-white/10">
-              <div className="text-xs font-semibold text-gray-400 mb-1">
-                Demo Access — {demoName}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      requestsRemaining > 2 ? 'bg-teal-500' :
-                      requestsRemaining > 0 ? 'bg-amber-500' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${(requestsRemaining / 5) * 100}%` }}
-                  />
-                </div>
-                <span className={`text-xs font-bold ${
-                  requestsRemaining > 2 ? 'text-teal-400' :
-                  requestsRemaining > 0 ? 'text-amber-400' : 'text-red-400'
-                }`}>
-                  {requestsRemaining}/5
-                </span>
-              </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {requestsRemaining} free request{requestsRemaining !== 1 ? 's' : ''} remaining
-              </div>
-            </div>
-          )}
 
           <div className="mx-0 flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2">
             <div
