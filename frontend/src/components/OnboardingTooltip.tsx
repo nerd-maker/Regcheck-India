@@ -6,7 +6,7 @@ const ONBOARDING_KEY = 'regcheck_onboarding_done';
 
 const STEPS = [
   {
-    title: "Welcome to RegCheck-India 👋",
+    title: "Welcome to RegCheck-India ",
     description: "India's first AI compliance platform for pharmaceutical regulatory submissions.",
     highlight: null
   },
@@ -31,7 +31,7 @@ const STEPS = [
     highlight: null
   },
   {
-    title: "You're ready! 🎉",
+    title: "You're ready! ",
     description: "All outputs include an AI disclaimer — always have a qualified RA professional review before regulatory submission.",
     highlight: null
   }

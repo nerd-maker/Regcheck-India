@@ -107,7 +107,7 @@ export default function DigestViewer() {
         <div className="space-y-6">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-bold mb-2">📰 Weekly Regulatory Digest</h2>
+                <h2 className="text-2xl font-bold mb-2"><svg className="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9.5a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg> Weekly Regulatory Digest</h2>
                 <p className="text-blue-100">Generate professional RA team digests</p>
             </div>
 

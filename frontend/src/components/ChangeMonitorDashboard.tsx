@@ -151,7 +151,7 @@ export default function ChangeMonitorDashboard() {
         <div className="space-y-6">
             {/* Header */}
             <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-bold mb-2">📊 Regulatory Intelligence Monitor</h2>
+                <h2 className="text-2xl font-bold mb-2"> Regulatory Intelligence Monitor</h2>
                 <p className="text-emerald-100">Track CDSCO/MOHFW regulatory changes and assess impact</p>
                 <div className="mt-2">
                     <ModelAttributionBadge attribution={modelAttribution} />

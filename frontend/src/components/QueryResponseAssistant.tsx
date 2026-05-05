@@ -466,7 +466,7 @@ export default function QueryResponseAssistant() {
                                     <ul className="space-y-2">
                                         {response.reviewer_flags.map((flag, i) => (
                                             <li key={i} className="flex items-start gap-3">
-                                                <span className="text-red-600">🚩</span>
+                                                <span className="text-red-600"></span>
                                                 <span className="text-red-800">{flag}</span>
                                             </li>
                                         ))}

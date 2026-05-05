@@ -247,7 +247,7 @@ export default function RegulatoryQA() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-slate-400 font-normal">{safeRender(result.query_type || 'General')}</span>
                 <span className={`status-chip text-sm normal-case font-medium ${statusColor(result.confidence)}`} style={{ padding: '4px 12px' }}>
-                  Confidence: {safeRender(result.confidence ?? 'â€”')}
+                  Confidence: {safeRender(result.confidence ?? '—')}
                 </span>
               </div>
             </h2>
@@ -286,7 +286,7 @@ export default function RegulatoryQA() {
               </div>
               {!result.answer_grounded_in_documents && (
                 <div className="mt-2 text-xs text-amber-400 flex items-center gap-1.5">
-                  <span>âš </span> Answer based on Claude training knowledge â€” not retrieved from documents
+                  <span>⚠</span> Answer based on Claude training knowledge — not retrieved from documents
                 </div>
               )}
             </div>

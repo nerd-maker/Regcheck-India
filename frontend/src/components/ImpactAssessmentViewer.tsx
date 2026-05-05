@@ -132,7 +132,7 @@ export default function ImpactAssessmentViewer() {
         <div className="space-y-6">
             {/* Header */}
             <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 rounded-lg shadow-lg">
-                <h2 className="text-2xl font-bold mb-2">🎯 Impact Assessment Viewer</h2>
+                <h2 className="text-2xl font-bold mb-2"> Impact Assessment Viewer</h2>
                 <p className="text-purple-100">Assess regulatory change impact on active submissions</p>
             </div>
 
@@ -214,7 +214,7 @@ export default function ImpactAssessmentViewer() {
                             )}
                             {assessment.human_review_required && (
                                 <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                                    👤 Human Review Required
+                                    <svg className="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> Human Review Required
                                 </span>
                             )}
                         </div>
@@ -235,7 +235,7 @@ export default function ImpactAssessmentViewer() {
                     {/* Alert */}
                     <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
                         <div className="flex items-start">
-                            <span className="text-2xl mr-3">⚠️</span>
+                            <span className="text-2xl mr-3"><svg className="w-5 h-5 inline-block mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></span>
                             <div>
                                 <h4 className="font-semibold text-yellow-800 mb-1">Regulatory Alert</h4>
                                 <p className="text-yellow-700">{assessment.alert_text}</p>
