@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 import shutil
+import time as time_module
 from uuid import uuid4
 import json
 import logging
@@ -14,9 +15,12 @@ import traceback
 import os
 
 import httpx
+import sentry_sdk
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 
 from app.core.config import settings
 from app.models.schemas import (
@@ -42,6 +46,35 @@ from app.core.datetime_utils import utc_now
 from agents_router import router as agents_router
 
 logger = logging.getLogger(__name__)
+_APP_START_TIME = time_module.time()
+
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            FastApiIntegration(transaction_style="endpoint"),
+            StarletteIntegration(transaction_style="endpoint"),
+        ],
+        traces_sample_rate=0.1,
+        environment=os.getenv("ENVIRONMENT", "development"),
+        release="regcheck-india@3.0.0",
+        before_send=lambda event, hint: (
+            {
+                **event,
+                "extra": {
+                    key: "[REDACTED]" if any(secret in key.lower() for secret in ["key", "token", "password", "secret"])
+                    else value
+                    for key, value in event.get("extra", {}).items()
+                },
+            }
+            if event
+            else event
+        ),
+    )
+    logger.info("Sentry error tracking initialized")
+else:
+    logger.info("Sentry DSN not configured - error tracking disabled")
 
 
 def with_model_attribution(payload: dict, primary_model: str = "claude-sonnet-4-20250514", validator_model: str = None, ner_model: str = None):
@@ -207,6 +240,90 @@ async def health_check_endpoint():
         "app_name": settings.app_name,
         "version": settings.app_version,
         "environment": settings.environment,
+    }
+
+
+def _check_tesseract() -> str:
+    try:
+        import pytesseract
+        pytesseract.get_tesseract_version()
+        return "available"
+    except Exception:
+        return "not_available"
+
+
+@app.get("/health/detailed")
+async def detailed_health():
+    """Detailed health check for monitoring dashboards and debugging."""
+    import chromadb
+
+    chromadb_status = "ok"
+    chromadb_chunks = 0
+
+    try:
+        chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
+        try:
+            from chromadb.config import Settings
+
+            client = chromadb.Client(
+                Settings(
+                    chroma_db_impl="duckdb+parquet",
+                    persist_directory=chromadb_path,
+                    anonymized_telemetry=False,
+                )
+            )
+        except ImportError:
+            client = chromadb.PersistentClient(
+                path=chromadb_path,
+                settings=chromadb.Settings(anonymized_telemetry=False),
+            )
+
+        try:
+            collection = client.get_collection("regulatory_documents")
+            chromadb_chunks = collection.count()
+        except Exception:
+            chromadb_status = "collection_not_found"
+    except Exception as exc:
+        chromadb_status = f"error: {str(exc)[:50]}"
+
+    anthropic_status = "configured" if os.getenv("ANTHROPIC_API_KEY") else "no_key"
+    sarvam_status = "configured" if os.getenv("SARVAM_API_KEY") else "no_key"
+
+    demo_stats = {}
+    try:
+        from app.services.pii_mapping_store import pii_mapping_store
+        demo_stats = pii_mapping_store.get_store_stats()
+    except Exception:
+        pass
+
+    uptime_seconds = int(time_module.time() - _APP_START_TIME)
+    uptime_str = f"{uptime_seconds // 3600}h {(uptime_seconds % 3600) // 60}m {uptime_seconds % 60}s"
+
+    return {
+        "status": "ok",
+        "version": "3.0.0",
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "uptime": uptime_str,
+        "uptime_seconds": uptime_seconds,
+        "modules": {
+            "m1_pii_anonymiser": "operational",
+            "m2_document_summariser": "operational",
+            "m3_completeness_assessor": "operational",
+            "m4_case_classifier": "operational",
+            "m5_inspection_report": "operational",
+            "m6_regulatory_qa": "operational",
+            "m7_schedule_y": "operational",
+            "m8_ich_gcp": "operational",
+        },
+        "dependencies": {
+            "anthropic_api": anthropic_status,
+            "chromadb": chromadb_status,
+            "chromadb_chunks": chromadb_chunks,
+            "sarvam_api": sarvam_status,
+            "tesseract_ocr": _check_tesseract(),
+        },
+        "demo_store": demo_stats,
+        "timestamp": utc_now().isoformat(),
     }
 
 

@@ -87,6 +87,14 @@ class DeAnonymiseRequest(BaseModel):
     session_id: str = Field(..., description="Session ID returned by the anonymise endpoint")
 
 
+class FeedbackRequest(BaseModel):
+    module: str
+    type: str
+    comment: Optional[str] = ""
+    result_hash: Optional[str] = ""
+    timestamp: Optional[str] = ""
+
+
 class DemoRegistrationRequest(BaseModel):
     name: str
     email: str
@@ -264,6 +272,24 @@ def _parse_json_block(raw_text: str) -> Any:
         )
 
 
+def _attach_response_metadata(parsed: Any, model: str, has_rag_context: bool) -> Any:
+    if not isinstance(parsed, dict):
+        return parsed
+
+    parsed["_metadata"] = {
+        "confidence_level": "HIGH" if has_rag_context else "MEDIUM",
+        "confidence_reason": (
+            "Based on retrieved official regulatory documents"
+            if has_rag_context
+            else "Based on Claude's training knowledge of regulations"
+        ),
+        "reviewed_by": "AI - requires qualified RA professional review",
+        "generated_at": datetime.utcnow().isoformat(),
+        "model_used": model,
+    }
+    return parsed
+
+
 def call_claude(
     agent_name: str,
     model: str,
@@ -271,6 +297,7 @@ def call_claude(
     user_content: str,
     api_key: str,
     max_tokens: int = 4096,
+    has_rag_context: bool = False,
 ) -> AgentResponse:
     """Shared Anthropic caller for the v1 agents router.
 
@@ -299,7 +326,12 @@ def call_claude(
             messages=[{"role": "user", "content": user_content}],
         )
         raw_text = response.content[0].text.strip()
-        parsed = _parse_json_block(raw_text)
+        parsed = _attach_response_metadata(
+            _parse_json_block(raw_text),
+            MODEL_SONNET,
+            bool(regulatory_context),
+        )
+        parsed = _attach_response_metadata(parsed, model, has_rag_context)
         return AgentResponse(
             agent=agent_name,
             model=model,
@@ -904,6 +936,7 @@ async def anonymise_document(request: AgentRequest, x_anthropic_api_key: Optiona
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
+        has_rag_context=False,
     )
 
     # Merge rule-based findings
@@ -987,6 +1020,7 @@ async def summarise_document(request: AgentRequest, x_anthropic_api_key: Optiona
         user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
+        has_rag_context=False,
     )
 
 
@@ -1048,6 +1082,7 @@ The following excerpts are retrieved from official regulatory documents. Use the
         user_content=prompt,
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
+        has_rag_context=bool(regulatory_context),
     )
 
 
@@ -1088,6 +1123,7 @@ async def classify_case(request: AgentRequest, x_anthropic_api_key: Optional[str
         user_content=f"Case metadata: {json.dumps(request.metadata)}\n\nCase narrative:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
+        has_rag_context=False,
     )
 
     # Add duplicate info to result
@@ -1362,6 +1398,7 @@ async def generate_inspection_report(request: AgentRequest, x_anthropic_api_key:
         user_content=f"Inspection metadata: {json.dumps(request.metadata)}\n\nInspection findings:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
+        has_rag_context=False,
     )
 
 
@@ -1388,6 +1425,7 @@ async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] =
         logger.info(f"Demo request: token={x_demo_token[:8]}*** remaining={_remaining}")
     # ── End quota check ──────────────────────────────────────────────────
     retrieved_context = request.retrieved_context
+    sources_used = []
     if not retrieved_context or len(retrieved_context.strip()) < 50:
         try:
             import os
@@ -1420,6 +1458,20 @@ async def regulatory_qa(request: QARequest, x_anthropic_api_key: Optional[str] =
             
             if results and results["documents"] and results["documents"][0]:
                 retrieved_context = "\n\n".join(results["documents"][0])
+                # Capture source metadata for frontend citation display
+                for i, doc in enumerate(results["documents"][0]):
+                    metadata = results["metadatas"][0][i] if results.get("metadatas") else {}
+                    distance = results["distances"][0][i] if results.get("distances") else 1.0
+                    similarity = round((1 - distance) * 100, 1)
+                    sources_used.append({
+                        "title": metadata.get("title", "Regulatory Document"),
+                        "short_name": metadata.get("short_name", ""),
+                        "authority": metadata.get("authority", ""),
+                        "category": metadata.get("category", ""),
+                        "chunk_index": metadata.get("chunk_index", 0),
+                        "relevance_score": similarity,
+                        "snippet": doc[:200] + "..." if len(doc) > 200 else doc
+                    })
         except Exception as e:
             logger.warning(f"ChromaDB retrieval failed: {e}")
 
@@ -1443,14 +1495,25 @@ Clearly state at the end that this answer is based on general regulatory knowled
         f"{context_section}\n\n"
         f"QUESTION: {structured_question}\n\nAdditional metadata: {json.dumps(request.metadata)}"
     )
-    return call_claude(
+    response = call_claude(
         agent_name="Regulatory_QA_RAG",
         model=MODEL_HAIKU,
         system_prompt=AGENT_06_SYSTEM_PROMPT,
         user_content=user_content,
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
+        has_rag_context=bool(retrieved_context and len(retrieved_context.strip()) >= 50),
     )
+    # Inject source citations into the response result
+    if sources_used and hasattr(response, 'result') and isinstance(response.result, dict):
+        response.result["retrieved_sources"] = sources_used
+        response.result["answer_grounded_in_documents"] = True
+        response.result["source_count"] = len(sources_used)
+    elif hasattr(response, 'result') and isinstance(response.result, dict):
+        response.result["retrieved_sources"] = []
+        response.result["answer_grounded_in_documents"] = False
+        response.result["source_count"] = 0
+    return response
 
 
 @router.post("/schedule-y", response_model=AgentResponse, summary="Agent 07 - Schedule Y / CDSCO Compliance")
@@ -1502,6 +1565,7 @@ The following excerpts are retrieved directly from Schedule Y and NDCTR 2019. Us
         user_content=prompt,
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
+        has_rag_context=bool(regulatory_context),
     )
 
 
@@ -1554,6 +1618,7 @@ The following excerpts are retrieved directly from ICH E6(R3) final guidelines. 
         user_content=prompt,
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
+        has_rag_context=bool(regulatory_context),
     )
 
 
@@ -1720,6 +1785,29 @@ Return EXACTLY this JSON structure:
 @router.get("/compare/health")
 async def compare_health():
     return {"status": "ok", "agent": "Document_Version_Comparison", "endpoint": "/api/v1/agents/compare"}
+
+
+@router.post("/feedback", summary="Submit output feedback")
+async def submit_feedback(request: FeedbackRequest):
+    """Log user feedback on module outputs."""
+    logger.info(
+        "FEEDBACK: module=%s type=%s comment=%s result_hash=%s",
+        request.module,
+        request.type,
+        (request.comment or "")[:100],
+        request.result_hash or "",
+    )
+    return {"status": "ok", "message": "Feedback recorded"}
+
+
+@router.get("/ping", summary="Keep-alive ping for uptime monitors")
+async def ping():
+    """Lightweight endpoint for uptime monitoring."""
+    return {
+        "status": "alive",
+        "timestamp": datetime.utcnow().isoformat(),
+        "service": "RegCheck-India API",
+    }
 
 
 @router.post("/deanonymise", summary="M1 — Reverse pseudonymisation using stored encrypted mapping")

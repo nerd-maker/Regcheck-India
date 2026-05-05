@@ -8,7 +8,9 @@ import FeedbackWidget from '@/components/FeedbackWidget';
 import AIDisclaimer from '@/components/AIDisclaimer';
 import HistoryPanel from '@/components/HistoryPanel';
 import { saveToHistory, HistoryEntry } from '@/services/history';
+import { useServerStatus } from '@/hooks/useServerStatus';
 import { runDocumentSummariser, extractTextFromFileOCR, transcribeMeetingAudio } from '@/services/api';
+import { moduleTransferStore } from '@/store/moduleTransfer';
 
 const MODULE_ID = 'm2-summarise';
 const MODULE_NAME = 'Document Summariser';
@@ -88,6 +90,7 @@ export default function DocumentSummariser() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [languageCode, setLanguageCode] = useState<string>('unknown');
   const [transcriptionMetadata, setTranscriptionMetadata] = useState<any>(null);
+  const { status } = useServerStatus();
   const [elapsed, setElapsed] = useState(0);
 
   const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
@@ -97,6 +100,21 @@ export default function DocumentSummariser() {
     const t = setInterval(() => setElapsed(e => e + 1), 1000);
     return () => clearInterval(t);
   }, [loading]);
+
+  useEffect(() => {
+    // Check for piped content from another module
+    const transfer = moduleTransferStore.receive(MODULE_ID);
+    if (transfer) {
+      setText(transfer.content);
+      setError(null);
+    }
+
+    // Subscribe to live transfers
+    const unsub = moduleTransferStore.subscribe(MODULE_ID, (payload) => {
+      setText(payload.content);
+    });
+    return () => { unsub(); };
+  }, []);
 
   const resultHash = useMemo(() => {
     if (!result) return '';
@@ -161,6 +179,8 @@ export default function DocumentSummariser() {
             Move from long-form narratives to concise reviewer packets with deterministic output shapes.
           </p>
           <div className="mt-3">
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${status === 'online' ? 'bg-green-500/20 text-green-400' : status === 'slow' ? 'bg-amber-500/20 text-amber-400' : status === 'offline' ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}`}><span className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-400' : status === 'slow' ? 'bg-amber-400 animate-pulse' : status === 'offline' ? 'bg-red-400' : 'bg-slate-400 animate-pulse'}`}/>{status === 'online' && 'Ready'}{status === 'slow' && 'Waking up...'}{status === 'offline' && 'Offline'}{status === 'checking' && 'Connecting...'}</span>
+            {status === 'slow' && <span className="text-xs text-amber-400/70">First request may take 30-60s</span>}
             <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
           </div>
         </div>
@@ -194,9 +214,9 @@ export default function DocumentSummariser() {
               </label>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { value: 'text', label: '✏️ Type / Paste Text' },
+                  { value: 'text', label: 'âœï¸ Type / Paste Text' },
                   { value: 'scan', label: '📄 Scanned Document (OCR)' },
-                  { value: 'handwritten', label: '✍️ Handwritten Notes (AI Vision)' },
+                  { value: 'handwritten', label: 'âœï¸ Handwritten Notes (AI Vision)' },
                 ].map((mode) => (
                   <button
                     key={mode.value}
@@ -317,7 +337,20 @@ export default function DocumentSummariser() {
               onChange={(e) => { setText(e.target.value); setError(null); }}
               placeholder="Paste filing text, SAE details, or meeting notes here."
             />
-            {text && <div className="flex justify-between items-center mt-1.5"><span className="text-xs text-slate-500">{wordCount} words</span>{wordCount > 6000 && <span className="text-xs text-amber-400">⚠ Large document</span>}</div>}
+            {text && (
+            <div className="flex items-center justify-between mt-1.5 px-1">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-medium ${wordCount === 0 ? 'text-slate-500' : wordCount < 20 ? 'text-red-400' : wordCount < 50 ? 'text-amber-400' : wordCount <= 3000 ? 'text-green-400' : wordCount <= 6000 ? 'text-amber-400' : 'text-red-400'}`}>{wordCount} words</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${wordCount === 0 ? 'hidden' : wordCount < 20 ? 'bg-red-500/10 text-red-400' : wordCount < 50 ? 'bg-amber-500/10 text-amber-400' : wordCount <= 3000 ? 'bg-green-500/10 text-green-400' : wordCount <= 6000 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>{wordCount < 20 ? 'Too short' : wordCount < 50 ? 'Add more context' : wordCount <= 3000 ? 'Optimal' : wordCount <= 6000 ? 'Long — may be slow' : 'Too long — will be truncated'}</span>
+              </div>
+              {wordCount >= 50 && <span className="text-xs text-slate-500">~{wordCount <= 1000 ? '15-30' : wordCount <= 3000 ? '30-60' : wordCount <= 6000 ? '60-90' : '90+'} seconds</span>}
+            </div>
+            )}
+            {wordCount > 0 && (
+            <div className="mt-1 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all duration-300 ${wordCount < 50 ? 'bg-red-500' : wordCount <= 3000 ? 'bg-green-500' : wordCount <= 6000 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((wordCount / 6000) * 100, 100)}%` }} />
+            </div>
+            )}
 
             <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-slate-400">{tabMeta[tab].note}</div>
@@ -654,16 +687,21 @@ export default function DocumentSummariser() {
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                 <span className="font-semibold uppercase tracking-wider">Audit Log:</span>
                 <span>{safeRender(result.audit_log.timestamp)}</span>
-                <span>•</span>
+                <span>â€¢</span>
                 <span>{transcriptionMetadata ? `${result.audit_log.transcript_word_count} words` : `${result.audit_log.document_pages} pages`} processed</span>
-                {result.audit_log.processing_time && (<><span>•</span><span>Time: {safeRender(result.audit_log.processing_time)}</span></>)}
-                <span>•</span>
+                {result.audit_log.processing_time && (<><span>â€¢</span><span>Time: {safeRender(result.audit_log.processing_time)}</span></>)}
+                <span>â€¢</span>
                 <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>{safeRender(result.audit_log.status)}</span>
               </div>
             </div>
           )}
           <AIDisclaimer />
-          <OutputActions result={result} moduleName={MODULE_NAME} textContent={`RegCheck-India - ${MODULE_NAME}\nGenerated: ${new Date().toLocaleString()}\n\nType: ${result.document_type || ''}\n\nKey Points: ${(result.key_regulatory_points || result.key_points || []).join('; ')}`} />
+          <OutputActions result={result} moduleName={MODULE_NAME}
+            moduleId={MODULE_ID}
+            inputSnippet={text.substring(0, 150)}
+            pipeableContent={result.summary}
+            pipeableLabel="document summary"
+            textContent={`RegCheck-India - ${MODULE_NAME}\nGenerated: ${new Date().toLocaleString()}\n\nType: ${result.document_type || ''}\n\nKey Points: ${(result.key_regulatory_points || result.key_points || []).join('; ')}`} />
           <FeedbackWidget moduleName={MODULE_NAME} resultHash={resultHash} />
         </div>
       )}

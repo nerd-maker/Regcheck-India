@@ -8,12 +8,15 @@ import FeedbackWidget from '@/components/FeedbackWidget';
 import AIDisclaimer from '@/components/AIDisclaimer';
 import HistoryPanel from '@/components/HistoryPanel';
 import { saveToHistory, HistoryEntry } from '@/services/history';
+import { useServerStatus } from '@/hooks/useServerStatus';
+import { moduleTransferStore } from '@/store/moduleTransfer';
+import { RegulationCitation } from '@/utils/regulatoryLinks';
 import { runScheduleYCompliance } from '@/services/api';
 
 const MODULE_ID = 'm7-schedule-y';
 const MODULE_NAME = 'Schedule Y Compliance';
 
-const M7_SAMPLE = `PHASE I FIRST-IN-HUMAN STUDY PROTOCOL — BX-500 (Novel JAK Inhibitor)
+const M7_SAMPLE = `PHASE I FIRST-IN-HUMAN STUDY PROTOCOL — BX-500 (Novel JAK Inhibitor)
 Sponsor: BioXcel Therapeutics India Pvt. Ltd.
 Study Type: Phase I, open-label, dose-escalation FIH study
 Indication: Rheumatoid Arthritis
@@ -46,8 +49,8 @@ const statusColor = (status: string) => {
 const validateInput = (text: string, minWords: number = 20): string | null => {
   if (!text || !text.trim()) return 'Please enter or upload a document before running.';
   const wordCount = text.trim().split(/\s+/).length;
-  if (wordCount < minWords) return `Please provide more content — minimum ${minWords} words required (currently ${wordCount} words).`;
-  if (wordCount > 8000) return 'Document too long — please limit to 8,000 words for best results.';
+  if (wordCount < minWords) return `Please provide more content — minimum ${minWords} words required (currently ${wordCount} words).`;
+  if (wordCount > 8000) return 'Document too long — please limit to 8,000 words for best results.';
   return null;
 };
 
@@ -57,6 +60,7 @@ export default function ScheduleYChecker() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const { status } = useServerStatus();
   const [elapsed, setElapsed] = useState(0);
 
   const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
@@ -124,6 +128,8 @@ export default function ScheduleYChecker() {
             <span className="status-chip">Schedule Y</span>
             <span className="status-chip">NDCTR 2019</span>
             <span className="status-chip">CDSCO</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${status === 'online' ? 'bg-green-500/20 text-green-400' : status === 'slow' ? 'bg-amber-500/20 text-amber-400' : status === 'offline' ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}`}><span className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-400' : status === 'slow' ? 'bg-amber-400 animate-pulse' : status === 'offline' ? 'bg-red-400' : 'bg-slate-400 animate-pulse'}`}/>{status === 'online' && 'Ready'}{status === 'slow' && 'Waking up...'}{status === 'offline' && 'Offline'}{status === 'checking' && 'Connecting...'}</span>
+            {status === 'slow' && <span className="text-xs text-amber-400/70">First request may take 30-60s</span>}
             <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
           </div>
         </div>
@@ -153,9 +159,33 @@ export default function ScheduleYChecker() {
           placeholder="Paste the document text to check against Schedule Y and CDSCO requirements."
         />
         {text && (
-          <div className="flex justify-between items-center mt-1.5">
-            <span className="text-xs text-slate-500">{wordCount} words</span>
-            {wordCount > 6000 && <span className="text-xs text-amber-400">⚠ Large document — may be truncated</span>}
+          <div className="flex items-center justify-between mt-1.5 px-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium ${
+                wordCount === 0 ? 'text-slate-500' :
+                wordCount < 20 ? 'text-red-400' :
+                wordCount < 50 ? 'text-amber-400' :
+                wordCount <= 3000 ? 'text-green-400' :
+                wordCount <= 6000 ? 'text-amber-400' :
+                'text-red-400'
+              }`}>{wordCount} words</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                wordCount === 0 ? 'hidden' :
+                wordCount < 20 ? 'bg-red-500/10 text-red-400' :
+                wordCount < 50 ? 'bg-amber-500/10 text-amber-400' :
+                wordCount <= 3000 ? 'bg-green-500/10 text-green-400' :
+                wordCount <= 6000 ? 'bg-amber-500/10 text-amber-400' :
+                'bg-red-500/10 text-red-400'
+              }`}>
+                {wordCount < 20 ? 'Too short' : wordCount < 50 ? 'Add more context' : wordCount <= 3000 ? 'Optimal' : wordCount <= 6000 ? 'Long — may be slow' : 'Too long — will be truncated'}
+              </span>
+            </div>
+            {wordCount >= 50 && <span className="text-xs text-slate-500">~{wordCount <= 1000 ? '15-30' : wordCount <= 3000 ? '30-60' : wordCount <= 6000 ? '60-90' : '90+'} seconds</span>}
+          </div>
+        )}
+        {wordCount > 0 && (
+          <div className="mt-1 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-300 ${wordCount < 50 ? 'bg-red-500' : wordCount <= 3000 ? 'bg-green-500' : wordCount <= 6000 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((wordCount / 6000) * 100, 100)}%` }} />
           </div>
         )}
 
@@ -182,7 +212,7 @@ export default function ScheduleYChecker() {
                 {elapsed < 10 && "Sending to AI agent..."}
                 {elapsed >= 10 && elapsed < 30 && "Analysing document against regulations..."}
                 {elapsed >= 30 && elapsed < 60 && "Generating structured compliance report..."}
-                {elapsed >= 60 && "Large document — almost done, please wait..."}
+                {elapsed >= 60 && "Large document — almost done, please wait..."}
               </div>
             </div>
           </div>
@@ -218,7 +248,7 @@ export default function ScheduleYChecker() {
               : 'border-red-500/30 bg-red-500/10 text-red-400'
             }`}>
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-              <span>{result._metadata.confidence_level} CONFIDENCE — {result._metadata.confidence_reason}</span>
+              <span>{result._metadata.confidence_level} CONFIDENCE — {result._metadata.confidence_reason}</span>
               <span className="ml-auto text-slate-500 font-normal">{result._metadata.reviewed_by}</span>
             </div>
           )}
@@ -333,7 +363,9 @@ export default function ScheduleYChecker() {
                   <tbody className="divide-y divide-white/5">
                     {result.compliance_checklist.map((item: any, i: number) => (
                       <tr key={i} className="hover:bg-white/5">
-                        <td className="px-4 py-3 font-medium text-slate-200 whitespace-nowrap">{safeRender(item.section)}</td>
+                        <td className="px-4 py-3 font-medium whitespace-nowrap text-slate-200">
+                          <RegulationCitation citation={safeRender(item.section)} className="text-slate-200" />
+                        </td>
                         <td className="px-4 py-3 text-xs leading-relaxed max-w-xs">{safeRender(item.requirement)}</td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${statusColor(item.status)}`}>{safeRender(item.status)}</span>
@@ -371,8 +403,12 @@ export default function ScheduleYChecker() {
           <OutputActions
             result={result}
             moduleName={MODULE_NAME}
+            moduleId={MODULE_ID}
+            inputSnippet={text.substring(0, 150)}
+            pipeableContent={`Schedule Y Status: ${result.overall_status}\nScore: ${result.compliance_score}/10\nGaps: ${(result.gaps || []).join(', ')}\nRecommendations: ${(result.recommendations || []).join(', ')}`}
+            pipeableLabel="compliance results"
             textContent={
-              `RegCheck-India — ${MODULE_NAME} Result\n` +
+              `RegCheck-India — ${MODULE_NAME} Result\n` +
               `Generated: ${new Date().toLocaleString()}\n\n` +
               `Status: ${result.overall_compliance_status || ''}\n` +
               `Score: ${result.compliance_score || ''} (${result.compliance_percentage || ''})\n` +

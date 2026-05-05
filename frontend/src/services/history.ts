@@ -49,3 +49,9 @@ export const deleteHistoryEntry = (id: string): void => {
   const history = getHistory().filter(e => e.id !== id)
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
 }
+
+export const getLastTwoResults = (moduleId: string): [HistoryEntry | null, HistoryEntry | null] => {
+  const history = getHistory().filter(e => e.moduleId === moduleId)
+  return [history[0] || null, history[1] || null]
+}
+

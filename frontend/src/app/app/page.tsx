@@ -11,6 +11,9 @@ import DocumentUpload from '@/components/DocumentUpload';
 import ICHGCPChecker from '@/components/ICHGCPChecker';
 import InspectionReportGenerator from '@/components/InspectionReportGenerator';
 import MetadataForm from '@/components/MetadataForm';
+import ModuleErrorBoundary from '@/components/ModuleErrorBoundary';
+import OnboardingTooltip from '@/components/OnboardingTooltip';
+import PinnedResultPanel from '@/components/PinnedResultPanel';
 import RegulatoryQA from '@/components/RegulatoryQA';
 import ResultsViewer from '@/components/ResultsViewer';
 import SAEClassifier from '@/components/SAEClassifier';
@@ -209,6 +212,8 @@ const modules: ModuleCard[] = [
   },
 ];
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://regcheck-india.onrender.com';
+
 export default function AppWorkspace() {
   const router = useRouter()
   const [activeModule, setActiveModule] = useState<Module>('anonymise');
@@ -219,6 +224,7 @@ export default function AppWorkspace() {
   const [quotaChecked, setQuotaChecked] = useState(false);
   const [requestsRemaining, setRequestsRemaining] = useState(5);
   const [demoName, setDemoName] = useState('User');
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'waking'>('checking');
 
   // Registration gate — redirect to /register if not registered
   useEffect(() => {
@@ -243,6 +249,33 @@ export default function AppWorkspace() {
     } else {
       setShowKeyModal(true); // auto-open on first visit
     }
+  }, []);
+
+  useEffect(() => {
+    const checkServer = async () => {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 5000);
+
+      try {
+        const start = Date.now();
+        const response = await fetch(`${API_BASE_URL}/api/v1/agents/ping`, {
+          signal: controller.signal,
+        });
+        const elapsed = Date.now() - start;
+        if (response.ok) {
+          setServerStatus(elapsed > 3000 ? 'waking' : 'online');
+          return;
+        }
+      } catch {
+        // Treated as waking below.
+      } finally {
+        window.clearTimeout(timeout);
+      }
+
+      setServerStatus('waking');
+    };
+
+    checkServer();
   }, []);
 
   const handleKeySaved = (key: string) => {
@@ -396,6 +429,23 @@ export default function AppWorkspace() {
             )}
           </div>
 
+          <div className="mx-0 flex items-center gap-2 rounded-xl bg-white/5 px-3 py-2">
+            <div
+              className={`h-2 w-2 rounded-full ${
+                serverStatus === 'online'
+                  ? 'bg-green-400'
+                  : serverStatus === 'waking'
+                    ? 'bg-amber-400 animate-pulse'
+                    : 'bg-gray-400 animate-pulse'
+              }`}
+            />
+            <span className="text-xs text-slate-400">
+              {serverStatus === 'online' && 'Server online'}
+              {serverStatus === 'waking' && 'Server waking up (~30s)'}
+              {serverStatus === 'checking' && 'Checking server...'}
+            </span>
+          </div>
+
           {/* Key status indicator */}
           <div
             className="flex items-center gap-2 px-3 py-2 rounded-lg"
@@ -423,6 +473,18 @@ export default function AppWorkspace() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
             </svg>
             {hasApiKey ? 'Change API Key' : 'Set API Key'}
+          </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem('regcheck_onboarding_done');
+              window.location.reload();
+            }}
+            className="w-full flex items-center gap-2 px-3 py-1 rounded-lg text-[10px] font-medium text-slate-500 hover:text-teal-400 transition-all"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Restart tour
           </button>
         </div>
       </aside>
@@ -467,18 +529,52 @@ export default function AppWorkspace() {
 
             {/* Module content */}
             <div className="px-6 py-6 md:px-8 md:py-8">
-              {activeModule === 'anonymise' && <AnonymisationTool />}
-              {activeModule === 'summarise' && <DocumentSummariser />}
-              {activeModule === 'completeness' && <CompletenessAssessor />}
-              {activeModule === 'classifier' && <SAEClassifier />}
-              {activeModule === 'inspection' && <InspectionReportGenerator />}
-              {activeModule === 'reg-qa' && <RegulatoryQA />}
-              {activeModule === 'schedule-y' && <ScheduleYChecker />}
-              {activeModule === 'ich-gcp' && <ICHGCPChecker />}
+              {activeModule === 'anonymise' && (
+                <ModuleErrorBoundary moduleName="PII Anonymiser">
+                  <AnonymisationTool />
+                </ModuleErrorBoundary>
+              )}
+              {activeModule === 'summarise' && (
+                <ModuleErrorBoundary moduleName="Document Summariser">
+                  <DocumentSummariser />
+                </ModuleErrorBoundary>
+              )}
+              {activeModule === 'completeness' && (
+                <ModuleErrorBoundary moduleName="Completeness Assessor">
+                  <CompletenessAssessor />
+                </ModuleErrorBoundary>
+              )}
+              {activeModule === 'classifier' && (
+                <ModuleErrorBoundary moduleName="Case Classifier">
+                  <SAEClassifier />
+                </ModuleErrorBoundary>
+              )}
+              {activeModule === 'inspection' && (
+                <ModuleErrorBoundary moduleName="Inspection Report Generator">
+                  <InspectionReportGenerator />
+                </ModuleErrorBoundary>
+              )}
+              {activeModule === 'reg-qa' && (
+                <ModuleErrorBoundary moduleName="Regulatory Q&A">
+                  <RegulatoryQA />
+                </ModuleErrorBoundary>
+              )}
+              {activeModule === 'schedule-y' && (
+                <ModuleErrorBoundary moduleName="Schedule Y Compliance">
+                  <ScheduleYChecker />
+                </ModuleErrorBoundary>
+              )}
+              {activeModule === 'ich-gcp' && (
+                <ModuleErrorBoundary moduleName="ICH E6(R3) GCP Checker">
+                  <ICHGCPChecker />
+                </ModuleErrorBoundary>
+              )}
             </div>
           </div>
         </main>
       </div>
+      <PinnedResultPanel />
+      <OnboardingTooltip />
     </div>
   );
 }

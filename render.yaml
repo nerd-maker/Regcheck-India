@@ -10,6 +10,8 @@ services:
     region: oregon
     plan: free
     envVars:
+      - key: SENTRY_DSN
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false  # Set manually in Render dashboard
       - key: SARVAM_API_KEY

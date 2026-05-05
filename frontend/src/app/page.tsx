@@ -632,6 +632,10 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-4 text-center">
+            <div className="mb-3 flex items-center justify-center gap-4 text-xs text-gray-500">
+              <Link href="/privacy" className="transition-colors hover:text-teal-400">Privacy Policy</Link>
+              <Link href="/terms" className="transition-colors hover:text-teal-400">Terms of Service</Link>
+            </div>
             <p className="text-xs text-gray-700">
               Pilot tool. All outputs must be reviewed by qualified RA professionals before regulatory submission to CDSCO.
             </p>

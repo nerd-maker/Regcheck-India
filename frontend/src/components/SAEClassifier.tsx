@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import FileUpload from '@/components/FileUpload';
@@ -8,6 +8,8 @@ import FeedbackWidget from '@/components/FeedbackWidget';
 import AIDisclaimer from '@/components/AIDisclaimer';
 import HistoryPanel from '@/components/HistoryPanel';
 import { saveToHistory, HistoryEntry } from '@/services/history';
+import { useServerStatus } from '@/hooks/useServerStatus';
+import { moduleTransferStore } from '@/store/moduleTransfer';
 import { runCaseClassifier } from '@/services/api';
 
 const MODULE_ID = 'm4-classifier';
@@ -61,6 +63,7 @@ export default function SAEClassifier() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const { status } = useServerStatus();
   const [elapsed, setElapsed] = useState(0);
   const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
 
@@ -109,6 +112,8 @@ export default function SAEClassifier() {
             <span className="status-chip">WHO-UMC</span>
             <span className="status-chip">Duplicate signals</span>
             <span className="status-chip">Priority scoring</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${status === 'online' ? 'bg-green-500/20 text-green-400' : status === 'slow' ? 'bg-amber-500/20 text-amber-400' : status === 'offline' ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}`}><span className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-400' : status === 'slow' ? 'bg-amber-400 animate-pulse' : status === 'offline' ? 'bg-red-400' : 'bg-slate-400 animate-pulse'}`}/>{status === 'online' && 'Ready'}{status === 'slow' && 'Waking up...'}{status === 'offline' && 'Offline'}{status === 'checking' && 'Connecting...'}</span>
+            {status === 'slow' && <span className="text-xs text-amber-400/70">First request may take 30-60s</span>}
             <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
           </div>
         </div>
@@ -122,7 +127,56 @@ export default function SAEClassifier() {
           </button>
         </div>
         <textarea className="textarea-shell" value={text} onChange={(e) => { setText(e.target.value); setError(null); }} placeholder="Paste the SAE narrative, onset details, suspect product, outcome, and reporter summary." />
-        {text && <div className="flex justify-between items-center mt-1.5"><span className="text-xs text-slate-500">{wordCount} words</span>{wordCount > 6000 && <span className="text-xs text-amber-400">⚠ Large document</span>}</div>}
+        {text && (
+          <div className="flex items-center justify-between mt-1.5 px-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium ${
+                wordCount === 0 ? 'text-slate-500' :
+                wordCount < 20 ? 'text-red-400' :
+                wordCount < 50 ? 'text-amber-400' :
+                wordCount <= 3000 ? 'text-green-400' :
+                wordCount <= 6000 ? 'text-amber-400' :
+                'text-red-400'
+              }`}>
+                {wordCount} words
+              </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                wordCount === 0 ? 'hidden' :
+                wordCount < 20 ? 'bg-red-500/10 text-red-400' :
+                wordCount < 50 ? 'bg-amber-500/10 text-amber-400' :
+                wordCount <= 3000 ? 'bg-green-500/10 text-green-400' :
+                wordCount <= 6000 ? 'bg-amber-500/10 text-amber-400' :
+                'bg-red-500/10 text-red-400'
+              }`}>
+                {wordCount < 20 ? 'Too short' :
+                 wordCount < 50 ? 'Add more context' :
+                 wordCount <= 3000 ? 'Optimal' :
+                 wordCount <= 6000 ? 'Long — may be slow' :
+                 'Too long — will be truncated'}
+              </span>
+            </div>
+            {wordCount >= 50 && (
+              <span className="text-xs text-slate-500">
+                ~{wordCount <= 1000 ? '15-30' :
+                   wordCount <= 3000 ? '30-60' :
+                   wordCount <= 6000 ? '60-90' : '90+'} seconds
+              </span>
+            )}
+          </div>
+        )}
+        {wordCount > 0 && (
+          <div className="mt-1 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                wordCount < 50 ? 'bg-red-500' :
+                wordCount <= 3000 ? 'bg-green-500' :
+                wordCount <= 6000 ? 'bg-amber-500' :
+                'bg-red-500'
+              }`}
+              style={{ width: `${Math.min((wordCount / 6000) * 100, 100)}%` }}
+            />
+          </div>
+        )}
         <div className="mt-5 flex justify-end">
           <button type="button" className="primary-button" onClick={run} disabled={loading || !text.trim()}>{loading ? 'Classifying...' : 'Classify SAE'}</button>
         </div>
@@ -232,7 +286,12 @@ export default function SAEClassifier() {
               </div>
             )}
             <AIDisclaimer />
-            <OutputActions result={result} moduleName={MODULE_NAME} textContent={`RegCheck-India - ${MODULE_NAME} Result\nGenerated: ${new Date().toLocaleString()}\n\nCategory: ${result.primary_category || ''}\nPriority: ${result.priority_score || ''}/10\nExpedited Reporting: ${result.requires_expedited_reporting ? 'YES' : 'NO'}\nCausality: ${result.causality?.assessment || ''}\n\nRegulatory Actions: ${(result.regulatory_actions_required || []).join('; ')}`} />
+            <OutputActions result={result} moduleName={MODULE_NAME}
+              moduleId={MODULE_ID}
+              inputSnippet={text.substring(0, 150)}
+              pipeableContent={`SAE Category: ${result.primary_category}\nPriority: ${result.priority_score}/10\nReporting: ${result.requires_expedited_reporting ? 'Expedited' : 'Standard'}\nActions: ${(result.regulatory_actions_required || []).join(', ')}`}
+              pipeableLabel="SAE classification"
+              textContent={`RegCheck-India - ${MODULE_NAME} Result\nGenerated: ${new Date().toLocaleString()}\n\nCategory: ${result.primary_category || ''}\nPriority: ${result.priority_score || ''}/10\nExpedited Reporting: ${result.requires_expedited_reporting ? 'YES' : 'NO'}\nCausality: ${result.causality?.assessment || ''}\n\nRegulatory Actions: ${(result.regulatory_actions_required || []).join('; ')}`} />
             <FeedbackWidget moduleName={MODULE_NAME} resultHash={resultHash} />
           </div>
         </div>

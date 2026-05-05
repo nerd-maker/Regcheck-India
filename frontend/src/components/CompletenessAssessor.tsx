@@ -8,6 +8,9 @@ import FeedbackWidget from '@/components/FeedbackWidget';
 import AIDisclaimer from '@/components/AIDisclaimer';
 import HistoryPanel from '@/components/HistoryPanel';
 import { saveToHistory, HistoryEntry } from '@/services/history';
+import { useServerStatus } from '@/hooks/useServerStatus';
+import { moduleTransferStore } from '@/store/moduleTransfer';
+import { RegulationCitation } from '@/utils/regulatoryLinks';
 import { runCompletenessAssessor, compareDocuments } from '@/services/api';
 
 const MODULE_ID = 'm3-completeness';
@@ -60,6 +63,7 @@ export default function CompletenessAssessor() {
   const [fileA, setFileA] = useState<File | null>(null);
   const [fileB, setFileB] = useState<File | null>(null);
   const [compareResult, setCompareResult] = useState<any>(null);
+  const { status } = useServerStatus();
   const [elapsed, setElapsed] = useState(0);
 
   const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
@@ -159,7 +163,9 @@ export default function CompletenessAssessor() {
               <span className="status-chip">CDSCO</span>
               <span className="status-chip">Schedule Y</span>
               <span className="status-chip">NDCTR 2019</span>
-              <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${status === 'online' ? 'bg-green-500/20 text-green-400' : status === 'slow' ? 'bg-amber-500/20 text-amber-400' : status === 'offline' ? 'bg-red-500/20 text-red-400' : 'bg-slate-500/20 text-slate-400'}`}><span className={`w-1.5 h-1.5 rounded-full ${status === 'online' ? 'bg-green-400' : status === 'slow' ? 'bg-amber-400 animate-pulse' : status === 'offline' ? 'bg-red-400' : 'bg-slate-400 animate-pulse'}`}/>{status === 'online' && 'Ready'}{status === 'slow' && 'Waking up...'}{status === 'offline' && 'Offline'}{status === 'checking' && 'Connecting...'}</span>
+            {status === 'slow' && <span className="text-xs text-amber-400/70">First request may take 30-60s</span>}
+            <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
             </div>
           </div>
 
@@ -192,7 +198,7 @@ export default function CompletenessAssessor() {
           <FileUpload onTextExtracted={handleTextExtracted} onError={handleUploadError} disabled={loading} />
           {uploadError && (
             <div className="mb-2 flex items-center gap-1 text-xs text-red-400">
-              <span>⚠</span> {uploadError}
+              <span>âš </span> {uploadError}
             </div>
           )}
           <div className="flex items-center justify-between mb-2 mt-4">
@@ -208,7 +214,20 @@ export default function CompletenessAssessor() {
             onChange={(e) => { setText(e.target.value); setError(null); }}
             placeholder="Paste the full submission document text here for completeness evaluation."
           />
-          {text && <div className="flex justify-between items-center mt-1.5"><span className="text-xs text-slate-500">{wordCount} words</span>{wordCount > 6000 && <span className="text-xs text-amber-400">⚠ Large document</span>}</div>}
+          {text && (
+          <div className="flex items-center justify-between mt-1.5 px-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium ${wordCount === 0 ? 'text-slate-500' : wordCount < 20 ? 'text-red-400' : wordCount < 50 ? 'text-amber-400' : wordCount <= 3000 ? 'text-green-400' : wordCount <= 6000 ? 'text-amber-400' : 'text-red-400'}`}>{wordCount} words</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${wordCount === 0 ? 'hidden' : wordCount < 20 ? 'bg-red-500/10 text-red-400' : wordCount < 50 ? 'bg-amber-500/10 text-amber-400' : wordCount <= 3000 ? 'bg-green-500/10 text-green-400' : wordCount <= 6000 ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>{wordCount < 20 ? 'Too short' : wordCount < 50 ? 'Add more context' : wordCount <= 3000 ? 'Optimal' : wordCount <= 6000 ? 'Long â€” may be slow' : 'Too long â€” will be truncated'}</span>
+            </div>
+            {wordCount >= 50 && <span className="text-xs text-slate-500">~{wordCount <= 1000 ? '15-30' : wordCount <= 3000 ? '30-60' : wordCount <= 6000 ? '60-90' : '90+'} seconds</span>}
+          </div>
+          )}
+          {wordCount > 0 && (
+          <div className="mt-1 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-300 ${wordCount < 50 ? 'bg-red-500' : wordCount <= 3000 ? 'bg-green-500' : wordCount <= 6000 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min((wordCount / 6000) * 100, 100)}%` }} />
+          </div>
+          )}
 
           <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <p className="text-sm text-slate-400">
@@ -248,7 +267,7 @@ export default function CompletenessAssessor() {
                   accept=".pdf,.docx"
                 />
                 <div className="space-y-1">
-                  <div className="text-2xl mb-2">{fileA ? '📄' : '📤'}</div>
+                  <div className="text-2xl mb-2">{fileA ? 'ðŸ“„' : 'ðŸ“¤'}</div>
                   <div className="text-sm font-medium text-slate-200 truncate px-4">
                     {fileA ? fileA.name : 'Click to upload Original'}
                   </div>
@@ -267,7 +286,7 @@ export default function CompletenessAssessor() {
                   accept=".pdf,.docx"
                 />
                 <div className="space-y-1">
-                  <div className="text-2xl mb-2">{fileB ? '📄' : '📤'}</div>
+                  <div className="text-2xl mb-2">{fileB ? 'ðŸ“„' : 'ðŸ“¤'}</div>
                   <div className="text-sm font-medium text-slate-200 truncate px-4">
                     {fileB ? fileB.name : 'Click to upload Revised'}
                   </div>
@@ -309,7 +328,7 @@ export default function CompletenessAssessor() {
       {error && (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="text-red-400 text-lg">⚠</span>
+            <span className="text-red-400 text-lg">âš </span>
             <div>
               <div className="text-red-400 font-medium text-sm">Operation Failed</div>
               <div className="text-red-300 text-sm mt-1">{error}</div>
@@ -323,7 +342,7 @@ export default function CompletenessAssessor() {
           <ModelAttributionBadge attribution={result?.model_attribution} />
           {result._metadata && (
             <div className={`flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl border text-xs font-medium ${result._metadata.confidence_level === 'HIGH' ? 'border-green-500/30 bg-green-500/10 text-green-400' : result._metadata.confidence_level === 'MEDIUM' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-red-500/30 bg-red-500/10 text-red-400'}`}>
-              <span>{result._metadata.confidence_level} CONFIDENCE — {result._metadata.confidence_reason}</span>
+              <span>{result._metadata.confidence_level} CONFIDENCE â€” {result._metadata.confidence_reason}</span>
             </div>
           )}
 
@@ -411,7 +430,10 @@ export default function CompletenessAssessor() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-semibold text-slate-100">{safeRender(field.field_name)}</div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">{safeRender(field.regulation)}</div>
+                          <RegulationCitation
+                            citation={safeRender(field.regulation)}
+                            className="mt-0.5 text-[10px] text-slate-500"
+                          />
                           {field.issue && (
                             <div className="text-xs text-red-400 mt-2 font-medium bg-red-500/10 p-2 rounded-lg">⚠ {safeRender(field.issue)}</div>
                           )}
@@ -490,7 +512,7 @@ export default function CompletenessAssessor() {
                   <ul className="space-y-2">
                     {result.recommendations.map((rec: string, i: number) => (
                       <li key={i} className="text-sm text-amber-200 flex gap-3">
-                        <span className="shrink-0">✦</span>
+                        <span className="shrink-0">✧</span>
                         {safeRender(rec)}
                       </li>
                     ))}
@@ -614,9 +636,9 @@ export default function CompletenessAssessor() {
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                 <span className="font-semibold uppercase tracking-wider text-slate-400">Audit Log</span>
                 <span>{safeRender(result.audit_log.timestamp)}</span>
-                <span>•</span>
+                <span>â€¢</span>
                 <span>{safeRender(result.audit_log.sections_checked || result.audit_log.fields_checked)} items checked</span>
-                <span>•</span>
+                <span>â€¢</span>
                 <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>
                   {safeRender(result.audit_log.status)}
                 </span>
@@ -624,7 +646,12 @@ export default function CompletenessAssessor() {
             </div>
           )}
           <AIDisclaimer />
-          <OutputActions result={result} moduleName={MODULE_NAME} textContent={`RegCheck-India - ${MODULE_NAME} Result\nGenerated: ${new Date().toLocaleString()}\n\nScore: ${result.completeness_percentage || result.overall_completeness_score || ''}\nReadiness: ${result.submission_readiness || ''}\n\nCritical Gaps: ${(result.critical_gaps || []).join('; ')}\nPriority Actions: ${(result.priority_actions || []).join('; ')}`} />
+          <OutputActions result={result} moduleName={MODULE_NAME}
+            moduleId={MODULE_ID}
+            inputSnippet={text.substring(0, 150)}
+            pipeableContent={`Critical Gaps:\n${(result.critical_gaps || []).join('\n')}\n\nPriority Actions:\n${(result.priority_actions || []).join('\n')}`}
+            pipeableLabel="compliance summary"
+            textContent={`RegCheck-India - ${MODULE_NAME} Result\nGenerated: ${new Date().toLocaleString()}\n\nScore: ${result.completeness_percentage || result.overall_completeness_score || ''}\nReadiness: ${result.submission_readiness || ''}\n\nCritical Gaps: ${(result.critical_gaps || []).join('; ')}\nPriority Actions: ${(result.priority_actions || []).join('; ')}`} />
           <FeedbackWidget moduleName={MODULE_NAME} resultHash={resultHash} />
         </div>
       )}
@@ -664,7 +691,7 @@ export default function CompletenessAssessor() {
                   <ul className="space-y-2">
                     {compareResult.critical_changes.map((change: any, i: number) => (
                       <li key={i} className="flex gap-2 text-sm text-slate-300">
-                        <span className="text-red-500">•</span> {safeRender(change)}
+                        <span className="text-red-500">â€¢</span> {safeRender(change)}
                       </li>
                     ))}
                   </ul>
@@ -719,9 +746,12 @@ export default function CompletenessAssessor() {
                   {change.regulatory_impact && (
                     <div className="rounded-xl bg-slate-900/50 p-4 border border-white/5">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs text-teal-400">⚖</span>
+                        <span className="text-xs text-teal-400">âš–</span>
                         <span className="text-xs font-bold text-slate-300 uppercase tracking-tight">Regulatory Impact</span>
-                        <span className="ml-auto text-[10px] text-slate-500 italic">{safeRender(change.regulatory_impact.regulation)}</span>
+                        <RegulationCitation
+                          citation={safeRender(change.regulatory_impact.regulation)}
+                          className="ml-auto text-[10px] italic text-slate-500"
+                        />
                       </div>
                       <p className="text-xs text-slate-400 leading-relaxed mb-3">{safeRender(change.regulatory_impact.impact_description)}</p>
                       <div className="flex items-center justify-between border-t border-white/5 pt-3">
@@ -752,7 +782,7 @@ export default function CompletenessAssessor() {
                 <div className="flex items-center gap-1.5 bg-white/5 px-3 py-1 rounded-full">
                   <span className="opacity-50">V2:</span> <span className="text-slate-300 max-w-[120px] truncate">{safeRender(compareResult.audit_log.file_b)}</span>
                 </div>
-                <span>•</span>
+                <span>â€¢</span>
                 <span>{safeRender(compareResult.audit_log.timestamp)}</span>
               </div>
             </div>
