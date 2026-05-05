@@ -4,7 +4,8 @@ RegCheck-India AI Agents Router.
 Provides a Claude-backed `/api/v1/agents/*` surface for the core agent workflows.
 """
 
-from __future__ import annotations
+# from __future__ import annotations
+
 
 import io
 import json
@@ -30,7 +31,8 @@ import pytesseract
 import pdf2image
 import pydub
 from chromadb.utils import embedding_functions
-from fastapi import APIRouter, File, Header, HTTPException, UploadFile, Request
+from fastapi import APIRouter, Header, HTTPException, UploadFile, File, Request
+
 from pydantic import BaseModel, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -222,7 +224,12 @@ def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
 
 @router.post("/extract-text")
 @limiter.limit("10/minute")
-async def extract_text_from_file(request: Request, file: UploadFile = File(...)):
+async def extract_text_from_file(
+    file: UploadFile = File(...),
+    request: Request = None,
+    x_anthropic_api_key: Optional[str] = Header(None)
+):
+
     """Extract text from PDF or DOCX file for use in any agent module."""
     try:
         content = await file.read()
@@ -1276,11 +1283,12 @@ async def classify_case(request: Request, body: AgentRequest, x_anthropic_api_ke
 @router.post("/ocr", summary="OCR — Extract text from scanned or handwritten documents")
 @limiter.limit("5/minute")
 async def extract_text_ocr(
-    request: Request,
     file: UploadFile = File(...),
+    request: Request = None,
     mode: str = "auto",  # auto | tesseract | vision
     x_anthropic_api_key: Optional[str] = Header(None)
 ):
+
     """
     Extract text from scanned PDFs, printed images, or handwritten notes.
     Supports: PDF, PNG, JPG, JPEG, TIFF, BMP
@@ -1364,12 +1372,13 @@ async def ocr_health():
 @router.post("/transcribe", summary="Transcribe and summarise meeting audio")
 @limiter.limit("3/minute")
 async def transcribe_meeting(
-    request: Request,
     file: UploadFile = File(...),
+    request: Request = None,
     language_code: str = "unknown",
     x_anthropic_api_key: Optional[str] = Header(None),
     x_sarvam_api_key: Optional[str] = Header(None)
 ):
+
     """
     Transcribe meeting audio using Sarvam AI Saaras v3,
     then summarise using Claude into structured meeting notes.
@@ -1811,12 +1820,13 @@ The following excerpts are retrieved directly from ICH E6(R3) final guidelines. 
     )
 
 
-@router.post("/compare", response_model=AgentResponse, summary="Agent 03b - Document Version Comparison")
+@router.post("/compare", summary="Agent 03b - Document Version Comparison")
 async def compare_documents(
     file_a: UploadFile = File(...),
     file_b: UploadFile = File(...),
     x_anthropic_api_key: Optional[str] = Header(None)
 ):
+
     """Compare two versions of a regulatory document and identify changes with regulatory impact."""
     try:
 
