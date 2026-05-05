@@ -10,19 +10,37 @@ import io
 import json
 import logging
 import os
+import re
 import uuid
+import hashlib
+import time
+import threading
+import subprocess
 from datetime import datetime, timezone
-from typing import Any, Optional
+from pathlib import Path
+from threading import Lock
+from typing import Any, Optional, List
+from contextlib import asynccontextmanager
 
 import anthropic
+import chromadb
+import docx
+import pypdf
+import pytesseract
+import pdf2image
+import pydub
+from chromadb.utils import embedding_functions
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile, Request
+from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
 from app.services.pii_mapping_store import pii_mapping_store, PIIMappingStore
 from app.services.file_cleanup import sanitize_filename, temp_file_context, validate_file, FileValidationError
 from app.services.input_sanitizer import sanitize_input
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from fastapi import APIRouter, File, Header, HTTPException, UploadFile, Request
-
-import re
+from app.services.ocr_service import extract_text_from_image_bytes
+from app.services.audio_service import transcribe_audio
+from app.services.case_store import get_case_collection
 
 # Patterns that must never appear in logs
 _SENSITIVE_PATTERNS = [
@@ -48,8 +66,6 @@ limiter = Limiter(key_func=get_remote_address)
 # Demo quota store — token → {remaining, name, email, org}
 # In-memory for now — upgrade to Redis/PostgreSQL in Phase 2
 # ─────────────────────────────────────────────────────────
-import hashlib
-from threading import Lock
 
 _demo_store: dict[str, dict] = {}
 _demo_lock = Lock()
@@ -162,8 +178,6 @@ def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
     Used by M3, M7, M8 to ground responses in actual regulatory documents.
     """
     try:
-        import chromadb
-        from chromadb.utils import embedding_functions
 
         chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
         client = chromadb.PersistentClient(
@@ -227,7 +241,6 @@ async def extract_text_from_file(request: Request, file: UploadFile = File(...))
         page_count: Optional[int] = None
 
         if filename.endswith(".pdf"):
-            import pypdf
 
             pdf_reader = pypdf.PdfReader(io.BytesIO(content))
             pages_text = []
@@ -239,7 +252,6 @@ async def extract_text_from_file(request: Request, file: UploadFile = File(...))
             page_count = len(pdf_reader.pages)
 
         elif filename.endswith(".docx"):
-            import docx
 
             doc = docx.Document(io.BytesIO(content))
             paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
@@ -349,7 +361,6 @@ def call_claude(
     """
     admin_password = "admin-regcheck"
     if api_key == admin_password:
-        import os
         server_key = os.getenv("ANTHROPIC_API_KEY")
         if not server_key:
             raise HTTPException(status_code=500, detail="Server Anthropic API key missing.")
@@ -1276,7 +1287,6 @@ async def extract_text_ocr(
     Modes: auto (smart selection), tesseract (printed), vision (handwritten)
     """
     try:
-        from app.services.ocr_service import extract_text_from_image_bytes
 
         content = await file.read()
         try:
@@ -1333,14 +1343,12 @@ async def ocr_health():
     pdf2image_available = False
 
     try:
-        import pytesseract
         pytesseract.get_tesseract_version()
         tesseract_available = True
     except Exception:
         pass
 
     try:
-        import pdf2image
         pdf2image_available = True
     except Exception:
         pass
@@ -1368,7 +1376,6 @@ async def transcribe_meeting(
     Supports: MP3, WAV, AAC, OGG, FLAC, M4A, WebM, WMA, AMR
     """
     try:
-        from app.services.audio_service import transcribe_audio
 
         content = await file.read()
         try:
@@ -1473,13 +1480,11 @@ async def transcribe_health():
     ffmpeg_available = False
 
     try:
-        import pydub
         pydub_available = True
     except ImportError:
         pass
 
     try:
-        import subprocess
         result = subprocess.run(
             ["ffmpeg", "-version"],
             capture_output=True, timeout=5
@@ -1587,9 +1592,6 @@ async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: 
     sources_used = []
     if not retrieved_context or len(retrieved_context.strip()) < 50:
         try:
-            import os
-            import chromadb
-            from chromadb.utils import embedding_functions
 
             chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
             client = chromadb.PersistentClient(
@@ -1817,9 +1819,6 @@ async def compare_documents(
 ):
     """Compare two versions of a regulatory document and identify changes with regulatory impact."""
     try:
-        import pypdf
-        import docx as python_docx
-        import io
 
         def extract_text(file_bytes: bytes, filename: str) -> str:
             filename_lower = filename.lower()
@@ -1832,7 +1831,7 @@ async def compare_documents(
                         pages.append(f"[Page {i+1}]\n{text}")
                 return "\n\n".join(pages)
             elif filename_lower.endswith(".docx"):
-                doc = python_docx.Document(io.BytesIO(file_bytes))
+                doc = docx.Document(io.BytesIO(file_bytes))
                 return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
             else:
                 raise HTTPException(status_code=400, detail=f"Unsupported file type: {filename}. Use PDF or DOCX.")
@@ -2023,7 +2022,6 @@ async def mapping_store_health():
 async def case_store_health():
     """Check how many cases are stored for duplicate detection."""
     try:
-        from app.services.case_store import get_case_collection
         collection = get_case_collection()
         count = collection.count() if collection else 0
         return {
