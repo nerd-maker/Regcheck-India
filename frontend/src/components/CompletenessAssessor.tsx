@@ -101,6 +101,7 @@ export default function CompletenessAssessor() {
       saveToHistory(MODULE_NAME, MODULE_ID, text, res);
     } catch (err: unknown) {
       console.error('Assessment failed:', err);
+      setResult(null);  // Clear stale result to prevent React render crash
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -116,6 +117,7 @@ export default function CompletenessAssessor() {
       setCompareResult(response.result);
     } catch (err: unknown) {
       console.error('Comparison failed:', err);
+      setResult(null);  // Clear stale result to prevent React render crash
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);

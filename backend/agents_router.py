@@ -949,6 +949,27 @@ Return EXACTLY this JSON structure:
 """
 
 
+@router.post("/demo/reset-my-quota")
+async def reset_my_quota(
+    email: str,
+    org: str,
+    x_admin_key: Optional[str] = Header(None)
+):
+    """Admin endpoint to reset a user's demo quota for testing."""
+    admin_key = os.getenv("ADMIN_DEMO_KEY", "")
+    if not admin_key or x_admin_key != admin_key:
+        raise HTTPException(status_code=403, detail="Admin key required")
+
+    token = _generate_token(email, org)
+    with _demo_lock:
+        if token in _demo_store:
+            _demo_store[token]["remaining"] = 5
+            _demo_store[token]["total_used"] = 0
+            return {"status": "ok", "message": f"Quota reset to 5 for {email}"}
+
+    return {"status": "not_found", "message": "User not found — they may need to register first"}
+
+
 @router.get("/anonymise/health", summary="Agent 01 - Anonymise Health Check")
 async def anonymise_health():
     """Lightweight CORS smoke-test endpoint — no API key required, no LLM call."""

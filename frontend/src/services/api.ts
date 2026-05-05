@@ -40,16 +40,27 @@ export const storeSarvamKey = (key: string): void => {
   }
 };
 
-export const getDemoToken = (): string =>
-  (typeof window !== 'undefined' ? localStorage.getItem('demo_token') : null) ?? '';
+export const getDemoToken = (): string => {
+  if (typeof window === 'undefined') return '';
+  // If using admin key — don't send demo token (bypasses quota)
+  const storedKey = getStoredKey();
+  const adminKey = process.env.NEXT_PUBLIC_ADMIN_KEY || '';
+  if (adminKey && storedKey === adminKey) return '';
+  return localStorage.getItem('demo_token') || '';
+};
 
 const decrementLocalQuota = () => {
-  if (typeof window === 'undefined') return
-  const remaining = parseInt(localStorage.getItem('demo_requests_remaining') || '5')
+  if (typeof window === 'undefined') return;
+  const remaining = parseInt(localStorage.getItem('demo_requests_remaining') || '5');
   if (remaining > 0) {
-    localStorage.setItem('demo_requests_remaining', String(remaining - 1))
+    localStorage.setItem('demo_requests_remaining', String(remaining - 1));
   }
-}
+};
+
+const syncQuotaExhausted = () => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('demo_requests_remaining', '0');
+};
 
 // ─── Generic agent caller — used by M1, M2, M3, M4, M5, M7, M8 ──────────────
 export const callAgent = async (
@@ -73,6 +84,18 @@ export const callAgent = async (
     return response.data;
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
+      // Handle demo quota exhausted — sync counter to 0, throw clean error
+      if (error.response?.status === 429) {
+        const detail = error.response.data?.detail;
+        if (typeof detail === 'object' && detail?.error === 'DEMO_QUOTA_EXHAUSTED') {
+          syncQuotaExhausted();
+          throw new Error(
+            'You have used all 5 free demo requests. ' +
+            'Contact rushikeshbork000@gmail.com for full access.'
+          );
+        }
+        throw new Error('Too many requests — please wait a moment and try again.');
+      }
       if (error.code === 'ECONNABORTED') {
         throw new Error('Request timed out — the server took too long to respond. Please try again.');
       }
@@ -113,6 +136,18 @@ export const callQAAgent = async (
     return response.data;
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
+      // Handle demo quota exhausted
+      if (error.response?.status === 429) {
+        const detail = error.response.data?.detail;
+        if (typeof detail === 'object' && detail?.error === 'DEMO_QUOTA_EXHAUSTED') {
+          syncQuotaExhausted();
+          throw new Error(
+            'You have used all 5 free demo requests. ' +
+            'Contact rushikeshbork000@gmail.com for full access.'
+          );
+        }
+        throw new Error('Too many requests — please wait a moment and try again.');
+      }
       if (error.code === 'ECONNABORTED') {
         throw new Error('Request timed out — the server took too long to respond. Please try again.');
       }
@@ -141,21 +176,33 @@ export const runDocumentSummariser = (document: string, metadata = {}) =>
   callAgent('/api/v1/agents/summarise', document, metadata);
 
 export const runCompletenessAssessor = (document: string, document_type: string = 'GENERAL', metadata = {}) => {
-  try {
-    return axios.post(
-      `${BACKEND_URL}/api/v1/agents/completeness`,
-      { document, document_type, metadata },
-      { 
-        headers: {
-          'x-anthropic-api-key': getStoredKey(),
-          'x-demo-token': getDemoToken(),
-        },
-        timeout: 120000
+  return axios.post(
+    `${BACKEND_URL}/api/v1/agents/completeness`,
+    { document, document_type, metadata },
+    {
+      headers: {
+        'x-anthropic-api-key': getStoredKey(),
+        'x-demo-token': getDemoToken(),
+      },
+      timeout: 120000
+    }
+  ).then(r => {
+    decrementLocalQuota();
+    return r.data;
+  }).catch((error: unknown) => {
+    if (axios.isAxiosError(error) && error.response?.status === 429) {
+      const detail = error.response.data?.detail;
+      if (typeof detail === 'object' && detail?.error === 'DEMO_QUOTA_EXHAUSTED') {
+        syncQuotaExhausted();
+        throw new Error(
+          'You have used all 5 free demo requests. ' +
+          'Contact rushikeshbork000@gmail.com for full access.'
+        );
       }
-    ).then(r => { decrementLocalQuota(); return r.data; });
-  } catch (error: unknown) {
+      throw new Error('Too many requests — please wait a moment and try again.');
+    }
     throw error;
-  }
+  });
 };
 
 export const runCaseClassifier = (document: string, metadata = {}) =>

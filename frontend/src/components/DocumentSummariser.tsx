@@ -148,6 +148,7 @@ export default function DocumentSummariser() {
       saveToHistory(MODULE_NAME, MODULE_ID, text, res);
     } catch (err: unknown) {
       console.error('Summarisation failed:', err);
+      setResult(null);  // Clear stale result to prevent React render crash
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
@@ -163,6 +164,7 @@ export default function DocumentSummariser() {
       setResult(data.result);
       setTranscriptionMetadata(data.result.transcription);
     } catch (err: unknown) {
+      setResult(null);  // Clear stale result to prevent React render crash
       setError(err instanceof Error ? err.message : 'Transcription failed');
     } finally {
       setLoading(false);

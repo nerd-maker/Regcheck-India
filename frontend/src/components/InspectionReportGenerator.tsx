@@ -102,6 +102,7 @@ export default function InspectionReportGenerator() {
       saveToHistory(MODULE_NAME, MODULE_ID, text, res);
     } catch (err: unknown) {
       console.error('Report generation failed:', err);
+      setResult(null);  // Clear stale result to prevent React render crash
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
