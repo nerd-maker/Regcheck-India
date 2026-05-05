@@ -1,9 +1,30 @@
-'use client';
+﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import FileUpload from '@/components/FileUpload';
 import ModelAttributionBadge from './ModelAttributionBadge';
+import OutputActions from '@/components/OutputActions';
+import FeedbackWidget from '@/components/FeedbackWidget';
+import AIDisclaimer from '@/components/AIDisclaimer';
+import HistoryPanel from '@/components/HistoryPanel';
+import { saveToHistory, HistoryEntry } from '@/services/history';
 import { runICHGCPChecker } from '@/services/api';
+
+const MODULE_ID = 'm8-ich-gcp';
+const MODULE_NAME = 'ICH E6(R3) GCP Checker';
+
+const M8_SAMPLE = `GCP COMPLIANCE AUDIT - Phase III Clinical Trial Site Assessment
+Site: Apollo Hospitals, Hyderabad | Trial: BX-400 Phase III, Complicated UTI Study
+FINDINGS:
+- No documented Quality Management System for trial operations
+- Risk-Based Monitoring: Fixed monitoring intervals, no centralized monitoring plan
+- PI Training: 2 of 6 required training modules completed
+- Informed Consent: 7 of 18 subjects not re-consented post protocol amendment v2.0
+- EDC System: User access authorization logs unavailable for 6 months
+- Audit trail: 5 data change entries without reason codes
+- Source Data Verification: 100% SDV conducted with no risk-based justification
+- Delegation Log: 3 new sub-investigators added but not listed in delegation log
+- Essential Documents: QMS documentation, re-consent forms, system validation docs missing`;
 
 const safeRender = (value: unknown): string => {
   if (value === null || value === undefined) return '';
@@ -16,10 +37,18 @@ const safeRender = (value: unknown): string => {
 
 const statusColor = (status: string) => {
   const upper = String(status).toUpperCase();
-  if (['COMPLIANT','COMPLETE','READY','PASSED','LOW','COMPLETED','PROBABLE','HIGH','STRONG','YES'].includes(upper)) return 'text-green-400 bg-green-400/10'
-  if (['PARTIAL','NEEDS_REVISION','MEDIUM','POSSIBLE','MINOR'].includes(upper)) return 'text-amber-400 bg-amber-400/10'
-  return 'text-red-400 bg-red-400/10'
-}
+  if (['COMPLIANT','COMPLETE','READY','PASSED','LOW','COMPLETED','PROBABLE','HIGH','STRONG','YES'].includes(upper)) return 'text-green-400 bg-green-400/10';
+  if (['PARTIAL','NEEDS_REVISION','MEDIUM','POSSIBLE','MINOR'].includes(upper)) return 'text-amber-400 bg-amber-400/10';
+  return 'text-red-400 bg-red-400/10';
+};
+
+const validateInput = (text: string): string | null => {
+  if (!text || !text.trim()) return 'Please enter or upload a document before running.';
+  const wc = text.trim().split(/\s+/).length;
+  if (wc < 20) return `Please provide more content - minimum 20 words required (currently ${wc} words).`;
+  if (wc > 8000) return 'Document too long - please limit to 8,000 words.';
+  return null;
+};
 
 export default function ICHGCPChecker() {
   const [text, setText] = useState('');
@@ -27,35 +56,39 @@ export default function ICHGCPChecker() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
 
-  const handleTextExtracted = (extractedText: string, _filename: string) => {
-    setText(extractedText);
-    setUploadError(null);
-  };
+  useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
 
-  const handleUploadError = (uploadMessage: string) => {
-    setUploadError(uploadMessage);
-  };
+  const resultHash = useMemo(() => {
+    if (!result) return '';
+    const str = JSON.stringify(result).substring(0, 200);
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h = h & h; }
+    return Math.abs(h).toString(16);
+  }, [result]);
+
+  const handleTextExtracted = (t: string) => { setText(t); setUploadError(null); };
+  const handleUploadError = (m: string) => setUploadError(m);
+  const handleRestore = (entry: HistoryEntry) => setResult(entry.result);
 
   const runCheck = async () => {
-    setError(null);
-    setLoading(true);
+    const ve = validateInput(text);
+    if (ve) { setError(ve); return; }
+    setError(null); setLoading(true);
     try {
       const response = await runICHGCPChecker(text);
-      setResult(response.result);
+      const res = response.result;
+      setResult(res);
+      saveToHistory(MODULE_NAME, MODULE_ID, text, res);
     } catch (err: unknown) {
-      console.error('ICH GCP check failed:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const readinessColor = (readiness: string) => {
-    const r = (readiness || '').toLowerCase();
-    if (r.includes('ready') || r.includes('high')) return 'text-emerald-300';
-    if (r.includes('moderate') || r.includes('partial')) return 'text-amber-300';
-    return 'text-rose-300';
+    } finally { setLoading(false); }
   };
 
   return (
@@ -66,190 +99,98 @@ export default function ICHGCPChecker() {
             <div className="section-kicker">GCP lane</div>
             <h3 className="mt-3 text-2xl font-semibold">ICH E6(R3) GCP compliance</h3>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              Assess documents against ICH E6(R3) Good Clinical Practice. Identifies R3-specific
-              gaps, inspection risks, strengths, and overall inspection readiness.
+              Assess documents against ICH E6(R3) Good Clinical Practice. Identifies R3-specific gaps, inspection risks, strengths, and overall inspection readiness.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <span className="status-chip">ICH E6(R3)</span>
             <span className="status-chip">GCP</span>
             <span className="status-chip">Inspection-ready</span>
+            <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
           </div>
         </div>
-
         <FileUpload onTextExtracted={handleTextExtracted} onError={handleUploadError} disabled={loading} />
-        {uploadError && (
-          <div className="mb-2 flex items-center gap-1 text-xs text-red-400">
-            <span>⚠</span> {uploadError}
-          </div>
-        )}
-        <textarea
-          className="textarea-shell"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Paste the document text for ICH E6(R3) GCP compliance assessment."
-        />
-
-        <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <p className="text-sm text-slate-400">
-            Returns GCP compliance status, R3-specific gaps, strengths, and inspection readiness.
-          </p>
-          <button type="button" className="primary-button" onClick={runCheck} disabled={loading || !text.trim()}>
-            {loading ? 'Assessing...' : 'Run GCP compliance check'}
+        {uploadError && <div className="mb-2 flex items-center gap-1 text-xs text-red-400"><span>⚠</span> {uploadError}</div>}
+        <div className="flex items-center justify-between mb-2 mt-4">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Input</label>
+          <button onClick={() => { setText(M8_SAMPLE); setError(null); }} className="flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 transition-colors px-2 py-1 rounded-lg hover:bg-teal-400/10">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+            Load sample data
           </button>
+        </div>
+        <textarea className="textarea-shell" value={text} onChange={(e) => { setText(e.target.value); setError(null); }} placeholder="Paste the document text for ICH E6(R3) GCP compliance assessment." />
+        {text && <div className="flex justify-between items-center mt-1.5"><span className="text-xs text-slate-500">{wordCount} words</span>{wordCount > 6000 && <span className="text-xs text-amber-400">⚠ Large document</span>}</div>}
+        <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <p className="text-sm text-slate-400">Returns GCP compliance status, R3-specific gaps, strengths, and inspection readiness.</p>
+          <button type="button" className="primary-button" onClick={runCheck} disabled={loading || !text.trim()}>{loading ? 'Assessing...' : 'Run GCP compliance check'}</button>
         </div>
       </div>
 
-      {error && (
-        <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-4">
+      {loading && (
+        <div className="mt-6 rounded-2xl border border-teal-500/20 bg-teal-500/5 px-6 py-5">
           <div className="flex items-center gap-3">
-            <span className="text-red-400 text-lg">⚠</span>
+            <svg className="animate-spin h-5 w-5 text-teal-400 shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
             <div>
-              <div className="text-red-400 font-medium text-sm">Request Failed</div>
-              <div className="text-red-300 text-sm mt-1">{error}</div>
+              <div className="text-sm font-semibold text-teal-400">Processing... {elapsed}s</div>
+              <div className="text-xs text-slate-400 mt-0.5">{elapsed < 10 ? 'Sending to AI agent...' : elapsed < 30 ? 'Analysing document...' : elapsed < 60 ? 'Generating compliance report...' : 'Almost done, please wait...'}</div>
             </div>
           </div>
-          <div className="mt-3 text-xs text-slate-500">
-            If the server is starting up, wait 30 seconds and try again. 
-            Free tier servers sleep after 15 minutes of inactivity.
-          </div>
+          {elapsed > 20 && <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-white/5">If server was inactive, first request takes 30-60 seconds to wake up</div>}
         </div>
       )}
+
+      {error && <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-4"><div className="text-red-400 font-medium text-sm">Request Failed</div><div className="text-red-300 text-sm mt-1">{error}</div></div>}
 
       {result && (
         <div className="glass-panel p-6">
           <ModelAttributionBadge attribution={result?.model_attribution} />
-
+          {result._metadata && (
+            <div className={`flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl border text-xs font-medium ${result._metadata.confidence_level === 'HIGH' ? 'border-green-500/30 bg-green-500/10 text-green-400' : result._metadata.confidence_level === 'MEDIUM' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-red-500/30 bg-red-500/10 text-red-400'}`}>
+              <span>{result._metadata.confidence_level} CONFIDENCE — {result._metadata.confidence_reason}</span>
+            </div>
+          )}
           <div className="border-b border-white/10 pb-4 mb-6 mt-4">
             <h2 className="text-xl font-bold uppercase tracking-wider text-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
               ICH E6(R3) Compliance
               <div className="flex items-center gap-2">
-                <span className={`status-chip text-sm normal-case font-medium ${statusColor(result.overall_gcp_status || result.overall_status || 'UNKNOWN')}`} style={{ padding: '4px 12px' }}>
-                  Status: {safeRender(result.overall_gcp_status || result.overall_status || 'Unknown')}
-                </span>
-                <span className="status-chip text-sm font-normal normal-case">
-                  Score: {safeRender(result.gcp_score)} ({safeRender(result.gcp_percentage)})
-                </span>
+                <span className={`status-chip text-sm normal-case font-medium ${statusColor(result.overall_gcp_status || result.overall_status || 'UNKNOWN')}`} style={{ padding: '4px 12px' }}>Status: {safeRender(result.overall_gcp_status || result.overall_status || 'Unknown')}</span>
+                <span className="status-chip text-sm font-normal normal-case">Score: {safeRender(result.gcp_score)} ({safeRender(result.gcp_percentage)})</span>
               </div>
             </h2>
           </div>
-
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="rounded-xl border border-white/10 bg-white/5 p-4 flex flex-col justify-center items-center text-center">
-              <div className="text-xs text-slate-400 uppercase font-bold mb-1">Principles Assessed</div>
-              <div className="text-2xl font-bold text-slate-100">{result.gcp_principles?.length ?? 0}</div>
-            </div>
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 flex flex-col justify-center items-center text-center">
-              <div className="text-xs text-red-400 uppercase font-bold mb-1">Critical Deviations</div>
-              <div className="text-2xl font-bold text-red-300">{result.critical_deviations?.length ?? 0}</div>
-            </div>
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 flex flex-col justify-center items-center text-center">
-              <div className="text-xs text-amber-400 uppercase font-bold mb-1">Major Deviations</div>
-              <div className="text-2xl font-bold text-amber-300">{result.major_deviations?.length ?? 0}</div>
-            </div>
-            <div className="rounded-xl border border-yellow-300/30 bg-yellow-300/10 p-4 flex flex-col justify-center items-center text-center">
-              <div className="text-xs text-yellow-500 uppercase font-bold mb-1">Minor Deviations</div>
-              <div className="text-2xl font-bold text-yellow-400">{result.minor_deviations?.length ?? 0}</div>
-            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-center"><div className="text-xs text-slate-400 uppercase font-bold mb-1">Principles</div><div className="text-2xl font-bold">{result.gcp_principles?.length ?? 0}</div></div>
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center"><div className="text-xs text-red-400 uppercase font-bold mb-1">Critical</div><div className="text-2xl font-bold text-red-300">{result.critical_deviations?.length ?? 0}</div></div>
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center"><div className="text-xs text-amber-400 uppercase font-bold mb-1">Major</div><div className="text-2xl font-bold text-amber-300">{result.major_deviations?.length ?? 0}</div></div>
+            <div className="rounded-xl border border-yellow-300/30 bg-yellow-300/10 p-4 text-center"><div className="text-xs text-yellow-500 uppercase font-bold mb-1">Minor</div><div className="text-2xl font-bold text-yellow-400">{result.minor_deviations?.length ?? 0}</div></div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            {result.quality_tolerance_limits && (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Quality Tolerance Limits</div>
-                <div className="space-y-2 text-sm text-slate-300">
-                  {Object.entries(result.quality_tolerance_limits).map(([key, value]) => (
-                    <div key={key} className="flex gap-2 w-full">
-                      <span className="capitalize w-32 text-slate-400">{key.replace(/_/g, ' ')}:</span>
-                      <span className={typeof value === 'boolean' ? (value ? 'text-emerald-400 font-medium' : 'text-rose-400 font-medium') : ''}>{safeRender(value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {result.risk_based_monitoring && (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Risk Based Monitoring</div>
-                <div className="space-y-2 text-sm text-slate-300">
-                  {Object.entries(result.risk_based_monitoring).map(([key, value]) => (
-                    <div key={key} className="flex gap-2 w-full">
-                      <span className="capitalize w-32 text-slate-400">{key.replace(/_/g, ' ')}:</span>
-                      <span className={typeof value === 'boolean' ? (value ? 'text-emerald-400 font-medium' : 'text-rose-400 font-medium') : ''}>{safeRender(value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {result.essential_documents && (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Essential Documents</div>
-                <div className="space-y-2 text-sm text-slate-300">
-                  {Object.entries(result.essential_documents).map(([key, value]) => (
-                    <div key={key} className="flex gap-2 w-full">
-                      <span className="capitalize w-32 text-slate-400">{key.replace(/_/g, ' ')}:</span>
-                      <span className={key === 'status' ? statusColor(String(value)) : ''}>{safeRender(value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {(Array.isArray(result.critical_deviations) && result.critical_deviations.length > 0 || Array.isArray(result.major_deviations) && result.major_deviations.length > 0 || Array.isArray(result.minor_deviations) && result.minor_deviations.length > 0) && (
+          {(Array.isArray(result.critical_deviations) && result.critical_deviations.length > 0) && (
             <div className="mb-6">
-              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Identified Deviations</div>
-              <div className="space-y-3">
-                {Array.isArray(result.critical_deviations) && result.critical_deviations.map((item: string, i: number) => (
-                  <div key={`crit-${i}`} className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex gap-3 items-start">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase text-red-300 bg-red-500/20 mt-0.5 whitespace-nowrap">CRITICAL</span>
-                    <span>{safeRender(item)}</span>
-                  </div>
-                ))}
-                {Array.isArray(result.major_deviations) && result.major_deviations.map((item: string, i: number) => (
-                  <div key={`maj-${i}`} className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 flex gap-3 items-start">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase text-amber-300 bg-amber-500/20 mt-0.5 whitespace-nowrap">MAJOR</span>
-                    <span>{safeRender(item)}</span>
-                  </div>
-                ))}
-                {Array.isArray(result.minor_deviations) && result.minor_deviations.map((item: string, i: number) => (
-                  <div key={`min-${i}`} className="rounded-xl border border-yellow-300/30 bg-yellow-300/10 px-4 py-3 text-sm text-yellow-200 flex gap-3 items-start">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase text-yellow-200 bg-yellow-300/20 mt-0.5 whitespace-nowrap">MINOR</span>
-                    <span>{safeRender(item)}</span>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Critical Deviations</div>
+              <div className="space-y-2">
+                {result.critical_deviations.map((item: string, i: number) => (
+                  <div key={i} className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex gap-3 items-start">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase text-red-300 bg-red-500/20 mt-0.5 whitespace-nowrap">CRITICAL</span><span>{safeRender(item)}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
           {Array.isArray(result.gcp_principles) && result.gcp_principles.length > 0 && (
             <div className="mb-6">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">GCP Principles Checked</div>
               <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
                 <table className="w-full text-left text-sm text-slate-300">
                   <thead className="border-b border-white/10 bg-slate-900/50 text-xs uppercase text-slate-400">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold w-1/4">Principle</th>
-                      <th className="px-4 py-3 font-semibold">ICH Reference</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Observation / Corrective Action</th>
-                    </tr>
+                    <tr><th className="px-4 py-3 font-semibold w-1/4">Principle</th><th className="px-4 py-3 font-semibold">ICH Reference</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Observation</th></tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {result.gcp_principles.map((item: any, i: number) => (
                       <tr key={i} className="hover:bg-white/5">
                         <td className="px-4 py-3 font-medium text-slate-200">{safeRender(item.principle)}</td>
                         <td className="px-4 py-3 text-xs">{safeRender(item.ich_reference)}</td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${statusColor(item.status)}`}>{safeRender(item.status)}</span>
-                        </td>
-                        <td className="px-4 py-3 text-xs">
-                          <div className="mb-1">{safeRender(item.observation)}</div>
-                          {item.corrective_action && (
-                            <div className="text-amber-300/80 mt-1 flex gap-1 items-start">
-                              <span className="font-bold">CAPA:</span><span>{safeRender(item.corrective_action)}</span>
-                            </div>
-                          )}
-                        </td>
+                        <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${statusColor(item.status)}`}>{safeRender(item.status)}</span></td>
+                        <td className="px-4 py-3 text-xs"><div>{safeRender(item.observation)}</div>{item.corrective_action && <div className="text-amber-300/80 mt-1"><span className="font-bold">CAPA:</span> {safeRender(item.corrective_action)}</div>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -257,30 +198,25 @@ export default function ICHGCPChecker() {
               </div>
             </div>
           )}
-
           {Array.isArray(result.recommendations) && result.recommendations.length > 0 && (
             <div className="mb-6 rounded-2xl border border-blue-400/20 bg-blue-400/10 px-5 py-4">
               <div className="text-xs font-bold uppercase tracking-wider text-blue-400 mb-3">Recommendations</div>
-              <div className="space-y-1 text-sm text-blue-300">
-                {result.recommendations.map((item: string, i: number) => (
-                  <div key={i}>• {safeRender(item)}</div>
-                ))}
-              </div>
+              <div className="space-y-1 text-sm text-blue-300">{result.recommendations.map((item: string, i: number) => <div key={i}>• {safeRender(item)}</div>)}</div>
             </div>
           )}
-
           {result.audit_log && (
             <div className="mt-4 border-t border-white/10 pt-4">
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                 <span className="font-semibold uppercase tracking-wider">Audit Log:</span>
                 <span>{safeRender(result.audit_log.timestamp)}</span>
                 <span>•</span>
-                <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>
-                  {safeRender(result.audit_log.status)}
-                </span>
+                <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>{safeRender(result.audit_log.status)}</span>
               </div>
             </div>
           )}
+          <AIDisclaimer />
+          <OutputActions result={result} moduleName={MODULE_NAME} textContent={`RegCheck-India - ${MODULE_NAME} Result\nGenerated: ${new Date().toLocaleString()}\n\nGCP Status: ${result.overall_gcp_status || ''}\nScore: ${result.gcp_score || ''} (${result.gcp_percentage || ''})\n\nCritical: ${(result.critical_deviations || []).join('; ')}\nRecommendations: ${(result.recommendations || []).join('; ')}`} />
+          <FeedbackWidget moduleName={MODULE_NAME} resultHash={resultHash} />
         </div>
       )}
     </div>

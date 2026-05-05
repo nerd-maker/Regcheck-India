@@ -9,6 +9,17 @@ export const getStoredKey = (): string =>
 export const getSarvamKey = (): string =>
   (typeof window !== 'undefined' ? localStorage.getItem('sarvam_api_key') : null) ?? '';
 
+export const getDemoToken = (): string =>
+  (typeof window !== 'undefined' ? localStorage.getItem('demo_token') : null) ?? '';
+
+const decrementLocalQuota = () => {
+  if (typeof window === 'undefined') return
+  const remaining = parseInt(localStorage.getItem('demo_requests_remaining') || '5')
+  if (remaining > 0) {
+    localStorage.setItem('demo_requests_remaining', String(remaining - 1))
+  }
+}
+
 // ─── Generic agent caller — used by M1, M2, M3, M4, M5, M7, M8 ──────────────
 export const callAgent = async (
   endpoint: string,
@@ -20,10 +31,14 @@ export const callAgent = async (
       `${BACKEND_URL}${endpoint}`,
       { document, metadata },
       { 
-        headers: { 'x-anthropic-api-key': getStoredKey() },
+        headers: {
+          'x-anthropic-api-key': getStoredKey(),
+          'x-demo-token': getDemoToken(),
+        },
         timeout: 120000
       }
     );
+    decrementLocalQuota();
     return response.data;
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
@@ -56,10 +71,14 @@ export const callQAAgent = async (
       `${BACKEND_URL}/api/v1/agents/qa`,
       { question, retrieved_context: '', metadata },
       { 
-        headers: { 'x-anthropic-api-key': getStoredKey() },
+        headers: {
+          'x-anthropic-api-key': getStoredKey(),
+          'x-demo-token': getDemoToken(),
+        },
         timeout: 120000 
       }
     );
+    decrementLocalQuota();
     return response.data;
   } catch (error: unknown) {
     if (axios.isAxiosError(error)) {
@@ -96,10 +115,13 @@ export const runCompletenessAssessor = (document: string, document_type: string 
       `${BACKEND_URL}/api/v1/agents/completeness`,
       { document, document_type, metadata },
       { 
-        headers: { 'x-anthropic-api-key': getStoredKey() },
+        headers: {
+          'x-anthropic-api-key': getStoredKey(),
+          'x-demo-token': getDemoToken(),
+        },
         timeout: 120000
       }
-    ).then(r => r.data);
+    ).then(r => { decrementLocalQuota(); return r.data; });
   } catch (error: unknown) {
     throw error;
   }

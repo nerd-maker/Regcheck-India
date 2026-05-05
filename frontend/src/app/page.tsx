@@ -192,7 +192,7 @@ export default function LandingPage() {
 
               <div className="mb-14 flex flex-wrap gap-4">
                 <Link
-                  href="/app"
+                  href="/register"
                   className="flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-4 text-sm font-semibold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-teal-700"
                 >
                   Try Free Demo
@@ -338,7 +338,7 @@ export default function LandingPage() {
 
           <div className="fade-up mt-12 text-center">
             <Link
-              href="/app"
+              href="/register"
               className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-8 py-4 font-semibold text-white shadow-lg transition-colors hover:bg-teal-700"
             >
               Access All 8 Agents Free

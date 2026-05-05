@@ -1,9 +1,38 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import FileUpload from '@/components/FileUpload';
 import ModelAttributionBadge from './ModelAttributionBadge';
+import OutputActions from '@/components/OutputActions';
+import FeedbackWidget from '@/components/FeedbackWidget';
+import AIDisclaimer from '@/components/AIDisclaimer';
+import HistoryPanel from '@/components/HistoryPanel';
+import { saveToHistory, HistoryEntry } from '@/services/history';
 import { runDocumentSummariser, extractTextFromFileOCR, transcribeMeetingAudio } from '@/services/api';
+
+const MODULE_ID = 'm2-summarise';
+const MODULE_NAME = 'Document Summariser';
+
+const M2_SAMPLE = `DEFICIENCY COMMUNICATION - CDSCO/IND/2024/CT-DEF/0892
+Study: Phase II study of ZP-101 (SGLT-2 inhibitor) in Type 2 Diabetes Mellitus
+Sponsor: ZenPharma India Pvt. Ltd., Mumbai
+Protocol: ZP-2024-DIAB-002, Application Date: 05-January-2024
+
+DEFICIENCIES IDENTIFIED:
+1. Reproductive toxicity studies not completed as per Schedule Y requirements
+2. Local ethics committee approvals pending for 3 of 5 study sites
+3. Subject information sheet not available in Hindi and Marathi
+4. Final Statistical Analysis Plan not submitted
+5. Clinical trial insurance documentation incomplete
+6. DSMB charter not provided for Phase II study`;
+
+const validateInput = (text: string): string | null => {
+  if (!text || !text.trim()) return 'Please enter or upload a document before running.';
+  const wc = text.trim().split(/\s+/).length;
+  if (wc < 20) return `Please provide more content - minimum 20 words required (currently ${wc} words).`;
+  if (wc > 8000) return 'Document too long - please limit to 8,000 words.';
+  return null;
+};
 
 const safeRender = (value: unknown): string => {
   if (value === null || value === undefined) return '';
@@ -56,23 +85,38 @@ export default function DocumentSummariser() {
   const [inputMode, setInputMode] = useState<'text' | 'scan' | 'handwritten'>('text');
   const [ocrResult, setOcrResult] = useState<{method: string, confidence: number, warnings: string[]} | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
-  
-  // Audio specific state
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [languageCode, setLanguageCode] = useState<string>('unknown');
   const [transcriptionMetadata, setTranscriptionMetadata] = useState<any>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+
+  useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
+
+  const resultHash = useMemo(() => {
+    if (!result) return '';
+    const str = JSON.stringify(result).substring(0, 200);
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h = h & h; }
+    return Math.abs(h).toString(16);
+  }, [result]);
 
   const handleTextExtracted = (extractedText: string, _filename: string) => {
     setText(extractedText);
     setUploadError(null);
     setOcrResult(null);
   };
-
-  const handleUploadError = (uploadMessage: string) => {
-    setUploadError(uploadMessage);
-  };
+  const handleUploadError = (uploadMessage: string) => setUploadError(uploadMessage);
+  const handleRestore = (entry: HistoryEntry) => setResult(entry.result);
 
   const run = async () => {
+    const ve = validateInput(text);
+    if (ve) { setError(ve); return; }
     setError(null);
     setLoading(true);
     try {
@@ -80,8 +124,10 @@ export default function DocumentSummariser() {
         document_type: tab === 'sugam' ? 'sugam_application' : tab === 'sae' ? 'sae_case' : 'meeting_transcript',
         checklist_type: tab === 'sugam' ? 'ct04' : undefined,
       });
-      setResult(response.result);
+      const res = response.result;
+      setResult(res);
       setTranscriptionMetadata(null);
+      saveToHistory(MODULE_NAME, MODULE_ID, text, res);
     } catch (err: unknown) {
       console.error('Summarisation failed:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -114,6 +160,9 @@ export default function DocumentSummariser() {
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
             Move from long-form narratives to concise reviewer packets with deterministic output shapes.
           </p>
+          <div className="mt-3">
+            <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-4 mb-8">
@@ -255,12 +304,20 @@ export default function DocumentSummariser() {
                 <span>⚠</span> {uploadError}
               </div>
             )}
+            <div className="flex items-center justify-between mb-2 mt-4">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Input</label>
+              <button onClick={() => { setText(M2_SAMPLE); setError(null); }} className="flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 transition-colors px-2 py-1 rounded-lg hover:bg-teal-400/10">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                Load sample
+              </button>
+            </div>
             <textarea
-              className="textarea-shell mt-5"
+              className="textarea-shell mt-2"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => { setText(e.target.value); setError(null); }}
               placeholder="Paste filing text, SAE details, or meeting notes here."
             />
+            {text && <div className="flex justify-between items-center mt-1.5"><span className="text-xs text-slate-500">{wordCount} words</span>{wordCount > 6000 && <span className="text-xs text-amber-400">⚠ Large document</span>}</div>}
 
             <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="text-sm text-slate-400">{tabMeta[tab].note}</div>
@@ -346,6 +403,19 @@ export default function DocumentSummariser() {
         )}
       </div>
 
+      {loading && (
+        <div className="mt-6 rounded-2xl border border-teal-500/20 bg-teal-500/5 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <svg className="animate-spin h-5 w-5 text-teal-400 shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+            <div>
+              <div className="text-sm font-semibold text-teal-400">Processing... {elapsed}s</div>
+              <div className="text-xs text-slate-400 mt-0.5">{elapsed < 10 ? 'Sending to AI agent...' : elapsed < 30 ? 'Analysing document...' : elapsed < 60 ? 'Generating summary...' : 'Almost done...'}</div>
+            </div>
+          </div>
+          {elapsed > 20 && <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-white/5">If server was inactive, first request takes 30-60 seconds to wake up</div>}
+        </div>
+      )}
+
       {error && (
         <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-4">
           <div className="flex items-center gap-3">
@@ -361,6 +431,11 @@ export default function DocumentSummariser() {
       {result && (
         <div className="glass-panel p-6">
           <ModelAttributionBadge attribution={result?.model_attribution} />
+          {result._metadata && (
+            <div className={`flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl border text-xs font-medium ${result._metadata.confidence_level === 'HIGH' ? 'border-green-500/30 bg-green-500/10 text-green-400' : result._metadata.confidence_level === 'MEDIUM' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-red-500/30 bg-red-500/10 text-red-400'}`}>
+              <span>{result._metadata.confidence_level} CONFIDENCE — {result._metadata.confidence_reason}</span>
+            </div>
+          )}
 
           {transcriptionMetadata && (
             <div className="rounded-2xl border border-teal-500/20 bg-teal-500/5 px-5 py-4 mb-6">
@@ -581,19 +656,15 @@ export default function DocumentSummariser() {
                 <span>{safeRender(result.audit_log.timestamp)}</span>
                 <span>•</span>
                 <span>{transcriptionMetadata ? `${result.audit_log.transcript_word_count} words` : `${result.audit_log.document_pages} pages`} processed</span>
-                {result.audit_log.processing_time && (
-                  <>
-                    <span>•</span>
-                    <span>Time: {safeRender(result.audit_log.processing_time)}</span>
-                  </>
-                )}
+                {result.audit_log.processing_time && (<><span>•</span><span>Time: {safeRender(result.audit_log.processing_time)}</span></>)}
                 <span>•</span>
-                <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>
-                  {safeRender(result.audit_log.status)}
-                </span>
+                <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>{safeRender(result.audit_log.status)}</span>
               </div>
             </div>
           )}
+          <AIDisclaimer />
+          <OutputActions result={result} moduleName={MODULE_NAME} textContent={`RegCheck-India - ${MODULE_NAME}\nGenerated: ${new Date().toLocaleString()}\n\nType: ${result.document_type || ''}\n\nKey Points: ${(result.key_regulatory_points || result.key_points || []).join('; ')}`} />
+          <FeedbackWidget moduleName={MODULE_NAME} resultHash={resultHash} />
         </div>
       )}
     </div>

@@ -1,9 +1,19 @@
-'use client';
+﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import FileUpload from '@/components/FileUpload';
 import ModelAttributionBadge from './ModelAttributionBadge';
+import OutputActions from '@/components/OutputActions';
+import FeedbackWidget from '@/components/FeedbackWidget';
+import AIDisclaimer from '@/components/AIDisclaimer';
+import HistoryPanel from '@/components/HistoryPanel';
+import { saveToHistory, HistoryEntry } from '@/services/history';
 import { runRegulatoryQA } from '@/services/api';
+
+const MODULE_ID = 'm6-reg-qa';
+const MODULE_NAME = 'Regulatory Q&A';
+
+const M6_SAMPLE = `What are the SAE reporting timelines under NDCTR 2019 and what is the difference between a Serious Adverse Event (SAE) and a Suspected Unexpected Serious Adverse Reaction (SUSAR)? When is expedited reporting required to CDSCO?`;
 
 const safeRender = (value: unknown): string => {
   if (value === null || value === undefined) return '';
@@ -23,27 +33,44 @@ const statusColor = (status: string) => {
 
 export default function RegulatoryQA() {
   const [question, setQuestion] = useState('');
-
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
+
+  const resultHash = useMemo(() => {
+    if (!result) return '';
+    const str = JSON.stringify(result).substring(0, 200);
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h = h & h; }
+    return Math.abs(h).toString(16);
+  }, [result]);
 
   const handleTextExtracted = (extractedText: string, _filename: string) => {
     setQuestion(extractedText);
     setUploadError(null);
   };
-
-  const handleUploadError = (uploadMessage: string) => {
-    setUploadError(uploadMessage);
-  };
+  const handleUploadError = (uploadMessage: string) => setUploadError(uploadMessage);
+  const handleRestore = (entry: HistoryEntry) => setResult(entry.result);
 
   const runQA = async () => {
+    const wc = question.trim().split(/\s+/).length;
+    if (!question.trim()) { setError('Please enter a question before running.'); return; }
+    if (wc < 5) { setError('Please enter a more specific question (minimum 5 words).'); return; }
     setError(null);
     setLoading(true);
     try {
       const response = await runRegulatoryQA(question);
-      setResult(response.result);
+      const res = response.result;
+      setResult(res);
+      saveToHistory(MODULE_NAME, MODULE_ID, question, res);
     } catch (err: unknown) {
       console.error('Q&A failed:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -75,6 +102,7 @@ export default function RegulatoryQA() {
             <span className="status-chip">RAG</span>
             <span className="status-chip">Citations</span>
             <span className="status-chip">Context-bound</span>
+            <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
           </div>
         </div>
 
@@ -83,14 +111,21 @@ export default function RegulatoryQA() {
           <FileUpload onTextExtracted={handleTextExtracted} onError={handleUploadError} disabled={loading} />
           {uploadError && (
             <div className="mb-2 flex items-center gap-1 text-xs text-red-400">
-              <span>⚠</span> {uploadError}
+              <span>âš </span> {uploadError}
             </div>
           )}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-slate-500">Ask anything about NDCTR 2019, Schedule Y, or ICH guidelines</span>
+            <button onClick={() => { setQuestion(M6_SAMPLE); setError(null); }} className="flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 transition-colors px-2 py-1 rounded-lg hover:bg-teal-400/10">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              Load sample
+            </button>
+          </div>
           <input
             type="text"
             className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:border-teal-400/50 focus:outline-none"
             value={question}
-            onChange={(e) => setQuestion(e.target.value)}
+            onChange={(e) => { setQuestion(e.target.value); setError(null); }}
             placeholder="e.g. What are the sample size requirements for Phase III trials under NDCTR 2019?"
           />
         </div>
@@ -112,18 +147,27 @@ export default function RegulatoryQA() {
         </div>
       </div>
 
+      {loading && (
+        <div className="mt-6 rounded-2xl border border-teal-500/20 bg-teal-500/5 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <svg className="animate-spin h-5 w-5 text-teal-400 shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+            <div>
+              <div className="text-sm font-semibold text-teal-400">Processing... {elapsed}s</div>
+              <div className="text-xs text-slate-400 mt-0.5">{elapsed < 10 ? 'Sending question to AI...' : elapsed < 30 ? 'Searching regulatory knowledge base...' : 'Generating citation-grounded answer...'}</div>
+            </div>
+          </div>
+          {elapsed > 20 && <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-white/5">If server was inactive, first request takes 30-60 seconds to wake up</div>}
+        </div>
+      )}
+
       {error && (
         <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="text-red-400 text-lg">⚠</span>
+            <span className="text-red-400 text-lg">âš </span>
             <div>
               <div className="text-red-400 font-medium text-sm">Request Failed</div>
               <div className="text-red-300 text-sm mt-1">{error}</div>
             </div>
-          </div>
-          <div className="mt-3 text-xs text-slate-500">
-            If the server is starting up, wait 30 seconds and try again. 
-            Free tier servers sleep after 15 minutes of inactivity.
           </div>
         </div>
       )}
@@ -131,6 +175,11 @@ export default function RegulatoryQA() {
       {result && (
         <div className="glass-panel p-6">
           <ModelAttributionBadge attribution={result?.model_attribution} />
+          {result._metadata && (
+            <div className={`flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl border text-xs font-medium ${result._metadata.confidence_level === 'HIGH' ? 'border-green-500/30 bg-green-500/10 text-green-400' : result._metadata.confidence_level === 'MEDIUM' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-red-500/30 bg-red-500/10 text-red-400'}`}>
+              <span>{result._metadata.confidence_level} CONFIDENCE â€” {result._metadata.confidence_reason}</span>
+            </div>
+          )}
 
           <div className="border-b border-white/10 pb-4 mb-6 mt-4">
             <h2 className="text-xl font-bold uppercase tracking-wider text-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-2">
@@ -138,7 +187,7 @@ export default function RegulatoryQA() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-slate-400 font-normal">{safeRender(result.query_type || 'General')}</span>
                 <span className={`status-chip text-sm normal-case font-medium ${statusColor(result.confidence)}`} style={{ padding: '4px 12px' }}>
-                  Confidence: {safeRender(result.confidence ?? '—')}
+                  Confidence: {safeRender(result.confidence ?? 'â€”')}
                 </span>
               </div>
             </h2>
@@ -195,14 +244,17 @@ export default function RegulatoryQA() {
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
                 <span className="font-semibold uppercase tracking-wider">Audit Log:</span>
                 <span>{safeRender(result.audit_log.timestamp)}</span>
-                {result.audit_log.sources_consulted && <span>• Sources: {safeRender(result.audit_log.sources_consulted)}</span>}
-                <span>•</span>
+                {result.audit_log.sources_consulted && <span>â€¢ Sources: {safeRender(result.audit_log.sources_consulted)}</span>}
+                <span>â€¢</span>
                 <span className={statusColor(result.audit_log.status)} style={{ padding: '2px 8px', borderRadius: '99px' }}>
                   {safeRender(result.audit_log.status)}
                 </span>
               </div>
             </div>
           )}
+          <AIDisclaimer />
+          <OutputActions result={result} moduleName={MODULE_NAME} textContent={`RegCheck-India - ${MODULE_NAME}\nGenerated: ${new Date().toLocaleString()}\n\nQ: ${question}\n\nA: ${result.answer || ''}\n\nCitations: ${(result.regulatory_citations || []).join('; ')}`} />
+          <FeedbackWidget moduleName={MODULE_NAME} resultHash={resultHash} />
         </div>
       )}
     </div>

@@ -1,9 +1,25 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import FileUpload from '@/components/FileUpload';
 import ModelAttributionBadge from './ModelAttributionBadge';
+import OutputActions from '@/components/OutputActions';
+import FeedbackWidget from '@/components/FeedbackWidget';
+import AIDisclaimer from '@/components/AIDisclaimer';
+import HistoryPanel from '@/components/HistoryPanel';
+import { saveToHistory, HistoryEntry } from '@/services/history';
 import { runPIIAnonymiser } from '@/services/api';
+
+const MODULE_ID = 'm1-anonymise';
+const MODULE_NAME = 'PII Anonymiser';
+
+const M1_SAMPLE = `Patient: Mr. Rajesh Kumar, DOB: 12-May-1978, Patient ID: KEM/2024/0892
+Site: KEM Hospital, Mumbai. Investigator: Dr. Priya Sharma, MCI Reg: MH-45231
+Contact: rajesh.kumar@email.com, +91-9876543210
+Current status: Recovering, still hospitalised as of 25-March-2024
+Causality assessment: Probably related to study drug BX-400 400mg IV
+Ethics Committee: Independent Ethics Committee of Pune
+Contact: Mr. Deepak Nair, Secretary, IEC-Pune, deepak.nair@iecpune.org`;
 
 const safeRender = (value: unknown): string => {
   if (value === null || value === undefined) return '';
@@ -21,6 +37,14 @@ const statusColor = (status: string) => {
   return 'text-red-400 bg-red-400/10'
 }
 
+const validateInput = (text: string, minWords: number = 20): string | null => {
+  if (!text || !text.trim()) return 'Please enter or upload a document before running.';
+  const wordCount = text.trim().split(/\s+/).length;
+  if (wordCount < minWords) return `Please provide more content — minimum ${minWords} words required (currently ${wordCount} words).`;
+  if (wordCount > 8000) return 'Document too long — please limit to 8,000 words for best results.';
+  return null;
+};
+
 export default function AnonymisationTool() {
   const [text, setText] = useState('');
   const [result, setResult] = useState<any>(null);
@@ -28,6 +52,27 @@ export default function AnonymisationTool() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  const wordCount = text.trim() ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+
+  useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    const timer = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(timer);
+  }, [loading]);
+
+  const resultHash = useMemo(() => {
+    if (!result) return '';
+    const str = JSON.stringify(result).substring(0, 200);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16);
+  }, [result]);
 
   const handleTextExtracted = (extractedText: string, _filename: string) => {
     setText(extractedText);
@@ -39,17 +84,25 @@ export default function AnonymisationTool() {
   };
 
   const runAnonymise = async () => {
+    const validationError = validateInput(text);
+    if (validationError) { setError(validationError); return; }
     setError(null);
     setLoading(true);
     try {
       const response = await runPIIAnonymiser(text, { mode: mode === 'full' ? 'full' : 'pseudo', full_anonymisation: mode === 'full' });
-      setResult({ ...response.result, mode });
+      const res = { ...response.result, mode };
+      setResult(res);
+      saveToHistory(MODULE_NAME, MODULE_ID, text, res);
     } catch (err: unknown) {
       console.error('Anonymisation failed:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRestore = (entry: HistoryEntry) => {
+    setResult(entry.result);
   };
 
   return (
@@ -68,6 +121,7 @@ export default function AnonymisationTool() {
             <span className="status-chip">DPDP</span>
             <span className="status-chip">NDHM</span>
             <span className="status-chip">Audit-ready</span>
+            <HistoryPanel onRestore={handleRestore} currentModuleId={MODULE_ID} />
           </div>
         </div>
 
@@ -98,12 +152,33 @@ export default function AnonymisationTool() {
             <span>⚠</span> {uploadError}
           </div>
         )}
+
+        <div className="flex items-center justify-between mb-2 mt-4">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Input</label>
+          <button
+            onClick={() => { setText(M1_SAMPLE); setError(null); }}
+            className="flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 transition-colors px-2 py-1 rounded-lg hover:bg-teal-400/10"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Load sample data
+          </button>
+        </div>
         <textarea
           className="textarea-shell"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); setError(null); }}
           placeholder="Paste patient narratives, site details, or investigator notes here."
         />
+        {text && (
+          <div className="flex justify-between items-center mt-1.5">
+            <span className="text-xs text-slate-500">{wordCount} words</span>
+            {wordCount > 6000 && (
+              <span className="text-xs text-amber-400">⚠ Large document — may be truncated</span>
+            )}
+          </div>
+        )}
 
         <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-sm text-slate-400">
@@ -114,6 +189,34 @@ export default function AnonymisationTool() {
           </button>
         </div>
       </div>
+
+      {loading && (
+        <div className="mt-6 rounded-2xl border border-teal-500/20 bg-teal-500/5 px-6 py-5">
+          <div className="flex items-center gap-3 mb-3">
+            <svg className="animate-spin h-5 w-5 text-teal-400 shrink-0" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            <div>
+              <div className="text-sm font-semibold text-teal-400">Processing... {elapsed}s</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                {elapsed < 10 && "Sending to AI agent..."}
+                {elapsed >= 10 && elapsed < 30 && "Analysing document against regulations..."}
+                {elapsed >= 30 && elapsed < 60 && "Generating structured compliance report..."}
+                {elapsed >= 60 && "Large document — almost done, please wait..."}
+              </div>
+            </div>
+          </div>
+          {elapsed > 20 && (
+            <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-2 pt-2 border-t border-white/5">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              If server was inactive, first request takes 30-60 seconds to wake up
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-4">
@@ -131,10 +234,26 @@ export default function AnonymisationTool() {
         <div className="glass-panel p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <ModelAttributionBadge attribution={result?.model_attribution} />
 
+          {result._metadata && (
+            <div className={`flex items-center gap-2 mb-4 px-4 py-2.5 rounded-xl border text-xs font-medium ${
+              result._metadata.confidence_level === 'HIGH'
+                ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                : result._metadata.confidence_level === 'MEDIUM'
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                : 'border-red-500/30 bg-red-500/10 text-red-400'
+            }`}>
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              </svg>
+              <span>{result._metadata.confidence_level} CONFIDENCE — {result._metadata.confidence_reason}</span>
+              <span className="ml-auto text-slate-500 font-normal">{result._metadata.reviewed_by}</span>
+            </div>
+          )}
+
           <div className="border-b border-white/10 pb-4 mb-6 mt-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <h2 className="text-xl font-bold uppercase tracking-wider text-slate-100">
-                PII DETECTION & ANONYMISATION
+                PII DETECTION &amp; ANONYMISATION
               </h2>
               <div className="flex items-center gap-2">
                 <span className="status-chip text-sm normal-case font-medium">
@@ -214,27 +333,19 @@ export default function AnonymisationTool() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div>
-                  <div className="text-xl font-bold text-blue-400">
-                    {safeRender(result.rule_based_summary.total_detections)}
-                  </div>
+                  <div className="text-xl font-bold text-blue-400">{safeRender(result.rule_based_summary.total_detections)}</div>
                   <div className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">Total Detected</div>
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-amber-400">
-                    {safeRender(result.rule_based_summary.pii_count)}
-                  </div>
+                  <div className="text-xl font-bold text-amber-400">{safeRender(result.rule_based_summary.pii_count)}</div>
                   <div className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">PII Items</div>
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-purple-400">
-                    {safeRender(result.rule_based_summary.phi_count)}
-                  </div>
+                  <div className="text-xl font-bold text-purple-400">{safeRender(result.rule_based_summary.phi_count)}</div>
                   <div className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">PHI Items</div>
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-green-400">
-                    {safeRender(result.rule_based_summary.high_confidence)}
-                  </div>
+                  <div className="text-xl font-bold text-green-400">{safeRender(result.rule_based_summary.high_confidence)}</div>
                   <div className="text-[10px] uppercase font-bold text-slate-500 tracking-tighter">High Confidence</div>
                 </div>
               </div>
@@ -306,6 +417,21 @@ export default function AnonymisationTool() {
               </div>
             </div>
           )}
+
+          <AIDisclaimer />
+
+          <OutputActions
+            result={result}
+            moduleName={MODULE_NAME}
+            textContent={
+              `RegCheck-India — ${MODULE_NAME} Result\n` +
+              `Generated: ${new Date().toLocaleString()}\n\n` +
+              `Anonymised Content:\n${result.anonymised_content || ''}\n\n` +
+              `Entities Detected: ${result.entities_anonymised || 0}\n` +
+              `Compliance: ${(result.compliance_frameworks || []).join(', ')}`
+            }
+          />
+          <FeedbackWidget moduleName={MODULE_NAME} resultHash={resultHash} />
         </div>
       )}
     </div>

@@ -38,4 +38,6 @@ services:
         value: "50"
       - key: RATE_LIMIT_PER_MINUTE
         value: "30"
+      - key: ADMIN_DEMO_KEY
+        sync: false  # Set manually in Render dashboard
     healthCheckPath: /health
