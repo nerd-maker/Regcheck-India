@@ -40,6 +40,7 @@ from app.services.input_sanitizer import sanitize_input
 from app.services.ocr_service import extract_text_from_image_bytes
 from app.services.audio_service import transcribe_audio
 from app.services.case_store import get_case_collection
+from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET
 
 # Patterns that must never appear in logs
 _SENSITIVE_PATTERNS = [
