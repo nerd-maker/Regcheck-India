@@ -63,6 +63,7 @@ export default function CompletenessAssessor() {
   const [fileA, setFileA] = useState<File | null>(null);
   const [fileB, setFileB] = useState<File | null>(null);
   const [compareResult, setCompareResult] = useState<any>(null);
+  const [receivedFrom, setReceivedFrom] = useState<string | null>(null);
   const { status } = useServerStatus();
   const [elapsed, setElapsed] = useState(0);
 
@@ -73,6 +74,29 @@ export default function CompletenessAssessor() {
     const t = setInterval(() => setElapsed(e => e + 1), 1000);
     return () => clearInterval(t);
   }, [loading]);
+
+  // Robust piping receive: 300ms delay so sessionStorage is written before we read
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const transfer = moduleTransferStore.receive(MODULE_ID);
+      if (transfer) {
+        setText(transfer.content);
+        setReceivedFrom(transfer.sourceModule);
+        setError(null);
+      }
+    }, 300);
+
+    const unsubscribe = moduleTransferStore.subscribe(MODULE_ID, (payload) => {
+      setText(payload.content);
+      setReceivedFrom(payload.sourceModule);
+      setError(null);
+    });
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
+  }, []);
 
   const resultHash = useMemo(() => {
     if (!result) return '';
@@ -210,6 +234,22 @@ export default function CompletenessAssessor() {
               Load sample data
             </button>
           </div>
+          {receivedFrom && (
+            <div className="mb-3 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+              <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+              </svg>
+              <span className="text-sm text-purple-300">
+                Content received from <strong className="text-purple-400">{receivedFrom}</strong>
+              </span>
+              <button
+                onClick={() => { setText(''); setReceivedFrom(null); }}
+                className="ml-auto text-xs text-purple-400/60 hover:text-purple-400"
+              >
+                Clear
+              </button>
+            </div>
+          )}
           <textarea
             className="textarea-shell"
             value={text}
