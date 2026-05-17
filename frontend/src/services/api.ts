@@ -28,6 +28,12 @@ export const storeKey = (key: string): void => {
   }
 };
 
+/** Returns true when the stored key is the admin bypass password. */
+export const isAdminUser = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  return getStoredKey() === 'admin-regcheck';
+};
+
 export const getSarvamKey = (): string => {
   if (typeof window === 'undefined') return '';
   const val = localStorage.getItem('sarvam_api_key') ?? '';

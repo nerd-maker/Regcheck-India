@@ -1,0 +1,173 @@
+/* ═══════════════════════════════════════════════════════════════
+   RegCheck-India — Platform Design System
+   Light-first, dark-mode adaptive via prefers-color-scheme
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --rc-teal:              #0d9488;
+  --rc-teal-light:        #e1f5ee;
+  --rc-teal-dark:         #0f6e56;
+  --rc-sidebar-width:     220px;
+  --rc-topbar-height:     48px;
+
+  /* Surfaces */
+  --rc-surface:           #ffffff;
+  --rc-surface-secondary: #f8fafc;
+  --rc-surface-tertiary:  #f1f5f9;
+
+  /* Borders */
+  --rc-border:            rgba(0, 0, 0, 0.08);
+  --rc-border-strong:     rgba(0, 0, 0, 0.14);
+
+  /* Text */
+  --rc-text-primary:      #0f172a;
+  --rc-text-secondary:    #475569;
+  --rc-text-muted:        #94a3b8;
+
+  /* Semantic */
+  --rc-red:               #dc2626;
+  --rc-amber:             #d97706;
+  --rc-green:             #16a34a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --rc-surface:           #0f172a;
+    --rc-surface-secondary: #1e293b;
+    --rc-surface-tertiary:  #0f172a;
+    --rc-border:            rgba(255, 255, 255, 0.08);
+    --rc-border-strong:     rgba(255, 255, 255, 0.14);
+    --rc-text-primary:      #f1f5f9;
+    --rc-text-secondary:    #94a3b8;
+    --rc-text-muted:        #475569;
+  }
+}
+
+/* ── Card ── */
+.rc-card {
+  background: var(--rc-surface);
+  border: 0.5px solid var(--rc-border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+/* ── Buttons ── */
+.rc-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 0.5px solid var(--rc-border-strong);
+  background: var(--rc-surface);
+  color: var(--rc-text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.rc-btn:hover {
+  background: var(--rc-surface-secondary);
+}
+
+.rc-btn-primary {
+  background: var(--rc-teal);
+  color: #ffffff;
+  border-color: var(--rc-teal);
+}
+
+.rc-btn-primary:hover {
+  background: var(--rc-teal-dark);
+}
+
+/* ── Status badges ── */
+.status-ready {
+  background: #e1f5ee;
+  color: #0f6e56;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.status-review {
+  background: #faeeda;
+  color: #854f0b;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.status-critical {
+  background: #fcebeb;
+  color: #a32d2d;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+/* ── Sidebar nav button reset ── */
+.rc-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  border: none;
+  border-right: 2px solid transparent;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  background: transparent;
+  color: var(--rc-text-secondary);
+  font-weight: 400;
+  transition: background 0.12s, color 0.12s;
+}
+
+.rc-nav-btn:hover {
+  background: var(--rc-surface-tertiary);
+  color: var(--rc-text-primary);
+}
+
+.rc-nav-btn.active {
+  background: var(--rc-surface);
+  color: #0d9488;
+  border-right-color: #0d9488;
+  font-weight: 500;
+}
+
+/* ── Section label ── */
+.rc-section-label {
+  padding: 4px 14px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--rc-text-muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin: 16px 0 4px;
+  display: block;
+}
+
+.rc-section-label:first-child {
+  margin-top: 8px;
+}
+
+/* ── Module wrapper — neutral card for dark module components ── */
+.rc-module-wrapper {
+  background: var(--rc-surface-tertiary);
+  min-height: calc(100vh - var(--rc-topbar-height) - 48px);
+}
+
+/* ── Scrollbar (platform) ── */
+.rc-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.rc-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rc-scroll::-webkit-scrollbar-thumb {
+  background: var(--rc-border-strong);
+  border-radius: 999px;
+}
