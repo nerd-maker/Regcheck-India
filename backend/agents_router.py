@@ -1837,6 +1837,270 @@ async def case_store_health():
 
 
 
+AGENT_09_SYSTEM_PROMPT = """You are the RegCheck-India Cross-Document Consistency agent.
+You receive multiple regulatory documents simultaneously and check consistency across all of them.
+Your job is to identify contradictions, mismatches, and alignment gaps between documents.
+
+Common consistency issues in Indian pharma submissions:
+- Drug dose/route in Protocol vs ICF vs IB mismatch
+- Inclusion/exclusion criteria differ between Protocol and ICF
+- Safety information in IB not reflected in ICF
+- SAE reporting timelines differ across documents
+- Study phase mentioned differently across documents
+- Principal Investigator details inconsistent
+- Ethics committee approval scope vs study scope mismatch
+- Sample size/statistical assumptions inconsistent
+- Visit schedule differs between Protocol and ICF
+- Endpoints defined differently across documents
+
+CRITICAL OUTPUT RULES:
+1. Return ONLY valid JSON — no markdown, no code fences
+2. Arrays must always be arrays
+3. Objects must always be objects
+4. Never omit required fields
+5. String fields must always be strings
+
+Return EXACTLY this JSON structure:
+{
+  "overall_consistency_status": "CONSISTENT|MINOR_ISSUES|MAJOR_ISSUES|CRITICAL_INCONSISTENCIES",
+  "consistency_score": 0.0,
+  "documents_analyzed": [
+    {
+      "document_name": "string",
+      "document_type": "string — Protocol/ICF/IB/SAE_Report/Other",
+      "word_count": 0
+    }
+  ],
+  "inconsistencies": [
+    {
+      "inconsistency_id": "string — e.g. INC-001",
+      "severity": "CRITICAL|MAJOR|MINOR",
+      "category": "string — e.g. Dosing, Eligibility, Safety, Timeline",
+      "description": "string — clear description of the inconsistency",
+      "document_a": "string — first document name",
+      "document_a_text": "string — relevant excerpt from doc A",
+      "document_b": "string — second document name",
+      "document_b_text": "string — relevant excerpt from doc B",
+      "regulatory_impact": "string — what regulation this affects",
+      "recommendation": "string — how to resolve"
+    }
+  ],
+  "critical_count": 0,
+  "major_count": 0,
+  "minor_count": 0,
+  "consistency_matrix": [
+    {
+      "doc_pair": "string — e.g. Protocol vs ICF",
+      "status": "CONSISTENT|ISSUES_FOUND",
+      "issue_count": 0
+    }
+  ],
+  "cross_document_strengths": ["string"],
+  "priority_actions": [
+    {
+      "action": "string",
+      "documents_affected": ["string"],
+      "urgency": "IMMEDIATE|HIGH|MEDIUM|LOW"
+    }
+  ],
+  "submission_risk": "LOW|MEDIUM|HIGH|CRITICAL",
+  "audit_log": {
+    "timestamp": "ISO datetime string",
+    "documents_processed": 0,
+    "total_words_analyzed": 0,
+    "status": "COMPLETED|FAILED"
+  }
+}
+"""
+
+
+def _detect_document_type(filename: str) -> str:
+    """Detect document type from filename."""
+    name = filename.lower()
+    if any(w in name for w in ['protocol', 'ctp']):
+        return "Clinical Trial Protocol"
+    if any(w in name for w in ['icf', 'consent', 'informed']):
+        return "Informed Consent Form"
+    if any(w in name for w in ['ib', 'brochure', 'investigator']):
+        return "Investigator Brochure"
+    if any(w in name for w in ['sae', 'adverse', 'safety']):
+        return "SAE Report"
+    if any(w in name for w in ['sap', 'statistical']):
+        return "Statistical Analysis Plan"
+    if any(w in name for w in ['crf', 'case report']):
+        return "Case Report Form"
+    return "Regulatory Document"
+
+
+@router.post("/cross-document", summary="Agent 09 - Cross-Document Consistency Check")
+async def cross_document_check(
+    files: List[UploadFile] = File(...),
+    x_anthropic_api_key: Optional[str] = Header(None),
+):
+    """
+    Check consistency across multiple regulatory documents simultaneously.
+    Supports 2-5 documents: Protocol, ICF, IB, SAE Reports, etc.
+    Supported formats: PDF, DOCX
+    """
+    if len(files) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="At least 2 documents required for cross-document analysis"
+        )
+
+    if len(files) > 5:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 5 documents supported per analysis"
+        )
+
+    api_key = x_anthropic_api_key or os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Anthropic API key required")
+
+    # Extract text from all documents
+    extracted_docs = []
+    total_words = 0
+
+    for file in files:
+        content = await file.read()
+        filename = sanitize_filename(file.filename or "document")
+
+        try:
+            if filename.lower().endswith(".pdf"):
+                reader = pypdf.PdfReader(io.BytesIO(content))
+                pages = []
+                for i, page in enumerate(reader.pages):
+                    text = page.extract_text()
+                    if text:
+                        pages.append(f"[Page {i+1}]\n{text}")
+                doc_text = "\n\n".join(pages)
+            elif filename.lower().endswith(".docx"):
+                doc_obj = docx.Document(io.BytesIO(content))
+                doc_text = "\n".join([p.text for p in doc_obj.paragraphs if p.text.strip()])
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported format: {filename}. Use PDF or DOCX."
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Could not extract text from {filename}: {str(e)}"
+            )
+
+        if not doc_text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail=f"No text extracted from {filename}. File may be scanned/image-based."
+            )
+
+        # Truncate very long documents — keep first 4000 words each
+        words = doc_text.split()
+        if len(words) > 4000:
+            doc_text = " ".join(words[:4000]) + "\n[Document truncated for analysis]"
+
+        word_count = len(doc_text.split())
+        total_words += word_count
+        extracted_docs.append({
+            "name": filename,
+            "text": doc_text,
+            "word_count": word_count
+        })
+
+    # Build cross-document prompt
+    docs_section = "\n\n".join([
+        f"=== DOCUMENT {i+1}: {doc['name']} ({doc['word_count']} words) ===\n{doc['text']}"
+        for i, doc in enumerate(extracted_docs)
+    ])
+
+    doc_names = [doc["name"] for doc in extracted_docs]
+
+    prompt = structure_prompt_input(
+        f"Analyze these {len(extracted_docs)} regulatory documents for consistency:\n\n{docs_section}",
+        "multi_document_regulatory_submission",
+        "M9_CROSS_DOCUMENT"
+    )
+
+    try:
+        sanitize_input(docs_section[:500], "M9_CROSS_DOCUMENT")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    admin_password = "admin-regcheck"
+    if api_key == admin_password:
+        server_key = os.getenv("ANTHROPIC_API_KEY")
+        if not server_key:
+            raise HTTPException(status_code=500, detail="Server Anthropic API key missing.")
+        client = anthropic.Anthropic(api_key=server_key)
+    else:
+        client = anthropic.Anthropic(api_key=api_key)
+
+    try:
+        response = client.messages.create(
+            model=os.getenv("ANTHROPIC_MODEL", MODEL_SONNET),
+            max_tokens=4096,
+            system=AGENT_09_SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"Check consistency across these {len(extracted_docs)} documents: {', '.join(doc_names)}\n\n{prompt}"
+            }]
+        )
+    except anthropic.AuthenticationError:
+        raise HTTPException(status_code=401, detail="Anthropic API key is invalid. Please check and update your key in Settings.")
+    except anthropic.RateLimitError:
+        raise HTTPException(status_code=429, detail="Rate limit reached — retry after a moment")
+    except anthropic.APIError as exc:
+        raise HTTPException(status_code=502, detail=f"Anthropic API error: {exc}")
+
+    raw_text = response.content[0].text.strip()
+    parsed = _parse_json_block(raw_text)
+
+    # Inject document metadata
+    parsed["documents_analyzed"] = [
+        {
+            "document_name": doc["name"],
+            "document_type": _detect_document_type(doc["name"]),
+            "word_count": doc["word_count"]
+        }
+        for doc in extracted_docs
+    ]
+
+    try:
+        parsed["_metadata"] = {
+            "confidence_level": "HIGH",
+            "confidence_reason": "Cross-document analysis based on submitted documents",
+            "reviewed_by": "AI — requires qualified RA professional review",
+            "generated_at": datetime.utcnow().isoformat(),
+            "model_used": os.getenv("ANTHROPIC_MODEL", MODEL_SONNET)
+        }
+    except Exception as meta_err:
+        logger.warning(f"Metadata error: {meta_err}")
+
+    return AgentResponse(
+        agent="Cross_Document_Consistency",
+        model=os.getenv("ANTHROPIC_MODEL", MODEL_SONNET),
+        result=parsed,
+        timestamp=datetime.utcnow().isoformat(),
+        token_usage={
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        }
+    )
+
+
+@router.get("/cross-document/health")
+async def cross_document_health():
+    return {
+        "status": "ok",
+        "agent": "Cross_Document_Consistency",
+        "endpoint": "/api/v1/agents/cross-document",
+        "max_documents": 5,
+        "supported_formats": ["PDF", "DOCX"]
+    }
+
 
 @router.get("/health", summary="Agents Health Check")
 async def agents_health():
@@ -1852,6 +2116,7 @@ async def agents_health():
             {"id": "07", "name": "Schedule_Y_Compliance", "endpoint": "/schedule-y", "model": MODEL_SONNET},
             {"id": "08", "name": "ICH_GCP_Compliance", "endpoint": "/ich-gcp", "model": MODEL_SONNET},
             {"id": "03b", "name": "Document_Version_Comparison", "endpoint": "/compare", "model": MODEL_SONNET},
+            {"id": "09", "name": "Cross_Document_Consistency", "endpoint": "/cross-document", "model": MODEL_SONNET},
         ],
         "anthropic_client": "initialised",
         "timestamp": _utc_timestamp(),

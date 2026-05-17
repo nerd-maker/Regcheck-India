@@ -338,6 +338,42 @@ export const transcribeMeetingAudio = async (
   }
 }
 
+// ─── M9 — Cross-Document Consistency Check ────────────────────────────────────
+export const crossDocumentCheck = async (files: File[]): Promise<unknown> => {
+  const formData = new FormData()
+  files.forEach(file => formData.append('files', file))
+
+  try {
+    const response = await axios.post(
+      `${BACKEND_URL}/api/v1/agents/cross-document`,
+      formData,
+      {
+        headers: {
+          'x-anthropic-api-key': getStoredKey(),
+        },
+        timeout: 300000  // 5 minutes for multi-doc analysis
+      }
+    )
+    return response.data
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Analysis timed out — try with fewer or shorter documents.')
+      }
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data?.detail || 'Invalid request')
+      }
+      if (error.response?.status === 401) {
+        throw new Error('Anthropic API key is invalid or missing. Please check your Settings.')
+      }
+      if (!error.response) {
+        throw new Error('Cannot reach server — please wait 30 seconds and try again.')
+      }
+    }
+    throw new Error('Cross-document analysis failed. Please try again.')
+  }
+}
+
 // ─── Health check ─────────────────────────────────────────────────────────────
 export const checkAgentsHealth = () =>
   axios.get(`${BACKEND_URL}/api/v1/agents/health`).then(r => r.data);

@@ -17,6 +17,7 @@ import RegulatoryQA from '@/components/RegulatoryQA';
 import ResultsViewer from '@/components/ResultsViewer';
 import SAEClassifier from '@/components/SAEClassifier';
 import ScheduleYChecker from '@/components/ScheduleYChecker';
+import CrossDocumentChecker from '@/components/CrossDocumentChecker';
 
 // The 8 correct agent modules per agents_router.py
 type Module =
@@ -27,7 +28,8 @@ type Module =
   | 'inspection'   // M5 — Inspection Report Gen → POST /api/v1/agents/inspection-report
   | 'reg-qa'       // M6 — Regulatory Q&A       → POST /api/v1/agents/qa
   | 'schedule-y'   // M7 — Schedule Y Compliance → POST /api/v1/agents/schedule-y
-  | 'ich-gcp';     // M8 — ICH E6(R3) GCP Checker→ POST /api/v1/agents/ich-gcp
+  | 'ich-gcp'     // M8 — ICH E6(R3) GCP Checker→ POST /api/v1/agents/ich-gcp
+  | 'crossdoc';   // M9 — Cross-Doc Consistency  → POST /api/v1/agents/cross-document
 
 type SidebarItem = {
   id: string;
@@ -121,6 +123,17 @@ const sidebarItems: SidebarItem[] = [
       </svg>
     ),
   },
+  {
+    id: 'm9-crossdoc',
+    label: 'Cross-Doc Consistency',
+    module: 'crossdoc',
+    divider: 'Advanced',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+      </svg>
+    ),
+  },
 ];
 
 type ModuleCard = {
@@ -208,6 +221,15 @@ const modules: ModuleCard[] = [
     description: 'Full GCP evaluation against ICH E6(R3) including R3-specific QMS and Risk-Based Monitoring gaps, with inspection readiness scoring.',
     accent: '#c4b5fd',
     category: 'GCP',
+  },
+  {
+    id: 'crossdoc',
+    name: 'Cross-Doc Consistency',
+    shortName: 'M9',
+    endpoint: '/api/v1/agents/cross-document',
+    description: 'Upload Protocol, ICF, IB, and SAE reports simultaneously. AI detects contradictions and mismatches across all documents.',
+    accent: '#a78bfa',
+    category: 'Advanced',
   },
 ];
 
@@ -507,6 +529,11 @@ export default function AppWorkspace() {
               {activeModule === 'ich-gcp' && (
                 <ModuleErrorBoundary moduleName="ICH E6(R3) GCP Checker">
                   <ICHGCPChecker />
+                </ModuleErrorBoundary>
+              )}
+              {activeModule === 'crossdoc' && (
+                <ModuleErrorBoundary moduleName="Cross-Document Consistency">
+                  <CrossDocumentChecker />
                 </ModuleErrorBoundary>
               )}
             </div>

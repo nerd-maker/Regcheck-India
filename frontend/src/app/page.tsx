@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
@@ -28,7 +28,7 @@ export default function LandingPage() {
   const [statsVisible, setStatsVisible] = useState(false)
   const statsRef = useRef<HTMLDivElement>(null)
   const documentsReviewed = useCountUp(218, 1400, statsVisible)
-  const activeAgents = useCountUp(8, 900, statsVisible)
+  const activeAgents = useCountUp(9, 900, statsVisible)
   const frameworksCovered = useCountUp(9, 1000, statsVisible)
 
   useEffect(() => {
@@ -186,8 +186,8 @@ export default function LandingPage() {
               </h1>
 
               <p className="mb-10 max-w-lg text-lg leading-relaxed text-gray-500">
-                Eight specialised AI agents built for India&apos;s pharma ecosystem, covering
-                CDSCO, NDCTR 2019, Schedule Y, and ICH E6(R3) from document upload to compliance report.
+                Nine specialised AI agents built for India&apos;s pharma ecosystem, covering
+                CDSCO, NDCTR 2019, Schedule Y, and ICH E6(R3) from document upload to compliance report — including cross-document consistency checking.
               </p>
 
               <div className="mb-14 flex flex-wrap gap-4">
@@ -305,7 +305,7 @@ export default function LandingPage() {
               A Regulatory Intelligence Platform
             </h2>
             <p className="mx-auto max-w-2xl text-lg text-gray-500">
-              Eight specialised AI agents covering the full pharmaceutical regulatory lifecycle in India.
+              Nine specialised AI agents covering the full pharmaceutical regulatory lifecycle in India.
             </p>
           </div>
 
@@ -319,6 +319,7 @@ export default function LandingPage() {
               { n: 'M6', title: 'Regulatory Q&A', desc: 'RAG-powered assistant grounded in NDCTR 2019, Schedule Y, ICH guidelines, and ICMR ethics corpus.', tag: 'Knowledge' },
               { n: 'M7', title: 'Schedule Y Compliance', desc: 'Deep compliance checks across Schedule Y Appendices I-XI and NDCTR 2019 Rules 1-105.', tag: 'Knowledge' },
               { n: 'M8', title: 'ICH E6(R3) GCP', desc: 'Full GCP evaluation against ICH E6(R3) including R3-specific QMS and Risk-Based Monitoring gaps.', tag: 'Knowledge' },
+              { n: 'M9', title: 'Cross-Doc Consistency', desc: 'Upload Protocol, ICF, IB, and SAE reports simultaneously. AI detects contradictions and mismatches across all documents.', tag: 'Advanced' },
             ].map((agent) => (
               <div
                 key={agent.n}
@@ -512,7 +513,7 @@ export default function LandingPage() {
                         </svg>
                       ), 
                       title: 'Claude-Powered', 
-                      desc: '8 specialised regulatory agents' 
+                      desc: '9 specialised regulatory agents' 
                     },
                     { 
                       icon: (
@@ -625,8 +626,8 @@ export default function LandingPage() {
 
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <div className="flex items-center gap-3">
-              <span className="rounded-full bg-teal-600/20 px-3 py-1 text-xs font-medium text-teal-400">v3.0.0</span>
-              <span className="text-xs text-gray-600">8 agents live | Claude-powered | Deployed on Vercel + Render</span>
+              <span className="rounded-full bg-teal-600/20 px-3 py-1 text-xs font-medium text-teal-400">v3.1.0</span>
+              <span className="text-xs text-gray-600">9 agents live | Claude-powered | Deployed on Vercel + Render</span>
             </div>
             <p className="text-xs text-gray-600">© 2025 RegCheck-India. Built for India&apos;s pharmaceutical ecosystem.</p>
           </div>
