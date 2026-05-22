@@ -15,8 +15,8 @@ const nextConfig = {
                         value: [
                             "default-src 'self'",
                             "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
-                            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-                            "font-src 'self' data: https://fonts.gstatic.com",
+                            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+                            "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
                             "img-src 'self' data: blob: https:",
                             "connect-src 'self' http://localhost:8000 https://regcheck-india.onrender.com https://regcheckindia.com https://api.anthropic.com https://api.sarvam.ai",
                             "media-src 'self' blob:",

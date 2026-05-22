@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only Veeva-style rewire tested end-to-end. Landing page, workspace shell, all left-nav views, agent action with Run Analysis, submission inspector (single-click) and detail view (double-click), inspector tabs and close, plus URL-hash deep linking all work. Zero console errors observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Landing page", "issues": ["Solutions section heading reads 'India's regulatory affairs teams.' — no literal 'Solutions' label. Section still exists on dark navy background with 3 audience cards (Pharma sponsors / CROs / RA consultancies) and matches spec visually, but renaming the section to include the word 'Solutions' (e.g. eyebrow label SOLUTIONS) would align with the PRD wording."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional) Add a SOLUTIONS eyebrow label above 'India's regulatory affairs teams.' section on landing page to match PRD wording."
+  ],
+  "critical_code_review_comments": [
+    "workspaceStore hash sync only writes 'sub' segment when activeView==='submission-detail'; selectedDocumentId is never serialised to the hash even though parser reads /doc/<id>. Minor inconsistency, not blocking.",
+    "WorkspaceRouter renders children below WorkspaceRouter in layout (main always renders both <WorkspaceRouter/> and {children}); since /app/page.tsx likely renders nothing relevant, but if a child page is added later it will stack under the router output. Consider removing {children} or gating it.",
+    "AGENT_IDS list is duplicated in WorkspaceRouter and LeftNav — extract to a shared constant in mockData.ts or a constants file (DRY)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "n/a — app is mock-data, no auth required",
+  "seed_data_creation": "n/a — all data mocked in /app/frontend/src/lib/mockData.ts",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Public preview URL: https://44def609-f92e-415e-a4dd-7705aa03c3ac.preview.emergentagent.com. Landing at /, workspace at /app. Hash routes like #/audit, #/correspondence, #/m1-anonymiser all work. data-testids verified: rc-shell, view-home, view-submissions/applications/registrations/documents/correspondence/audit/reports/settings/submission-detail, leftnav-{home,submissions,applications,registrations,documents,correspondence,audit,reports,settings,m1-anonymiser..m9-crossdoc}, subrow-{id}, right-inspector, inspector-tab-{details,actions,activity}, inspector-close, agent-run-btn. Single-click submission row opens right inspector; double-click opens submission-detail view. Run Analysis on any agent returns mocked findings after ~1.1s setTimeout.",
+  "test_coverage_executed": [
+    "Landing page sections (Platform, Workflow, Security, Frameworks, dark navy Solutions analogue, Contact CTA, footer) — 6 platform headings + 3 audience cards present",
+    "Workspace shell renders with TopBar + LeftNav + Home view by default",
+    "Home view: KPI tiles + 'My Queue · Needs Action' (4 rows) + Vault-wide Compliance + Recent Activity verified visually",
+    "Left-nav navigation: 8/8 PASS (submissions, applications, registrations, documents, correspondence, audit, reports, settings)",
+    "Agent: leftnav-m7-scheduley → agent-run-btn → Run Analysis returns findings text",
+    "Submissions: 6 subrows present, single-click opens right-inspector with 3 tabs, close works",
+    "Double-click row → view-submission-detail rendered",
+    "URL hash deep-linking: #/audit, #/correspondence, #/m1-anonymiser — all PASS",
+    "No JS console errors or pageerrors during full flow"
+  ]
+}
