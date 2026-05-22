@@ -401,9 +401,9 @@ export default function LandingPage() {
         <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle at 20% 20%, #fff 1px, transparent 1px), radial-gradient(circle at 80% 60%, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }}/>
         <div style={{ maxWidth: 1280, margin: '0 auto', position: 'relative' }}>
           <div className="fade-up" style={{ marginBottom: 48 }}>
-            <Eyebrow color="#7DD3FC">Built for</Eyebrow>
+            <Eyebrow color="#7DD3FC">Solutions</Eyebrow>
             <h2 style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.02em', margin: '12px 0 0', lineHeight: 1.1 }}>
-              India&apos;s regulatory affairs teams.
+              Built for India&apos;s regulatory affairs teams.
             </h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
