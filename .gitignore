@@ -63,3 +63,9 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
