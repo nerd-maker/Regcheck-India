@@ -9,6 +9,7 @@ interface FileUploadProps {
   disabled?: boolean;
   label?: string;
   inputId?: string;
+  uploadedFileName?: string | null;
 }
 
 const MAX_FILE_SIZE_MB = 50;
@@ -20,13 +21,16 @@ export default function FileUpload({
   disabled,
   label = 'Upload a regulatory document',
   inputId: externalId,
+  uploadedFileName,
 }: FileUploadProps) {
   const [uploading, setUploading] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [localUploadedFile, setLocalUploadedFile] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const generatedId = useId();
   const inputId = externalId ?? generatedId;
+
+  const uploadedFile = uploadedFileName !== undefined ? uploadedFileName : localUploadedFile;
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -34,7 +38,9 @@ export default function FileUpload({
 
     // Reset state
     setFileError(null);
-    setUploadedFile(null);
+    if (uploadedFileName === undefined) {
+      setLocalUploadedFile(null);
+    }
 
     // Type validation
     const isValidType = file.name.endsWith('.pdf') || file.name.endsWith('.docx');
@@ -55,9 +61,13 @@ export default function FileUpload({
 
     setUploading(true);
     try {
-      const result = await extractTextFromFile(file);
-      setUploadedFile(file.name);
-      onTextExtracted(result.extracted_text, file.name);
+      // Simulate extraction offline
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const dummyText = `Extracted content from ${file.name}. Simulated regulatory document text with clinical protocols and patient narratives.`;
+      if (uploadedFileName === undefined) {
+        setLocalUploadedFile(file.name);
+      }
+      onTextExtracted(dummyText, file.name);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to process file.';
       setFileError(msg);

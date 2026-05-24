@@ -1,5 +1,8 @@
-// The new layout.tsx renders the workspace router.
-// This page is an intentional empty stub.
+'use client'
+
+import HomeView from '@/components/views/HomeView'
+
 export default function AppPage() {
-  return null
+  return <HomeView />
 }
+

@@ -5,7 +5,6 @@ import { WorkspaceProvider, useWorkspace } from '@/lib/workspaceStore'
 import TopBar from '@/components/veeva/TopBar'
 import LeftNav from '@/components/veeva/LeftNav'
 import RightInspector from '@/components/veeva/RightInspector'
-import WorkspaceRouter from '@/components/WorkspaceRouter'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -34,10 +33,10 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div style={{ gridColumn: '1 / -1' }}><TopBar/></div>
       <LeftNav/>
       <main className="rc-scroll" style={{ overflow: 'auto', background: 'var(--rc-surface-secondary)' }}>
-        <WorkspaceRouter/>
         {children}
       </main>
       <RightInspector/>
     </div>
   )
 }
+

@@ -1,15 +1,44 @@
 'use client'
 
-import { HOME_KPIS, SUBMISSIONS, COMPLIANCE_SCORES, AUDIT_EVENTS } from '@/lib/mockData'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { HOME_KPIS, COMPLIANCE_SCORES, AUDIT_EVENTS, SubmissionRecord } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
+import NewSubmissionModal from '@/components/NewSubmissionModal'
 
 export default function HomeView() {
-  const { setActiveView, setSelectedSubmissionId, openInspector } = useWorkspace()
+  const router = useRouter()
+  const { submissions, setSelectedSubmissionId, setActiveView } = useWorkspace()
+  const [newSubOpen, setNewSubOpen] = useState(false)
 
-  const pinned = SUBMISSIONS.slice(0, 3)
-  const myQueue = SUBMISSIONS.filter(s => s.state === 'review' || s.state === 'rejected' || s.openGaps > 0).slice(0, 4)
+  const pinned = submissions.slice(0, 3)
+  const myQueue = submissions.filter(s => s.state === 'review' || s.state === 'rejected' || s.openGaps > 0).slice(0, 4)
+
+  const handleExportCSV = () => {
+    const headers = ['Submission ID', 'Drug', 'Type', 'State', 'Gaps', 'Compliance %']
+    const rows = myQueue.map(s => [
+      s.number,
+      s.product,
+      s.type,
+      s.stateLabel ?? s.state,
+      s.openGaps,
+      `${s.complianceScore}%`
+    ])
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `regcheck_queue_export_${new Date().toISOString().slice(0,10)}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   return (
     <div data-testid="view-home">
@@ -20,8 +49,10 @@ export default function HomeView() {
         icon="ti-home-2"
         actions={
           <>
-            <button className="rc-btn" data-testid="home-export-btn"><i className="ti ti-download"/> Export</button>
-            <button className="rc-btn rc-btn-primary" onClick={() => setActiveView('submissions')} data-testid="home-new-submission">
+            <button className="rc-btn" onClick={handleExportCSV} data-testid="home-export-btn">
+              <i className="ti ti-download"/> Export
+            </button>
+            <button className="rc-btn rc-btn-primary" onClick={() => setNewSubOpen(true)} data-testid="home-new-submission">
               <i className="ti ti-plus"/> New submission
             </button>
           </>
@@ -49,7 +80,9 @@ export default function HomeView() {
           <div className="rc-card" data-testid="my-queue-card">
             <div className="rc-card-header">
               <span>My Queue · Needs Action</span>
-              <button className="rc-btn rc-btn-ghost rc-btn-sm" onClick={() => setActiveView('submissions')}>View all <i className="ti ti-arrow-right" style={{ fontSize: 13 }}/></button>
+              <Link href="/app/submissions" className="rc-btn rc-btn-ghost rc-btn-sm" style={{ textDecoration: 'none' }}>
+                View all <i className="ti ti-arrow-right" style={{ fontSize: 13 }}/>
+              </Link>
             </div>
             <table className="rc-table">
               <thead>
@@ -66,8 +99,8 @@ export default function HomeView() {
                 {myQueue.map(s => (
                   <tr key={s.id} onClick={() => {
                     setSelectedSubmissionId(s.id)
-                    setActiveView('submission-detail')
-                  }} data-testid={`queue-row-${s.id}`}>
+                    router.push(`/app/submissions/${s.id}`)
+                  }} data-testid={`queue-row-${s.id}`} style={{ cursor: 'pointer' }}>
                     <td>
                       <div style={{
                         width: 18, height: 18, borderRadius: 4,
@@ -124,7 +157,9 @@ export default function HomeView() {
             <div className="rc-card">
               <div className="rc-card-header">
                 <span>Recent activity</span>
-                <button className="rc-btn rc-btn-ghost rc-btn-sm" onClick={() => setActiveView('audit')}>Audit trail</button>
+                <Link href="/app/audit-trail" className="rc-btn rc-btn-ghost rc-btn-sm" style={{ textDecoration: 'none' }}>
+                  Audit trail
+                </Link>
               </div>
               <div>
                 {AUDIT_EVENTS.slice(0, 5).map(e => (
@@ -153,10 +188,13 @@ export default function HomeView() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {pinned.map(s => (
               <div key={s.id} className="rc-card" style={{ padding: 14, cursor: 'pointer' }}
-                onClick={() => { setSelectedSubmissionId(s.id); setActiveView('submission-detail'); }}
+                onClick={() => {
+                  setSelectedSubmissionId(s.id)
+                  router.push(`/app/submissions/${s.id}`)
+                }}
                 data-testid={`pinned-${s.id}`}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span style={{ fontSize: 11.5, fontFamily: 'var(--rc-font-mono)', color: 'var(--rc-text-muted)' }}>{s.number}</span>
                   <StatusBadge state={s.state} label={s.stateLabel} size="sm"/>
                 </div>
@@ -176,6 +214,8 @@ export default function HomeView() {
           </div>
         </div>
       </div>
+      <NewSubmissionModal isOpen={newSubOpen} onClose={() => setNewSubOpen(false)} />
     </div>
   )
 }
+

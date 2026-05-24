@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { SUBMISSIONS, LifecycleState, SubmissionRecord } from '@/lib/mockData'
+import { useRouter } from 'next/navigation'
+import { LifecycleState, SubmissionRecord } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
+import NewSubmissionModal from '@/components/NewSubmissionModal'
 
 const STATE_FACETS: { id: LifecycleState; label: string }[] = [
   { id: 'draft',     label: 'Draft' },
@@ -18,23 +20,25 @@ const TYPE_FACETS = ['IND', 'NDA', 'CT-04', 'Schedule M', 'Pre-IND Meeting', 'An
 const PHASE_FACETS = ['Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Post-Marketing']
 
 export default function SubmissionsView() {
-  const { setActiveView, setSelectedSubmissionId, openInspector } = useWorkspace()
+  const router = useRouter()
+  const { submissions, setSelectedSubmissionId, setActiveView, openInspector } = useWorkspace()
   const [stateFilter, setStateFilter] = useState<Set<string>>(new Set())
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set())
   const [phaseFilter, setPhaseFilter] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  const [newSubOpen, setNewSubOpen] = useState(false)
   const [sortBy, setSortBy] = useState<{ k: keyof SubmissionRecord; dir: 'asc' | 'desc' }>({ k: 'updatedAt', dir: 'asc' })
 
   const filtered = useMemo(() => {
-    return SUBMISSIONS.filter(s => {
+    return submissions.filter(s => {
       if (stateFilter.size && !stateFilter.has(s.state)) return false
       if (typeFilter.size  && !typeFilter.has(s.type))   return false
       if (phaseFilter.size && !phaseFilter.has(s.phase)) return false
       if (search && !`${s.name} ${s.number} ${s.product}`.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
-  }, [stateFilter, typeFilter, phaseFilter, search])
+  }, [submissions, stateFilter, typeFilter, phaseFilter, search])
 
   const toggleSet = (s: Set<string>, val: string, fn: (n: Set<string>) => void) => {
     const ns = new Set(s)
@@ -42,27 +46,53 @@ export default function SubmissionsView() {
     fn(ns)
   }
 
-  const countByState = (st: string) => SUBMISSIONS.filter(s => s.state === st).length
-  const countByType  = (st: string) => SUBMISSIONS.filter(s => s.type === st).length
-  const countByPhase = (st: string) => SUBMISSIONS.filter(s => s.phase === st).length
+  const countByState = (st: string) => submissions.filter(s => s.state === st).length
+  const countByType  = (st: string) => submissions.filter(s => s.type === st).length
+  const countByPhase = (st: string) => submissions.filter(s => s.phase === st).length
 
   const open = (s: SubmissionRecord) => {
     setSelectedSubmissionId(s.id)
-    setActiveView('submission-detail')
+    router.push(`/app/submissions/${s.id}`)
+  }
+
+  const handleExportCSV = () => {
+    const headers = ['Submission ID', 'Drug', 'Type', 'Phase', 'Authority', 'State', 'Docs', 'Gaps', 'Compliance %']
+    const rows = filtered.map(s => [
+      s.number,
+      s.product,
+      s.type,
+      s.phase,
+      s.haAuthority,
+      s.stateLabel ?? s.state,
+      s.documents,
+      s.openGaps,
+      `${s.complianceScore}%`
+    ])
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `regcheck_submissions_export_${new Date().toISOString().slice(0,10)}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   return (
     <div data-testid="view-submissions" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PageHeader
-        crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Submissions' }]}
+        crumbs={[{ label: 'Workspace', onClick: () => router.push('/app') }, { label: 'Submissions' }]}
         title="Submissions"
-        subtitle={`${filtered.length} of ${SUBMISSIONS.length} submissions`}
+        subtitle={`${filtered.length} of ${submissions.length} submissions`}
         icon="ti-folder-open"
         actions={
           <>
             <button className="rc-btn"><i className="ti ti-filter"/> Saved Views</button>
-            <button className="rc-btn"><i className="ti ti-download"/> Export</button>
-            <button className="rc-btn rc-btn-primary" data-testid="submissions-new-btn"><i className="ti ti-plus"/> New submission</button>
+            <button className="rc-btn" onClick={handleExportCSV}><i className="ti ti-download"/> Export</button>
+            <button className="rc-btn rc-btn-primary" onClick={() => setNewSubOpen(true)} data-testid="submissions-new-btn"><i className="ti ti-plus"/> New submission</button>
           </>
         }
       />
@@ -150,6 +180,7 @@ export default function SubmissionsView() {
                   }}
                   onDoubleClick={() => open(s)}
                   data-testid={`subrow-${s.id}`}
+                  style={{ cursor: 'pointer' }}
                 >
                   <td onClick={e => e.stopPropagation()}><input type="checkbox"/></td>
                   <td>
@@ -191,6 +222,7 @@ export default function SubmissionsView() {
           </table>
         </div>
       </div>
+      <NewSubmissionModal isOpen={newSubOpen} onClose={() => setNewSubOpen(false)} />
     </div>
   )
 }
@@ -203,3 +235,4 @@ function FacetGroup({ title, children }: { title: string; children: React.ReactN
     </div>
   )
 }
+

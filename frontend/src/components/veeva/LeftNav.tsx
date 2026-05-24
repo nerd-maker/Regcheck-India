@@ -1,6 +1,7 @@
 'use client'
 
-import { useWorkspace } from '@/lib/workspaceStore'
+import { usePathname } from 'next/navigation'
+import Link from 'next/link'
 
 interface NavItem {
   id: string
@@ -38,23 +39,48 @@ const SYSTEM: NavItem[] = [
   { id: 'apikeys',  label: 'API & Vaults', icon: 'ti-key' },
 ]
 
-function Item({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+function getHref(id: string) {
+  if (id === 'home') return '/app'
+  if (id === 'settings') return '/app/settings'
+  if (id === 'apikeys') return '/app/api-vaults'
+  if (id === 'm1-anonymiser') return '/app/agents/pii-anonymiser'
+  if (id === 'm2-summariser') return '/app/agents/document-summariser'
+  if (id === 'm3-completeness') return '/app/agents/completeness-check'
+  if (id === 'm4-classifier') return '/app/agents/case-classifier'
+  if (id === 'm5-inspection') return '/app/agents/inspection-report'
+  if (id === 'm6-qa') return '/app/agents/regulatory-qa'
+  if (id === 'm7-scheduley') return '/app/agents/schedule-y-check'
+  if (id === 'm8-ichgcp') return '/app/agents/ich-e6r3-gcp'
+  if (id === 'm9-crossdoc') return '/app/agents/cross-doc-check'
+  return `/app/${id}`
+}
+
+function Item({ item, active, href }: { item: NavItem; active: boolean; href: string }) {
   return (
-    <button
+    <Link
+      href={href}
       className={`rc-nav-item${active ? ' is-active' : ''}`}
-      onClick={onClick}
       data-testid={`leftnav-${item.id}`}
+      style={{ textDecoration: 'none', display: 'flex', width: '100%', alignItems: 'center' }}
     >
       <i className={`ti ${item.icon}`}/>
       <span style={{ flex: 1 }}>{item.label}</span>
       {item.badge !== undefined && <span className="rc-nav-item-badge">{item.badge}</span>}
       {item.isNew && <span className="rc-nav-item-new">NEW</span>}
-    </button>
+    </Link>
   )
 }
 
 export default function LeftNav() {
-  const { activeView, setActiveView } = useWorkspace()
+  const pathname = usePathname()
+
+  const isActive = (item: NavItem) => {
+    const href = getHref(item.id)
+    if (item.id === 'home') {
+      return pathname === '/app'
+    }
+    return pathname.startsWith(href)
+  }
 
   return (
     <div className="rc-leftnav rc-scroll" data-testid="left-nav">
@@ -64,8 +90,8 @@ export default function LeftNav() {
         </div>
         {PRIMARY.map(item => (
           <Item key={item.id} item={item}
-            active={activeView === item.id}
-            onClick={() => setActiveView(item.id)}/>
+            active={isActive(item)}
+            href={getHref(item.id)}/>
         ))}
       </div>
 
@@ -77,8 +103,8 @@ export default function LeftNav() {
         </div>
         {AGENTS.map(item => (
           <Item key={item.id} item={item}
-            active={activeView === item.id}
-            onClick={() => setActiveView(item.id)}/>
+            active={isActive(item)}
+            href={getHref(item.id)}/>
         ))}
       </div>
 
@@ -88,8 +114,8 @@ export default function LeftNav() {
         </div>
         {SYSTEM.map(item => (
           <Item key={item.id} item={item}
-            active={activeView === item.id}
-            onClick={() => setActiveView(item.id)}/>
+            active={isActive(item)}
+            href={getHref(item.id)}/>
         ))}
       </div>
 
@@ -110,3 +136,4 @@ export default function LeftNav() {
     </div>
   )
 }
+
