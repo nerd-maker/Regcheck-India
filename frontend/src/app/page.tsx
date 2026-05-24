@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import DemoRequestModal from '@/components/DemoRequestModal'
 
 // ─── Inline animation tokens (kept here so the landing is self-contained) ───
 const NAVY = '#0B2A5B'
@@ -13,13 +14,17 @@ function useCountUp(target: number, duration = 1600, trigger = false) {
   useEffect(() => {
     if (!trigger) return
     let start: number | null = null
+    let animationFrameId: number
     const step = (ts: number) => {
       if (start === null) start = ts
       const p = Math.min((ts - start) / duration, 1)
       setCount(Math.floor(p * target))
-      if (p < 1) requestAnimationFrame(step)
+      if (p < 1) {
+        animationFrameId = requestAnimationFrame(step)
+      }
     }
-    requestAnimationFrame(step)
+    animationFrameId = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(animationFrameId)
   }, [trigger, target, duration])
   return count
 }
@@ -27,9 +32,10 @@ function useCountUp(target: number, duration = 1600, trigger = false) {
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [statsVisible, setStatsVisible] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
   const statsRef = useRef<HTMLDivElement | null>(null)
-  const submissions = useCountUp(218, 1500, statsVisible)
-  const agents = useCountUp(9, 900, statsVisible)
+  const submissions = useCountUp(2400, 1200, statsVisible)
+  const agents = useCountUp(8, 900, statsVisible)
   const frameworks = useCountUp(12, 1200, statsVisible)
 
   useEffect(() => {
@@ -39,7 +45,7 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setStatsVisible(true) }, { threshold: 0.3 })
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setStatsVisible(true) }, { threshold: 0.05 })
     if (statsRef.current) obs.observe(statsRef.current)
     return () => obs.disconnect()
   }, [])
@@ -105,7 +111,7 @@ export default function LandingPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <a href="#contact" style={{ fontSize: 13, color: '#4B5563', textDecoration: 'none' }}>Request Demo</a>
+            <button onClick={() => setModalOpen(true)} style={{ fontSize: 13, color: '#4B5563', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Request Demo</button>
             <Link href="/app" style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               fontSize: 13, fontWeight: 600, color: '#fff',
@@ -144,10 +150,10 @@ export default function LandingPage() {
             </h1>
 
             <p style={{ fontSize: 16.5, color: '#4B5563', lineHeight: 1.6, maxWidth: 560, margin: '0 0 30px' }}>
-              Submissions, applications, registrations, and HA correspondence — unified in a single vault, accelerated by nine specialised AI compliance agents trained on India&apos;s regulatory corpus.
+              Submissions, applications, registrations, and HA correspondence — unified in a single vault, accelerated by eight specialised AI compliance agents trained on India&apos;s regulatory corpus.
             </p>
 
-            <div style={{ display: 'flex', gap: 10, marginBottom: 44 }}>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
               <Link href="/app" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
                 background: NAVY, color: '#fff', padding: '12px 22px',
@@ -157,19 +163,21 @@ export default function LandingPage() {
               }}>
                 Open the Vault →
               </Link>
-              <a href="#contact" style={{
+              <button onClick={() => setModalOpen(true)} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
                 background: '#fff', color: '#0F1419', padding: '12px 22px',
                 borderRadius: 5, fontSize: 14, fontWeight: 600,
-                textDecoration: 'none',
-                border: '1px solid #D6DBE3',
+                cursor: 'pointer', border: '1px solid #D6DBE3',
               }}>
-                Request a Demo
-              </a>
+                Request a Pilot →
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 44, fontStyle: 'italic' }}>
+              30-min product walkthrough · No commitment · RA team welcome
             </div>
 
             <div ref={statsRef} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 32, borderTop: '1px solid #E1E5EB', paddingTop: 24, maxWidth: 540 }}>
-              <Stat label="Compliance checks" value={`${submissions}+`}/>
+              <Stat label="Compliance checks" value={`${submissions.toLocaleString()}+`}/>
               <Stat label="AI agents" value={`${agents}`}/>
               <Stat label="Frameworks indexed" value={`${frameworks}`}/>
             </div>
@@ -272,7 +280,7 @@ export default function LandingPage() {
           <div className="fade-up" style={{ maxWidth: 720, marginBottom: 56 }}>
             <Eyebrow>Platform</Eyebrow>
             <h2 style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.02em', color: '#0F1419', margin: '12px 0 16px', lineHeight: 1.1 }}>
-              One vault. Every regulatory artefact. Nine specialised AI agents.
+              One vault. Every regulatory artefact. Eight specialised AI agents.
             </h2>
             <p style={{ fontSize: 15, color: '#4B5563', lineHeight: 1.7, margin: 0 }}>
               Submissions, applications, registrations, HA correspondence, and an immutable audit trail — managed in a single vault with the structure Indian regulatory teams need to file with confidence.
@@ -432,19 +440,25 @@ export default function LandingPage() {
           <p style={{ fontSize: 15, color: '#4B5563', lineHeight: 1.7, margin: '0 auto 32px', maxWidth: 600 }}>
             Be among the first Indian pharmaceutical sponsors and CROs to consolidate submissions, registrations, and HA correspondence into a single AI-assisted vault.
           </p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <Link href="/app" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              background: NAVY, color: '#fff', padding: '14px 26px',
-              borderRadius: 5, fontSize: 14, fontWeight: 600,
-              textDecoration: 'none', boxShadow: '0 6px 18px rgba(11, 42, 91, 0.22)',
-            }}>Open the Vault →</Link>
-            <a href="mailto:rushikeshbork000@gmail.com" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              background: '#fff', color: '#0F1419', padding: '14px 26px',
-              borderRadius: 5, fontSize: 14, fontWeight: 600,
-              textDecoration: 'none', border: '1px solid #D6DBE3',
-            }}>Request a Pilot</a>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <Link href="/app" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: '#fff', color: '#0F1419', padding: '14px 26px',
+                borderRadius: 5, fontSize: 14, fontWeight: 600,
+                textDecoration: 'none', border: '1px solid #D6DBE3',
+              }}>Open the Vault →</Link>
+              <button onClick={() => setModalOpen(true)} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: NAVY, color: '#fff', padding: '14px 26px',
+                borderRadius: 5, fontSize: 14, fontWeight: 600,
+                cursor: 'pointer', border: 'none',
+                boxShadow: '0 6px 18px rgba(11, 42, 91, 0.22)',
+              }}>Request a Pilot</button>
+            </div>
+            <div style={{ marginTop: 12, fontSize: 13, color: '#6B7280' }}>
+              Or email us directly: <a href="mailto:contact@regcheck.in" style={{ color: BLUE, fontWeight: 600, textDecoration: 'none' }}>contact@regcheck.in</a>
+            </div>
           </div>
         </div>
       </section>
@@ -475,7 +489,7 @@ export default function LandingPage() {
           ))}
         </div>
         <div style={{ maxWidth: 1280, margin: '0 auto', borderTop: '1px solid #1F2937', paddingTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 11.5 }}>© 2025 RegCheck-India · v3.2.0 · Pilot tool. All AI outputs require RA sign-off before CDSCO submission.</div>
+          <div style={{ fontSize: 11.5 }}>© 2025 RegCheck-India · v1.0 Beta · 8 agents live · All AI outputs require qualified RA review before CDSCO submission.</div>
           <div style={{ display: 'flex', gap: 16 }}>
             <Link href="/privacy" style={{ fontSize: 11.5, color: '#9CA3AF', textDecoration: 'none' }}>Privacy</Link>
             <Link href="/terms"   style={{ fontSize: 11.5, color: '#9CA3AF', textDecoration: 'none' }}>Terms</Link>
@@ -483,6 +497,7 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+      <DemoRequestModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
   )
 }

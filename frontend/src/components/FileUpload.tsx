@@ -1,49 +1,88 @@
 'use client';
 
 import React, { useId, useRef, useState } from 'react';
-
 import { extractTextFromFile } from '@/services/api';
 
 interface FileUploadProps {
   onTextExtracted: (text: string, filename: string) => void;
   onError: (error: string) => void;
   disabled?: boolean;
+  label?: string;
+  inputId?: string;
 }
 
-export default function FileUpload({ onTextExtracted, onError, disabled }: FileUploadProps) {
+const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+export default function FileUpload({
+  onTextExtracted,
+  onError,
+  disabled,
+  label = 'Upload a regulatory document',
+  inputId: externalId,
+}: FileUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const inputId = useId();
+  const generatedId = useId();
+  const inputId = externalId ?? generatedId;
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.pdf') && !file.name.endsWith('.docx')) {
-      onError('Please upload a PDF or DOCX file only.');
+    // Reset state
+    setFileError(null);
+    setUploadedFile(null);
+
+    // Type validation
+    const isValidType = file.name.endsWith('.pdf') || file.name.endsWith('.docx');
+    if (!isValidType) {
+      const msg = 'Only PDF and DOCX files are accepted.';
+      setFileError(msg);
+      onError(msg);
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      onError('File size must be under 10MB.');
+    // Size validation
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      const msg = `File exceeds ${MAX_FILE_SIZE_MB} MB limit. Please compress or split the document.`;
+      setFileError(msg);
+      onError(msg);
       return;
     }
 
     setUploading(true);
-    setUploadedFile(null);
-
     try {
       const result = await extractTextFromFile(file);
       setUploadedFile(file.name);
       onTextExtracted(result.extracted_text, file.name);
     } catch (err: unknown) {
-      onError(err instanceof Error ? err.message : 'Failed to process file.');
+      const msg = err instanceof Error ? err.message : 'Failed to process file.';
+      setFileError(msg);
+      onError(msg);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
+
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    if (disabled || uploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    // Simulate a change event
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.files = dt.files;
+      fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  };
+
+  const isDisabled = disabled || uploading;
 
   return (
     <div className="mb-3">
@@ -52,42 +91,76 @@ export default function FileUpload({ onTextExtracted, onError, disabled }: FileU
         type="file"
         accept=".pdf,.docx"
         onChange={handleFileChange}
-        disabled={disabled || uploading}
-        className="hidden"
+        disabled={isDisabled}
+        className="sr-only"
         id={inputId}
+        aria-label={label}
       />
+
       <label
         htmlFor={inputId}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm cursor-pointer transition-all duration-200 w-fit ${
-          disabled || uploading
-            ? 'border-white/10 text-slate-500 cursor-not-allowed'
-            : 'border-white/20 text-slate-300 hover:border-teal-400/50 hover:text-teal-400'
-        }`}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={handleDrop}
+        className={`
+          flex flex-col items-center justify-center gap-3
+          w-full rounded-xl border-2 border-dashed px-6 py-8
+          text-center transition-all duration-200
+          ${isDisabled
+            ? 'cursor-not-allowed border-white/10 opacity-50'
+            : uploadedFile
+            ? 'cursor-pointer border-teal-500/50 bg-teal-500/5 hover:bg-teal-500/10'
+            : 'cursor-pointer border-white/20 bg-white/[0.02] hover:border-teal-400/60 hover:bg-white/5'
+          }
+        `}
+        style={{ minHeight: 140 }}
       >
         {uploading ? (
           <>
-            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-8 w-8 text-teal-400" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
-            Extracting text...
+            <p className="text-sm font-medium text-teal-400">Extracting text…</p>
+            <p className="text-xs text-slate-500">This may take a moment for large documents</p>
+          </>
+        ) : uploadedFile ? (
+          <>
+            {/* Success check icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg" width="28" height="28"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className="text-teal-400"
+            >
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <p className="text-sm font-semibold text-teal-400">✓ {uploadedFile} selected — ready to run</p>
+            <p className="text-xs text-slate-500">Click to replace</p>
           </>
         ) : (
           <>
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            {/* Upload arrow icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg" width="28" height="28"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className="text-slate-400"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
-            Upload PDF or DOCX
+            <p className="text-sm font-medium text-slate-300">{label}</p>
+            <p className="text-xs text-slate-500">PDF · DOCX · Max {MAX_FILE_SIZE_MB} MB · Click or drag &amp; drop</p>
           </>
         )}
       </label>
-      {uploadedFile && (
-        <div className="mt-2 flex items-center gap-2 text-xs text-teal-400">
-          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          {uploadedFile} - text extracted successfully
-        </div>
+
+      {fileError && (
+        <p className="mt-2 text-xs text-red-400 flex items-center gap-1">
+          <span>⚠</span> {fileError}
+        </p>
       )}
     </div>
   );
