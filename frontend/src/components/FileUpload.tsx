@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useId, useRef, useState } from 'react';
-import { extractTextFromFile } from '@/services/api';
 
 interface FileUploadProps {
   onTextExtracted: (text: string, filename: string) => void;
   onError: (error: string) => void;
+  /** Called with the raw File object immediately after selection — before any extraction. */
+  onFileSelect?: (file: File) => void;
   disabled?: boolean;
   label?: string;
   inputId?: string;
@@ -18,6 +19,7 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 export default function FileUpload({
   onTextExtracted,
   onError,
+  onFileSelect,
   disabled,
   label = 'Upload a regulatory document',
   inputId: externalId,
@@ -59,23 +61,22 @@ export default function FileUpload({
       return;
     }
 
-    setUploading(true);
-    try {
-      // Simulate extraction offline
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      const dummyText = `Extracted content from ${file.name}. Simulated regulatory document text with clinical protocols and patient narratives.`;
-      if (uploadedFileName === undefined) {
-        setLocalUploadedFile(file.name);
-      }
-      onTextExtracted(dummyText, file.name);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to process file.';
-      setFileError(msg);
-      onError(msg);
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    // Notify parent with raw File immediately (for real API extraction)
+    if (onFileSelect) {
+      onFileSelect(file);
     }
+
+    // Update display name
+    if (uploadedFileName === undefined) {
+      setLocalUploadedFile(file.name);
+    }
+
+    // Also call onTextExtracted with a placeholder so existing callers
+    // that rely on the text callback still work without breaking.
+    onTextExtracted('', file.name);
+
+    // Reset file input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
