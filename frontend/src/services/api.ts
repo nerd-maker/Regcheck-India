@@ -1,6 +1,14 @@
 import axios from 'axios';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// ─── Proxy base ──────────────────────────────────────────────────────────────
+// /api/regcheck/* is server-side rewritten by Next.js to the Render backend
+// (see next.config.js → rewrites). Same-origin → no CORS, key never exposed
+// in the URL/origin.
+//
+// All endpoints below previously hit `${PROXY_BASE}/<X>` —
+// they now hit `/api/regcheck/<X>` and Next.js does the proxying server-side.
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const PROXY_BASE  = '/api/regcheck';
 
 /** 
  * Obfuscate keys in localStorage to prevent cleartext scraping.
@@ -15,8 +23,23 @@ const deobfuscate = (str: string): string => {
   }
 };
 
-/** Read the Anthropic API key from localStorage (safe for SSR). */
+/** Read the Anthropic API key from localStorage (safe for SSR).
+ *  Defaults to the "admin-regcheck" magic word which tells the backend to
+ *  use its own server-side Anthropic key — keeps the demo working without
+ *  forcing every user to bring their own key. Users who paste a real key
+ *  in Settings will use their own credits.
+ */
 export const getStoredKey = (): string => {
+  if (typeof window === 'undefined') return 'admin-regcheck';
+  const val = localStorage.getItem('regcheck_anthropic_key') ?? '';
+  const k = deobfuscate(val);
+  return k || 'admin-regcheck';
+};
+
+/** Returns the raw stored key (or empty string). Use this for UI that shows
+ *  "is a personal key set?" — distinct from the default magic word.
+ */
+export const getRawStoredKey = (): string => {
   if (typeof window === 'undefined') return '';
   const val = localStorage.getItem('regcheck_anthropic_key') ?? '';
   return deobfuscate(val);
@@ -55,7 +78,7 @@ export const callAgent = async (
 ) => {
   try {
     const response = await axios.post(
-      `${BACKEND_URL}${endpoint}`,
+      `${PROXY_BASE}${endpoint.replace("/api/v1/agents","")}`,
       { document, metadata },
       { 
         headers: {
@@ -96,7 +119,7 @@ export const callQAAgent = async (
 ) => {
   try {
     const response = await axios.post(
-      `${BACKEND_URL}/api/v1/agents/qa`,
+      `${PROXY_BASE}/qa`,
       { question, retrieved_context: '', metadata },
       { 
         headers: {
@@ -140,7 +163,7 @@ export const runDocumentSummariser = (document: string, metadata = {}) =>
 
 export const runCompletenessAssessor = (document: string, document_type: string = 'GENERAL', metadata = {}) => {
   return axios.post(
-    `${BACKEND_URL}/api/v1/agents/completeness`,
+    `${PROXY_BASE}/completeness`,
     { document, document_type, metadata },
     {
       headers: {
@@ -187,7 +210,7 @@ export const extractTextFromFile = async (
 
   try {
     const response = await axios.post(
-      `${BACKEND_URL}/api/v1/agents/extract-text`,
+      `${PROXY_BASE}/extract-text`,
       formData,
       {
         headers: {
@@ -232,7 +255,7 @@ export const extractTextFromFileOCR = async (
 
   try {
     const response = await axios.post(
-      `${BACKEND_URL}/api/v1/agents/ocr`,
+      `${PROXY_BASE}/ocr`,
       formData,
       {
         headers: {
@@ -271,7 +294,7 @@ export const compareDocuments = async (
 
   try {
     const response = await axios.post(
-      `${BACKEND_URL}/api/v1/agents/compare`,
+      `${PROXY_BASE}/compare`,
       formData,
       {
         headers: {
@@ -314,7 +337,7 @@ export const transcribeMeetingAudio = async (
 
   try {
     const response = await axios.post(
-      `${BACKEND_URL}/api/v1/agents/transcribe`,
+      `${PROXY_BASE}/transcribe`,
       formData,
       {
         headers: {
@@ -351,7 +374,7 @@ export const crossDocumentCheck = async (files: File[]): Promise<unknown> => {
 
   try {
     const response = await axios.post(
-      `${BACKEND_URL}/api/v1/agents/cross-document`,
+      `${PROXY_BASE}/cross-document`,
       formData,
       {
         headers: {
@@ -382,4 +405,4 @@ export const crossDocumentCheck = async (files: File[]): Promise<unknown> => {
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 export const checkAgentsHealth = () =>
-  axios.get(`${BACKEND_URL}/api/v1/agents/health`).then(r => r.data);
+  axios.get(`${PROXY_BASE}/health`).then(r => r.data);
