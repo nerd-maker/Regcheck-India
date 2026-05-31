@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import {
@@ -92,11 +92,18 @@ type ResultState =
   | { kind: 'ok'; data: any }
 
 export default function AgentActionView({ agentId }: { agentId: string }) {
-  const { setActiveView } = useWorkspace()
+  const { setActiveView, consumePrefilledInput } = useWorkspace()
   const agent = AGENTS[agentId] ?? AGENTS['m3-completeness']
   const [input, setInput] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [result, setResult] = useState<ResultState>({ kind: 'idle' })
+
+  // Pre-fill the input when this view is launched from the Inspector
+  // "Compliance Actions" panel on a document / submission.
+  useEffect(() => {
+    const text = consumePrefilledInput()
+    if (text) setInput(text)
+  }, [agentId, consumePrefilledInput])
 
   const run = async () => {
     setResult({ kind: 'loading', elapsedMs: 0 })

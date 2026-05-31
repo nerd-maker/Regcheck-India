@@ -28,6 +28,12 @@ interface WorkspaceState {
   activeAction: string | null              // e.g. 'm7-scheduley'
   startAction: (id: string) => void
   endAction: () => void
+
+  // Pre-filled agent input (used when "Compliance Action" is launched from
+  // the inspector — the document's text gets passed to the agent page).
+  prefilledInput: string
+  setPrefilledInput: (text: string) => void
+  consumePrefilledInput: () => string         // read + clear in one shot
 }
 
 const Ctx = createContext<WorkspaceState | null>(null)
@@ -39,6 +45,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('details')
   const [activeAction, setActiveAction] = useState<string | null>(null)
+  const [prefilledInput, setPrefilledInputState] = useState<string>('')
 
   const [hashParsed, setHashParsed] = useState(false)
 
@@ -84,6 +91,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [])
   const endAction = useCallback(() => setActiveAction(null), [])
 
+  const setPrefilledInput = useCallback((text: string) => setPrefilledInputState(text), [])
+  const consumePrefilledInput = useCallback(() => {
+    const v = prefilledInput
+    setPrefilledInputState('')
+    return v
+  }, [prefilledInput])
+
   const value = useMemo<WorkspaceState>(() => ({
     activeView, setActiveView,
     selectedSubmissionId, setSelectedSubmissionId,
@@ -91,10 +105,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     inspectorOpen, inspectorTab,
     openInspector, closeInspector, setInspectorTab,
     activeAction, startAction, endAction,
+    prefilledInput, setPrefilledInput, consumePrefilledInput,
   }), [
     activeView, selectedSubmissionId, selectedDocumentId,
     inspectorOpen, inspectorTab, openInspector, closeInspector,
     activeAction, startAction, endAction,
+    prefilledInput, setPrefilledInput, consumePrefilledInput,
   ])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

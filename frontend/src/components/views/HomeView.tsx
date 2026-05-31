@@ -4,12 +4,22 @@ import { HOME_KPIS, SUBMISSIONS, COMPLIANCE_SCORES, AUDIT_EVENTS } from '@/lib/m
 import { useWorkspace } from '@/lib/workspaceStore'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
+import { exportCSV, timestampedName } from '@/lib/csv'
 
 export default function HomeView() {
   const { setActiveView, setSelectedSubmissionId, openInspector } = useWorkspace()
 
   const pinned = SUBMISSIONS.slice(0, 3)
   const myQueue = SUBMISSIONS.filter(s => s.state === 'review' || s.state === 'rejected' || s.openGaps > 0).slice(0, 4)
+
+  const handleExport = () => exportCSV(
+    timestampedName('regcheck_home_kpis'),
+    [
+      ...HOME_KPIS.map(k => ({ section: 'KPI', name: k.label, value: k.value, delta: k.delta, trend: k.trend })),
+      ...COMPLIANCE_SCORES.map(c => ({ section: 'Compliance', name: c.name, value: c.score, delta: '', trend: '' })),
+    ],
+    ['section', 'name', 'value', 'delta', 'trend'],
+  )
 
   return (
     <div data-testid="view-home">
@@ -20,7 +30,7 @@ export default function HomeView() {
         icon="ti-home-2"
         actions={
           <>
-            <button className="rc-btn" data-testid="home-export-btn"><i className="ti ti-download"/> Export</button>
+            <button className="rc-btn" onClick={handleExport} data-testid="home-export-btn"><i className="ti ti-download"/> Export</button>
             <button className="rc-btn rc-btn-primary" onClick={() => setActiveView('submissions')} data-testid="home-new-submission">
               <i className="ti ti-plus"/> New submission
             </button>

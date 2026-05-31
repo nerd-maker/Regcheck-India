@@ -44,6 +44,7 @@ export interface DocumentRecord {
   applicationId?: string
   complianceScore?: number         // 0-100
   flags?: ('pii-detected' | 'expedited' | 'critical-gap' | 'pending-signoff')[]
+  excerpt?: string                 // representative content snippet (used by AI agents)
 }
 
 export interface SubmissionRecord {
@@ -258,6 +259,7 @@ export const DOCUMENTS: DocumentRecord[] = [
     submissionId: 's-001', applicationId: 'a-001',
     complianceScore: 72,
     flags: ['critical-gap'],
+    excerpt: 'Phase II Protocol — ZP-101 in Type 2 Diabetes Mellitus. Sponsor: Zephyr Pharma Pvt Ltd. CTRI/2025/03/072314. Primary endpoint: change in HbA1c from baseline at Week 24. Secondary endpoints: fasting plasma glucose, body weight, lipid profile. Sample size: 300 (1:1 randomisation). Treatment duration: 24 weeks + 4-week follow-up. Inclusion: adults 18-75y, HbA1c 7.0-10.5%, on stable metformin >=12 weeks. Exclusion: eGFR <45, prior insulin therapy, history of pancreatitis. IP: ZP-101 oral 400 mg once daily. Schedule Y Appendix I attached. Schedule Y Appendix III animal pharmacology attached. Insurance: INR 75 lakhs per subject per Rule 39. Compensation per Rule 42. Free medical management per Rule 41.',
   },
   {
     id: 'd-002', number: 'DOC-0043', name: 'ZP-101 Informed Consent Form (English)',
@@ -267,6 +269,7 @@ export const DOCUMENTS: DocumentRecord[] = [
     size: '342 KB', updatedAt: '1 hour ago', updatedBy: PEOPLE.clin.name,
     submissionId: 's-001', applicationId: 'a-001',
     complianceScore: 88,
+    excerpt: 'Informed Consent Form — ZP-101 Phase II — English version 1.4. You are being invited to participate in a clinical research study of ZP-101 (200 mg once daily) for the treatment of Type 2 Diabetes Mellitus. The investigator is Dr. Priya Menon at Apollo Hospitals, Chennai. The study will last 24 weeks. Risks include hypoglycaemia, gastrointestinal upset, and rare hypersensitivity reactions. Patient: _______ (Aadhaar: _______). Investigator PAN: ABCDE1234F.',
   },
   {
     id: 'd-003', number: 'DOC-0044', name: 'ZP-101 Investigator Brochure',
@@ -321,6 +324,7 @@ export const DOCUMENTS: DocumentRecord[] = [
     size: '256 KB', updatedAt: '2 hours ago', updatedBy: PEOPLE.pv.name,
     submissionId: 's-002',
     complianceScore: 51, flags: ['critical-gap', 'expedited'],
+    excerpt: 'A 47-year-old male subject (SAE-2025-0089) developed anaphylactic shock approximately 12 minutes after the second IV dose of BX-400 (400 mg/m²). Symptoms: generalised urticaria, hypotension (BP 70/40), tachycardia (HR 140), bronchospasm, laryngeal oedema. Treatment: IM adrenaline 0.5 mg, IV hydrocortisone 200 mg, IV chlorpheniramine 10 mg, high-flow oxygen. Subject required overnight ICU admission, discharged after 36 hours. Investigator assessment: causality - probable; outcome - recovered; seriousness - life threatening; expectedness - unexpected (not listed in IB v2.1).',
   },
   {
     id: 'd-009', number: 'DOC-0090', name: 'BX-400 Causality Assessment',

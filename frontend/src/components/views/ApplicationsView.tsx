@@ -1,8 +1,11 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import { APPLICATIONS } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
+import FilterBar from '@/components/veeva/FilterBar'
+import { exportCSV, timestampedName } from '@/lib/csv'
 
 const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
   'Active':         { bg: 'var(--rc-effective-bg)', color: 'var(--rc-effective)' },
@@ -13,19 +16,45 @@ const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
 
 export default function ApplicationsView() {
   const { setActiveView } = useWorkspace()
+  const [active, setActive] = useState<Record<string, string>>({})
+  const [search, setSearch] = useState('')
+
+  const STATUS_OPTS = ['Active', 'Pending CDSCO', 'Approved', 'On Hold']
+  const TYPE_OPTS = ['Clinical Trial', 'New Drug', 'Subsequent New Drug']
+
+  const filtered = useMemo(() => APPLICATIONS.filter(a => {
+    if (active.status && a.status !== active.status) return false
+    if (active.type && a.type !== active.type) return false
+    if (search && !`${a.number} ${a.product} ${a.sponsor}`.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  }), [active, search])
+
   return (
     <div data-testid="view-applications">
       <PageHeader
         crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Applications' }]}
         title="Applications"
-        subtitle={`${APPLICATIONS.length} applications across all products`}
+        subtitle={`${filtered.length} of ${APPLICATIONS.length} applications`}
         icon="ti-stack-2"
         actions={
           <>
-            <button className="rc-btn"><i className="ti ti-filter"/> Filter</button>
+            <button className="rc-btn" onClick={() => exportCSV(timestampedName('regcheck_applications'),
+              filtered.map(a => ({ number: a.number, product: a.product, sponsor: a.sponsor, type: a.type, status: a.status, submissions: a.submissions, registrations: a.registrations, owner: a.owner.name, opened: a.openedAt }))
+            )} data-testid="apps-export-btn"><i className="ti ti-download"/> Export</button>
             <button className="rc-btn rc-btn-primary"><i className="ti ti-plus"/> New application</button>
           </>
         }
+      />
+      <FilterBar
+        active={active}
+        onChange={setActive}
+        search={search}
+        onSearch={setSearch}
+        searchPlaceholder="Search number, product, sponsor…"
+        filters={[
+          { key: 'status', label: 'Status', chips: STATUS_OPTS.map(s => ({ id: s, label: s, count: APPLICATIONS.filter(a => a.status === s).length })) },
+          { key: 'type',   label: 'Type',   chips: TYPE_OPTS.map(t => ({ id: t, label: t, count: APPLICATIONS.filter(a => a.type === t).length })) },
+        ]}
       />
       <div style={{ padding: 24 }}>
         <div className="rc-card">
@@ -44,13 +73,11 @@ export default function ApplicationsView() {
               </tr>
             </thead>
             <tbody>
-              {APPLICATIONS.map(a => {
+              {filtered.map(a => {
                 const st = STATUS_COLOR[a.status]
                 return (
                   <tr key={a.id} data-testid={`approw-${a.id}`}>
-                    <td>
-                      <div className="rc-table-link" style={{ fontWeight: 500 }}>{a.number}</div>
-                    </td>
+                    <td><div className="rc-table-link" style={{ fontWeight: 500 }}>{a.number}</div></td>
                     <td><strong>{a.product}</strong></td>
                     <td><span style={{ fontSize: 12, color: 'var(--rc-text-secondary)' }}>{a.sponsor}</span></td>
                     <td>{a.type}</td>
@@ -67,6 +94,9 @@ export default function ApplicationsView() {
                   </tr>
                 )
               })}
+              {filtered.length === 0 && (
+                <tr><td colSpan={9}><div className="rc-empty"><i className="ti ti-search-off"/><div>No applications match the current filters.</div></div></td></tr>
+              )}
             </tbody>
           </table>
         </div>
