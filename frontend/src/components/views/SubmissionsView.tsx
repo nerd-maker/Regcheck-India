@@ -3,11 +3,15 @@
 import { useState, useMemo, useEffect } from 'react'
 import { LifecycleState, SubmissionRecord } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
-import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
-import { exportCSV, timestampedName } from '@/lib/csv'
-import { fetchSubmissions, createSubmission } from '@/services/workspaceData'
+import StatusBadge from '@/components/veeva/StatusBadge'
+import { createSubmission } from '@/services/workspaceData'
+import { useSubmissions } from '@/hooks/useWorkspaceData'
 import NewSubmissionModal from '@/components/NewSubmissionModal'
+import { exportCSV, timestampedName } from '@/lib/csv'
+
+
+
 
 const SAVED_VIEWS_KEY = 'rc_saved_views_submissions'
 
@@ -40,25 +44,12 @@ export default function SubmissionsView() {
   const [selected, setSelected] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<{ k: keyof SubmissionRecord; dir: 'asc' | 'desc' }>({ k: 'updatedAt', dir: 'asc' })
 
-  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: submissions, loading, reload } = useSubmissions()
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
-
-  const loadSubmissions = () => {
-    setLoading(true)
-    fetchSubmissions().then(data => {
-      setSubmissions(data)
-      setLoading(false)
-    })
-  }
-
-  useEffect(() => {
-    loadSubmissions()
-  }, [])
 
   const handleCreateSubmission = async (formData: any) => {
     await createSubmission(formData)
-    loadSubmissions()
+    await reload()
   }
 
   // ── Saved Views ────────────────────────────────────────────────────────

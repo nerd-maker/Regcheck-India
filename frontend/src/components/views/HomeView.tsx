@@ -1,26 +1,17 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { HOME_KPIS, SUBMISSIONS, COMPLIANCE_SCORES, AUDIT_EVENTS } from '@/lib/mockData'
+import { HOME_KPIS, COMPLIANCE_SCORES, AUDIT_EVENTS } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
 import { exportCSV, timestampedName } from '@/lib/csv'
-import { fetchSubmissions } from '@/services/workspaceData'
-import type { SubmissionRecord } from '@/lib/mockData'
+import { useSubmissions } from '@/hooks/useWorkspaceData'
 
 export default function HomeView() {
   const { setActiveView, setSelectedSubmissionId, openInspector } = useWorkspace()
 
-  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchSubmissions().then(data => {
-      setSubmissions(data)
-      setLoading(false)
-    })
-  }, [])
+  const { data: submissions, loading } = useSubmissions()
 
   const pinned = useMemo(() => submissions.slice(0, 3), [submissions])
   

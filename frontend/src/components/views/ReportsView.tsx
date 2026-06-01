@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { COMPLIANCE_SCORES, SUBMISSIONS } from '@/lib/mockData'
+import { COMPLIANCE_SCORES } from '@/lib/mockData'
+import { useSubmissions } from '@/hooks/useWorkspaceData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
-import { fetchSubmissions } from '@/services/workspaceData'
-import type { SubmissionRecord } from '@/lib/mockData'
+
 
 const RANGES = [
   { id: '7',   label: 'Last 7 days' },
@@ -21,15 +21,7 @@ export default function ReportsView() {
   const [showRange, setShowRange] = useState(false)
   const rangeLabel = RANGES.find(r => r.id === range)?.label ?? 'Last 30 days'
 
-  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchSubmissions().then(data => {
-      setSubmissions(data)
-      setLoading(false)
-    })
-  }, [])
+  const { data: submissions, loading } = useSubmissions()
 
   const factor = range === '7' ? 0.30 : range === '30' ? 1 : range === '90' ? 2.4 : range === 'ytd' ? 4.2 : 6.0
   const throughput = {
@@ -40,8 +32,7 @@ export default function ReportsView() {
   }
 
   const sortedSubmissions = useMemo(() => {
-    const list = submissions.length > 0 ? submissions : SUBMISSIONS
-    return [...list].sort((a, b) => b.openGaps - a.openGaps).slice(0, 5)
+    return [...submissions].sort((a, b) => b.openGaps - a.openGaps).slice(0, 5)
   }, [submissions])
 
   return (

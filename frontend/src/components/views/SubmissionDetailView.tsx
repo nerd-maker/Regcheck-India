@@ -7,40 +7,27 @@ import PageHeader from '@/components/veeva/PageHeader'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import LifecycleBar from '@/components/veeva/LifecycleBar'
 import { ComplianceTrendChart } from '@/components/ComplianceTrendChart'
-import { fetchSubmissions, fetchDocuments, fetchCorrespondence, uploadDocument } from '@/services/workspaceData'
+import { uploadDocument } from '@/services/workspaceData'
+import { useSubmissions, useDocuments, useCorrespondence } from '@/hooks/useWorkspaceData'
 import type { SubmissionRecord, DocumentRecord, HACorrespondenceRecord } from '@/lib/mockData'
 
 export default function SubmissionDetailView() {
   const { selectedSubmissionId, setActiveView, setSelectedDocumentId, openInspector, setPrefilledInput } = useWorkspace()
   const [tab, setTab] = useState('overview')
 
-  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
-  const [documents, setDocuments] = useState<DocumentRecord[]>([])
-  const [correspondence, setCorrespondence] = useState<HACorrespondenceRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: submissions, loading: subsLoading, reload: reloadSubs } = useSubmissions()
+  const { data: documents, loading: docsLoading, reload: reloadDocs } = useDocuments(selectedSubmissionId || undefined)
+  const { data: correspondence, loading: corrsLoading, reload: reloadCorrs } = useCorrespondence(selectedSubmissionId || undefined)
+
+  const loading = subsLoading || docsLoading || corrsLoading
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const loadData = () => {
-    if (!selectedSubmissionId) return
-    setLoading(true)
-    Promise.all([
-      fetchSubmissions(),
-      fetchDocuments(selectedSubmissionId),
-      fetchCorrespondence(selectedSubmissionId)
-    ]).then(([subs, docs, corrs]) => {
-      setSubmissions(subs)
-      setDocuments(docs)
-      setCorrespondence(corrs)
-      setLoading(false)
-    }).catch(() => {
-      setLoading(false)
-    })
+    reloadSubs()
+    reloadDocs()
+    reloadCorrs()
   }
-
-  useEffect(() => {
-    loadData()
-  }, [selectedSubmissionId])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

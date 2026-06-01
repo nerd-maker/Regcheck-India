@@ -5,8 +5,10 @@ import { LifecycleState, DocumentRecord } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import StatusBadge from '@/components/veeva/StatusBadge'
+import { uploadDocument } from '@/services/workspaceData'
+import { useDocuments } from '@/hooks/useWorkspaceData'
 import { exportCSV, timestampedName } from '@/lib/csv'
-import { fetchDocuments, uploadDocument } from '@/services/workspaceData'
+
 
 const STATES: LifecycleState[] = ['draft', 'review', 'approved', 'effective', 'superseded']
 
@@ -16,22 +18,9 @@ export default function DocumentsView() {
   const [view, setView] = useState<'flat' | 'folder'>('flat')
   const [search, setSearch] = useState('')
 
-  const [documents, setDocuments] = useState<DocumentRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: documents, loading, reload } = useDocuments()
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-  const loadDocuments = () => {
-    setLoading(true)
-    fetchDocuments().then(data => {
-      setDocuments(data)
-      setLoading(false)
-    })
-  }
-
-  useEffect(() => {
-    loadDocuments()
-  }, [])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -39,7 +28,7 @@ export default function DocumentsView() {
     setUploading(true)
     try {
       await uploadDocument(file)
-      loadDocuments()
+      await reload()
     } catch (err: any) {
       alert(err.message || 'Upload failed')
     } finally {

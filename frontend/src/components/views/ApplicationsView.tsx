@@ -5,8 +5,7 @@ import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
-import { fetchApplications } from '@/services/workspaceData'
-import type { ApplicationRecord } from '@/lib/mockData'
+import { useApplications } from '@/hooks/useWorkspaceData'
 
 const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
   'Active':         { bg: 'var(--rc-effective-bg)', color: 'var(--rc-effective)' },
@@ -20,15 +19,7 @@ export default function ApplicationsView() {
   const [active, setActive] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
 
-  const [applications, setApplications] = useState<ApplicationRecord[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchApplications().then(data => {
-      setApplications(data)
-      setLoading(false)
-    })
-  }, [])
+  const { data: applications, loading } = useApplications()
 
   const STATUS_OPTS = ['Active', 'Pending CDSCO', 'Approved', 'On Hold']
   const TYPE_OPTS = ['Clinical Trial', 'New Drug', 'Subsequent New Drug']

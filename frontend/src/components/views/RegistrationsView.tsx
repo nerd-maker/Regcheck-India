@@ -5,8 +5,7 @@ import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
-import { fetchRegistrations } from '@/services/workspaceData'
-import type { RegistrationRecord } from '@/lib/mockData'
+import { useRegistrations } from '@/hooks/useWorkspaceData'
 
 const STATE_COLOR: Record<string, { bg: string; color: string }> = {
   'Effective':       { bg: 'var(--rc-approved-bg)',   color: 'var(--rc-approved)' },
@@ -20,15 +19,7 @@ export default function RegistrationsView() {
   const [active, setActive] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
 
-  const [registrations, setRegistrations] = useState<RegistrationRecord[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchRegistrations().then(data => {
-      setRegistrations(data)
-      setLoading(false)
-    })
-  }, [])
+  const { data: registrations, loading } = useRegistrations()
 
   const STATE_OPTS = ['Effective', 'Expiring Soon', 'Expired', 'Withdrawn']
 

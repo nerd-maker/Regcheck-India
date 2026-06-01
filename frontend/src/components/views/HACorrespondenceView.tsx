@@ -5,8 +5,8 @@ import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
-import { fetchCorrespondence, updateCorrespondenceState } from '@/services/workspaceData'
-import type { HACorrespondenceRecord } from '@/lib/mockData'
+import { updateCorrespondenceState } from '@/services/workspaceData'
+import { useCorrespondence } from '@/hooks/useWorkspaceData'
 
 const STATE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
   'open':              { bg: 'var(--rc-rejected-bg)',  color: 'var(--rc-rejected)',  label: 'Open' },
@@ -20,20 +20,7 @@ export default function HACorrespondenceView() {
   const [active, setActive] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
 
-  const [correspondence, setCorrespondence] = useState<HACorrespondenceRecord[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const loadCorrespondence = () => {
-    setLoading(true)
-    fetchCorrespondence().then(data => {
-      setCorrespondence(data)
-      setLoading(false)
-    })
-  }
-
-  useEffect(() => {
-    loadCorrespondence()
-  }, [])
+  const { data: correspondence, loading, reload: loadCorrespondence } = useCorrespondence()
 
   const byDir = useMemo(() => correspondence.filter(c =>
     tab === 'inbox'  ? c.direction === 'inbound'
