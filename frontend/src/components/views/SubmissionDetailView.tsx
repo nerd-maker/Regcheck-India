@@ -8,7 +8,7 @@ import StatusBadge from '@/components/veeva/StatusBadge'
 import LifecycleBar from '@/components/veeva/LifecycleBar'
 
 export default function SubmissionDetailView() {
-  const { setActiveView, setSelectedDocumentId, openInspector } = useWorkspace()
+  const { setActiveView, setSelectedDocumentId, openInspector, setPrefilledInput } = useWorkspace()
   const sub = useSelectedSubmission(SUBMISSIONS)
   const [tab, setTab] = useState('overview')
 
@@ -51,9 +51,12 @@ export default function SubmissionDetailView() {
         badge={<StatusBadge state={sub.state} label={sub.stateLabel}/>}
         actions={
           <>
-            <button className="rc-btn" data-testid="sub-share-btn"><i className="ti ti-share"/> Share</button>
+            <button className="rc-btn" onClick={() => {
+              const url = `${window.location.origin}/app#/submission-detail/sub/${sub.id}`
+              navigator.clipboard?.writeText(url).then(() => alert(`Link copied to clipboard:\n${url}`)).catch(() => alert(`Share link:\n${url}`))
+            }} data-testid="sub-share-btn"><i className="ti ti-link"/> Copy link</button>
             <button className="rc-btn" onClick={() => openInspector('details')} data-testid="sub-inspect-btn"><i className="ti ti-layout-sidebar-right-expand"/> Inspect</button>
-            <button className="rc-btn" data-testid="sub-upload-btn"><i className="ti ti-upload"/> Upload</button>
+            <button className="rc-btn" onClick={() => alert('File upload — coming in Phase B-1 (real document storage). For now, documents are pre-loaded mock data.')} data-testid="sub-upload-btn"><i className="ti ti-upload"/> Upload</button>
             <button className="rc-btn rc-btn-primary" onClick={() => openInspector('actions')} data-testid="sub-run-actions">
               <i className="ti ti-sparkles"/> Run AI Actions
             </button>
@@ -112,7 +115,7 @@ export default function SubmissionDetailView() {
           <div className="rc-card">
             <div className="rc-card-header">
               <span>{docs.length} documents</span>
-              <button className="rc-btn rc-btn-primary rc-btn-sm" data-testid="add-doc-btn"><i className="ti ti-plus"/> Add document</button>
+              <button className="rc-btn rc-btn-primary rc-btn-sm" onClick={() => alert('Add Document — comes online in Phase B-1 once the backend document-storage endpoint is wired. Until then, documents are pre-loaded mock data linked to each submission.')} data-testid="add-doc-btn"><i className="ti ti-plus"/> Add document</button>
             </div>
             <table className="rc-table">
               <thead>
@@ -227,7 +230,10 @@ export default function SubmissionDetailView() {
                       <div style={{ fontSize: 13, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{g.text}</div>
                       <div style={{ fontSize: 11.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>{g.framework}</div>
                     </div>
-                    <button className="rc-btn rc-btn-sm" data-testid={`gap-resolve-${g.id}`}><i className="ti ti-sparkles"/> Resolve with AI</button>
+                    <button className="rc-btn rc-btn-sm" onClick={() => {
+                      setPrefilledInput(`Resolve the following compliance gap:\n\nGap: ${g.text}\nFramework: ${g.framework}\nSubmission: ${sub.name} (${sub.number})\nProduct: ${sub.product}\nIndication: ${sub.indication}\n\nProvide a detailed remediation plan with citations to the relevant NDCTR / Schedule Y / ICH provisions and concrete content to add to the document.`)
+                      setActiveView('m6-qa')
+                    }} data-testid={`gap-resolve-${g.id}`}><i className="ti ti-sparkles"/> Resolve with AI</button>
                   </div>
                 ))}
               </div>

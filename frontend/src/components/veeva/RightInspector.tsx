@@ -23,7 +23,7 @@ export default function RightInspector() {
     inspectorOpen, closeInspector,
     inspectorTab, setInspectorTab,
     selectedDocumentId, selectedSubmissionId,
-    startAction,
+    setActiveView, setPrefilledInput,
   } = useWorkspace()
 
   if (!inspectorOpen) return null
@@ -157,7 +157,17 @@ export default function RightInspector() {
         {inspectorTab === 'actions' && (
           <ComplianceActions
             isDoc={isDoc}
-            onRun={(id) => startAction(id)}
+            onRun={(actionId) => {
+              // Pre-fill the agent's input box with the document excerpt
+              // (or a representative summary for submission-level runs).
+              if (isDoc && doc?.excerpt) {
+                setPrefilledInput(doc.excerpt)
+              } else if (!isDoc && sub) {
+                setPrefilledInput(`Submission: ${sub.name} (${sub.number})\nType: ${sub.type}\nProduct: ${sub.product}\nIndication: ${sub.indication}\nPhase: ${sub.phase}\nAuthority: ${sub.haAuthority}\nFrameworks: ${sub.frameworks.join(', ')}`)
+              }
+              setActiveView(actionId)
+              closeInspector()
+            }}
           />
         )}
 

@@ -1,12 +1,22 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
-import { LifecycleState, SubmissionRecord } from '@/lib/mockData'
+import { useState, useMemo, useEffect } from 'react'
+import { SUBMISSIONS, LifecycleState, SubmissionRecord } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
-import NewSubmissionModal from '@/components/NewSubmissionModal'
+import { exportCSV, timestampedName } from '@/lib/csv'
+
+const SAVED_VIEWS_KEY = 'rc_saved_views_submissions'
+
+interface SavedView {
+  id: string
+  name: string
+  state: string[]
+  type: string[]
+  phase: string[]
+  search: string
+}
 
 const STATE_FACETS: { id: LifecycleState; label: string }[] = [
   { id: 'draft',     label: 'Draft' },
@@ -20,25 +30,53 @@ const TYPE_FACETS = ['IND', 'NDA', 'CT-04', 'Schedule M', 'Pre-IND Meeting', 'An
 const PHASE_FACETS = ['Pre-IND', 'Phase I', 'Phase II', 'Phase III', 'Post-Marketing']
 
 export default function SubmissionsView() {
-  const router = useRouter()
-  const { submissions, setSelectedSubmissionId, setActiveView, openInspector } = useWorkspace()
+  const { setActiveView, setSelectedSubmissionId, openInspector } = useWorkspace()
   const [stateFilter, setStateFilter] = useState<Set<string>>(new Set())
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set())
   const [phaseFilter, setPhaseFilter] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
-  const [newSubOpen, setNewSubOpen] = useState(false)
   const [sortBy, setSortBy] = useState<{ k: keyof SubmissionRecord; dir: 'asc' | 'desc' }>({ k: 'updatedAt', dir: 'asc' })
 
+  // ── Saved Views ────────────────────────────────────────────────────────
+  const [savedViews, setSavedViews] = useState<SavedView[]>([])
+  const [showSaved, setShowSaved] = useState(false)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SAVED_VIEWS_KEY)
+      if (raw) setSavedViews(JSON.parse(raw))
+    } catch {}
+  }, [])
+  const persistSaved = (next: SavedView[]) => {
+    setSavedViews(next)
+    try { localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(next)) } catch {}
+  }
+  const saveCurrent = () => {
+    const name = prompt('Save this filter view as:')
+    if (!name?.trim()) return
+    const view: SavedView = {
+      id: `v_${Date.now()}`,
+      name: name.trim(),
+      state: Array.from(stateFilter), type: Array.from(typeFilter), phase: Array.from(phaseFilter),
+      search,
+    }
+    persistSaved([...savedViews, view])
+  }
+  const applyView = (v: SavedView) => {
+    setStateFilter(new Set(v.state)); setTypeFilter(new Set(v.type)); setPhaseFilter(new Set(v.phase))
+    setSearch(v.search); setShowSaved(false)
+  }
+  const deleteView = (id: string) => persistSaved(savedViews.filter(v => v.id !== id))
+
   const filtered = useMemo(() => {
-    return submissions.filter(s => {
+    return SUBMISSIONS.filter(s => {
       if (stateFilter.size && !stateFilter.has(s.state)) return false
       if (typeFilter.size  && !typeFilter.has(s.type))   return false
       if (phaseFilter.size && !phaseFilter.has(s.phase)) return false
       if (search && !`${s.name} ${s.number} ${s.product}`.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
-  }, [submissions, stateFilter, typeFilter, phaseFilter, search])
+  }, [stateFilter, typeFilter, phaseFilter, search])
 
   const toggleSet = (s: Set<string>, val: string, fn: (n: Set<string>) => void) => {
     const ns = new Set(s)
@@ -46,53 +84,59 @@ export default function SubmissionsView() {
     fn(ns)
   }
 
-  const countByState = (st: string) => submissions.filter(s => s.state === st).length
-  const countByType  = (st: string) => submissions.filter(s => s.type === st).length
-  const countByPhase = (st: string) => submissions.filter(s => s.phase === st).length
+  const countByState = (st: string) => SUBMISSIONS.filter(s => s.state === st).length
+  const countByType  = (st: string) => SUBMISSIONS.filter(s => s.type === st).length
+  const countByPhase = (st: string) => SUBMISSIONS.filter(s => s.phase === st).length
 
   const open = (s: SubmissionRecord) => {
     setSelectedSubmissionId(s.id)
-    router.push(`/app/submissions/${s.id}`)
-  }
-
-  const handleExportCSV = () => {
-    const headers = ['Submission ID', 'Drug', 'Type', 'Phase', 'Authority', 'State', 'Docs', 'Gaps', 'Compliance %']
-    const rows = filtered.map(s => [
-      s.number,
-      s.product,
-      s.type,
-      s.phase,
-      s.haAuthority,
-      s.stateLabel ?? s.state,
-      s.documents,
-      s.openGaps,
-      `${s.complianceScore}%`
-    ])
-    
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.setAttribute('href', url)
-    link.setAttribute('download', `regcheck_submissions_export_${new Date().toISOString().slice(0,10)}.csv`)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    setActiveView('submission-detail')
   }
 
   return (
     <div data-testid="view-submissions" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PageHeader
-        crumbs={[{ label: 'Workspace', onClick: () => router.push('/app') }, { label: 'Submissions' }]}
+        crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Submissions' }]}
         title="Submissions"
-        subtitle={`${filtered.length} of ${submissions.length} submissions`}
+        subtitle={`${filtered.length} of ${SUBMISSIONS.length} submissions`}
         icon="ti-folder-open"
         actions={
           <>
-            <button className="rc-btn"><i className="ti ti-filter"/> Saved Views</button>
-            <button className="rc-btn" onClick={handleExportCSV}><i className="ti ti-download"/> Export</button>
-            <button className="rc-btn rc-btn-primary" onClick={() => setNewSubOpen(true)} data-testid="submissions-new-btn"><i className="ti ti-plus"/> New submission</button>
+            <div style={{ position: 'relative' }}>
+              <button className="rc-btn" onClick={() => setShowSaved(s => !s)} data-testid="submissions-saved-btn">
+                <i className="ti ti-bookmark"/> Saved Views{savedViews.length > 0 ? ` (${savedViews.length})` : ''}
+              </button>
+              {showSaved && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: 'var(--rc-surface)', border: '1px solid var(--rc-border)', borderRadius: 'var(--rc-radius-md)', boxShadow: 'var(--rc-shadow-md)', minWidth: 240, zIndex: 30 }}>
+                  <button className="rc-nav-item" style={{ borderBottom: '1px solid var(--rc-divider)' }} onClick={saveCurrent}>
+                    <i className="ti ti-plus"/> Save current filters…
+                  </button>
+                  {savedViews.length === 0 ? (
+                    <div style={{ padding: '12px 16px', fontSize: 11.5, color: 'var(--rc-text-muted)' }}>No saved views yet.</div>
+                  ) : savedViews.map(v => (
+                    <div key={v.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--rc-divider)' }}>
+                      <button className="rc-nav-item" style={{ flex: 1, borderLeft: 'none' }} onClick={() => applyView(v)} data-testid={`apply-view-${v.id}`}>
+                        <i className="ti ti-filter"/> {v.name}
+                      </button>
+                      <button className="rc-btn rc-btn-ghost rc-btn-sm" onClick={() => deleteView(v.id)} style={{ padding: '0 8px' }}>
+                        <i className="ti ti-trash"/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="rc-btn" onClick={() => exportCSV(
+              timestampedName('regcheck_submissions'),
+              filtered.map(s => ({
+                number: s.number, name: s.name, type: s.type, phase: s.phase, authority: s.haAuthority,
+                state: s.stateLabel ?? s.state, documents: s.documents, open_gaps: s.openGaps,
+                compliance_pct: s.complianceScore, owner: s.owner.name, target_submit: s.targetSubmitDate,
+                product: s.product, indication: s.indication, frameworks: s.frameworks.join(';'),
+                updated: s.updatedAt,
+              })),
+            )} data-testid="submissions-export-btn"><i className="ti ti-download"/> Export ({filtered.length})</button>
+            <button className="rc-btn rc-btn-primary" data-testid="submissions-new-btn"><i className="ti ti-plus"/> New submission</button>
           </>
         }
       />
@@ -180,7 +224,6 @@ export default function SubmissionsView() {
                   }}
                   onDoubleClick={() => open(s)}
                   data-testid={`subrow-${s.id}`}
-                  style={{ cursor: 'pointer' }}
                 >
                   <td onClick={e => e.stopPropagation()}><input type="checkbox"/></td>
                   <td>
@@ -222,7 +265,6 @@ export default function SubmissionsView() {
           </table>
         </div>
       </div>
-      <NewSubmissionModal isOpen={newSubOpen} onClose={() => setNewSubOpen(false)} />
     </div>
   )
 }
@@ -235,4 +277,3 @@ function FacetGroup({ title, children }: { title: string; children: React.ReactN
     </div>
   )
 }
-

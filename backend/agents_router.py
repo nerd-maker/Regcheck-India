@@ -925,7 +925,7 @@ async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_a
     rule_based_matches = []
     rule_based_summary = {}
     try:
-        rule_based_matches = detect_pii(request.document)
+        rule_based_matches = detect_pii(body.document)
         rule_based_summary = get_pii_summary(rule_based_matches)
         if rule_based_matches:
             logger.info(f"Rule-based scan found {len(rule_based_matches)} PII instances before LLM")
@@ -942,7 +942,7 @@ async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_a
         agent_name="PII_PHI_Anonymisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_01_SYSTEM_PROMPT,
-        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
+        user_content=f"Document metadata: {json.dumps(body.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
         has_rag_context=has_rag_context,
@@ -1023,7 +1023,7 @@ async def summarise_document(request: Request, body: AgentRequest, x_anthropic_a
         agent_name="Document_Summarisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_02_SYSTEM_PROMPT,
-        user_content=f"Document metadata: {json.dumps(request.metadata)}\n\nDocument:\n{structured_text}",
+        user_content=f"Document metadata: {json.dumps(body.metadata)}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
         has_rag_context=has_rag_context,

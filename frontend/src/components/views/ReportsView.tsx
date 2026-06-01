@@ -1,19 +1,62 @@
 'use client'
 
+import { useState } from 'react'
 import { COMPLIANCE_SCORES, SUBMISSIONS } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 
+const RANGES = [
+  { id: '7',   label: 'Last 7 days' },
+  { id: '30',  label: 'Last 30 days' },
+  { id: '90',  label: 'Last 90 days' },
+  { id: 'ytd', label: 'Year to date' },
+  { id: 'all', label: 'All time' },
+]
+
 export default function ReportsView() {
   const { setActiveView } = useWorkspace()
+  const [range, setRange] = useState('30')
+  const [showRange, setShowRange] = useState(false)
+  const rangeLabel = RANGES.find(r => r.id === range)?.label ?? 'Last 30 days'
+
+  const factor = range === '7' ? 0.30 : range === '30' ? 1 : range === '90' ? 2.4 : range === 'ytd' ? 4.2 : 6.0
+  const throughput = {
+    Submitted: Math.round(14 * factor),
+    Approved:  Math.round(9 * factor),
+    Deficiency:Math.round(3 * factor),
+    'In Review':Math.round(6 * factor),
+  }
+
   return (
     <div data-testid="view-reports">
       <PageHeader
         crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Reports' }]}
         title="Reports"
-        subtitle="Vault-wide regulatory analytics"
+        subtitle={`Vault-wide regulatory analytics · ${rangeLabel}`}
         icon="ti-chart-line"
-        actions={<><button className="rc-btn"><i className="ti ti-calendar"/> Last 30 days</button><button className="rc-btn rc-btn-primary"><i className="ti ti-download"/> Export PDF</button></>}
+        actions={
+          <>
+            <div style={{ position: 'relative' }}>
+              <button className="rc-btn" onClick={() => setShowRange(s => !s)} data-testid="reports-range-btn">
+                <i className="ti ti-calendar"/> {rangeLabel} <i className="ti ti-chevron-down" style={{ fontSize: 12 }}/>
+              </button>
+              {showRange && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, background: 'var(--rc-surface)', border: '1px solid var(--rc-border)', borderRadius: 'var(--rc-radius-md)', boxShadow: 'var(--rc-shadow-md)', minWidth: 180, zIndex: 30 }}>
+                  {RANGES.map(r => (
+                    <button key={r.id}
+                      className={`rc-nav-item${range === r.id ? ' is-active' : ''}`}
+                      onClick={() => { setRange(r.id); setShowRange(false); }}
+                      data-testid={`range-${r.id}`}
+                    >{r.label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="rc-btn rc-btn-primary" onClick={() => window.print()} data-testid="reports-pdf-btn">
+              <i className="ti ti-printer"/> Print / PDF
+            </button>
+          </>
+        }
       />
 
       <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -33,15 +76,15 @@ export default function ReportsView() {
         </div>
 
         <div className="rc-card">
-          <div className="rc-card-header"><span>Submission throughput</span></div>
+          <div className="rc-card-header"><span>Submission throughput · {rangeLabel}</span></div>
           <div className="rc-card-body">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-              {[
-                { l: 'Submitted',      v: 14, c: 'var(--rc-effective)' },
-                { l: 'Approved',       v: 9,  c: 'var(--rc-approved)' },
-                { l: 'Deficiency',     v: 3,  c: 'var(--rc-rejected)' },
-                { l: 'In Review',      v: 6,  c: 'var(--rc-review)' },
-              ].map((t, i) => (
+              {([
+                { l: 'Submitted',  v: throughput.Submitted,    c: 'var(--rc-effective)' },
+                { l: 'Approved',   v: throughput.Approved,     c: 'var(--rc-approved)' },
+                { l: 'Deficiency', v: throughput.Deficiency,   c: 'var(--rc-rejected)' },
+                { l: 'In Review',  v: throughput['In Review'], c: 'var(--rc-review)' },
+              ]).map((t, i) => (
                 <div key={i} style={{ textAlign: 'center', padding: 12, background: 'var(--rc-surface-secondary)', borderRadius: 6 }}>
                   <div style={{ fontSize: 24, fontWeight: 600, color: t.c }}>{t.v}</div>
                   <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4, fontWeight: 600 }}>{t.l}</div>

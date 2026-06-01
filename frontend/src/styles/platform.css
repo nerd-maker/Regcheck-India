@@ -846,6 +846,25 @@
 }
 .rc-empty .ti { font-size: 36px; opacity: 0.4; display: block; margin: 0 auto 10px; }
 
+/* ══════════════════════════════════════════════════════════════
+   Print styles — Reports → "Print / PDF" button
+   ══════════════════════════════════════════════════════════════ */
+@media print {
+  .rc-topbar,
+  .rc-leftnav,
+  .rc-inspector,
+  .rc-page-actions,
+  .rc-subbar { display: none !important; }
+  .rc-shell {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .rc-card { box-shadow: none !important; break-inside: avoid; }
+  body, .rc-shell { background: #fff !important; }
+}
+
 /* Legacy compatibility (used by some old components) */
 .status-ready    { background: var(--rc-approved-bg); color: var(--rc-approved); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
 .status-review   { background: var(--rc-review-bg);   color: var(--rc-review);   font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }

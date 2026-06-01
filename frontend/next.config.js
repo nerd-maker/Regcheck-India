@@ -1,9 +1,23 @@
 /** @type {import('next').NextConfig} */
 
+// ─── Backend base for the proxy ──────────────────────────────────────────────
+// All `/api/regcheck/*` requests from the browser are forwarded server-side
+// to this origin → no CORS issues in the browser, key never leaves the network.
+const REGCHECK_API_BASE =
+    process.env.REGCHECK_API_BASE || 'https://regcheck-india.onrender.com'
+
 const nextConfig = {
     output: 'standalone',
     env: {
-        NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+        NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
+    },
+    async rewrites() {
+        return [
+            {
+                source: '/api/regcheck/:path*',
+                destination: `${REGCHECK_API_BASE}/api/v1/agents/:path*`,
+            },
+        ]
     },
     async headers() {
         return [
