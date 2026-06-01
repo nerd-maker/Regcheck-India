@@ -5,6 +5,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from contextlib import asynccontextmanager
 from pathlib import Path
 import shutil
 import time as time_module
@@ -44,6 +45,7 @@ from app.services.runtime_state_store import runtime_state_store
 from app.config.llm_config import LLMConfig
 from app.core.datetime_utils import utc_now
 from agents_router import router as agents_router
+from routers.agent_runs import router as agent_runs_router, init_db
 
 logger = logging.getLogger(__name__)
 _APP_START_TIME = time_module.time()
@@ -111,11 +113,22 @@ async def _probe_http_endpoint(url: str, enabled: bool) -> dict:
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown lifecycle handler."""
+    # Create agent_runs table if it doesn't exist (idempotent)
+    await init_db()
+    yield
+    # Shutdown — nothing to clean up currently
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Pharmaceutical regulatory compliance evaluation for Indian regulations"
+    description="Pharmaceutical regulatory compliance evaluation for Indian regulations",
+    lifespan=lifespan
 )
 
 # Attach rate limiter
@@ -220,6 +233,7 @@ app.include_router(summarisation_endpoints.router, prefix="/api/summarise", tags
 app.include_router(comparison_endpoints.router, prefix="/api/compare", tags=["Comparison"])
 app.include_router(classification_endpoints.router, prefix="/api/classify", tags=["Classification"])
 app.include_router(agents_router, prefix="/api/v1/agents", tags=["AI Agents"])
+app.include_router(agent_runs_router, tags=["Agent Runs"])
 
 # Create upload directory
 UPLOAD_DIR = Path(settings.upload_dir)

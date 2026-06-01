@@ -6,6 +6,7 @@ import { useWorkspace, useSelectedSubmission } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import LifecycleBar from '@/components/veeva/LifecycleBar'
+import { ComplianceTrendChart } from '@/components/ComplianceTrendChart'
 
 export default function SubmissionDetailView() {
   const { setActiveView, setSelectedDocumentId, openInspector, setPrefilledInput } = useWorkspace()
@@ -77,6 +78,14 @@ export default function SubmissionDetailView() {
               <Tile label="Open gaps"        value={String(sub.openGaps)} valueColor={sub.openGaps > 0 ? 'var(--rc-rejected)' : 'var(--rc-approved)'}/>
               <Tile label="Compliance score" value={`${sub.complianceScore}%`}/>
               <Tile label="Target submit"    value={sub.targetSubmitDate}/>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <ComplianceTrendChart
+                agentId="m7-scheduley"
+                agentName="Schedule Y"
+                submissionId={sub.id}
+              />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>

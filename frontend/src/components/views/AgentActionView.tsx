@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
+import { saveToHistory } from '@/services/history'
 import PageHeader from '@/components/veeva/PageHeader'
 import {
   runPIIAnonymiser,
@@ -92,7 +93,7 @@ type ResultState =
   | { kind: 'ok'; data: any }
 
 export default function AgentActionView({ agentId }: { agentId: string }) {
-  const { setActiveView, consumePrefilledInput } = useWorkspace()
+  const { setActiveView, consumePrefilledInput, selectedSubmissionId } = useWorkspace()
   const agent = AGENTS[agentId] ?? AGENTS['m3-completeness']
   const [input, setInput] = useState('')
   const [files, setFiles] = useState<File[]>([])
@@ -130,6 +131,21 @@ export default function AgentActionView({ agentId }: { agentId: string }) {
         default: throw new Error('Unknown agent')
       }
       setResult({ kind: 'ok', data })
+      // Save run to persistent history (fire-and-forget — doesn't block UI)
+      saveToHistory(
+        agent.title,
+        agent.id,
+        agent.id === 'm9-crossdoc'
+          ? files.map(f => f.name).join(', ')
+          : input,
+        data,
+        {
+          filename: agent.id === 'm9-crossdoc'
+            ? files[0]?.name
+            : undefined,
+          submissionId: selectedSubmissionId || undefined,
+        }
+      ).catch(() => { /* history save errors are non-blocking */ })
     } catch (e: any) {
       setResult({ kind: 'error', message: e?.message || 'Request failed.' })
     } finally {

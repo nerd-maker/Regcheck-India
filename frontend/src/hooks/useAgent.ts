@@ -3,7 +3,7 @@
 // result parsing, and error handling.
 
 import { useState, useCallback } from "react"
-import { pingBackend, extractTextFromFile } from "@/lib/api"
+import { checkAgentsHealth, extractTextFromFile } from "@/services/api"
 
 export type AgentStatus =
   | "idle"
@@ -33,15 +33,21 @@ export function useAgent() {
 
     try {
       // 1. Check if backend is awake (Render free tier sleeps)
-      const isAwake = await pingBackend()
+      let isAwake = false
+      try {
+        const health = await checkAgentsHealth()
+        isAwake = !!health
+      } catch { isAwake = false }
       if (!isAwake) {
         setStatus("waking")
         // Poll every 5s until awake, max 90s
         let attempts = 0
         while (attempts < 18) {
           await new Promise((r) => setTimeout(r, 5000))
-          const awake = await pingBackend()
-          if (awake) break
+          try {
+            const h = await checkAgentsHealth()
+            if (h) break
+          } catch { /* still sleeping */ }
           attempts++
         }
       }
@@ -50,7 +56,8 @@ export function useAgent() {
       let documentText = ""
       if (options.file) {
         setStatus("extracting")
-        documentText = await extractTextFromFile(options.file)
+        const extracted = await extractTextFromFile(options.file)
+        documentText = extracted.extracted_text
         setRawText(documentText)
       }
 

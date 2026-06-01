@@ -14,6 +14,11 @@ const nextConfig = {
     async rewrites() {
         return [
             {
+                // Agent run history + trend (maps to /api/v1/agent-runs, NOT /api/v1/agents)
+                source: '/api/regcheck/agent-runs/:path*',
+                destination: `${REGCHECK_API_BASE}/api/v1/agent-runs/:path*`,
+            },
+            {
                 source: '/api/regcheck/:path*',
                 destination: `${REGCHECK_API_BASE}/api/v1/agents/:path*`,
             },

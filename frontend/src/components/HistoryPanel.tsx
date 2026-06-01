@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getHistory, clearHistory, deleteHistoryEntry, HistoryEntry } from '@/services/history'
+import { ComplianceTrendChart } from './ComplianceTrendChart'
 
 interface HistoryPanelProps {
   onRestore: (entry: HistoryEntry) => void
@@ -56,7 +57,16 @@ export default function HistoryPanel({ onRestore, currentModuleId }: HistoryPane
           {history.length === 0 ? (
             <p className="text-xs text-slate-500 text-center py-4">No history yet</p>
           ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2">
+              {history.length >= 2 && (
+                <div style={{ marginBottom: 12 }}>
+                  <ComplianceTrendChart
+                    agentId={currentModuleId}
+                    agentName={history[0]?.module || currentModuleId}
+                  />
+                </div>
+              )}
+              <div className="space-y-2 max-h-64 overflow-y-auto">
               {history.map((entry) => (
                 <div key={entry.id} className="bg-white/5 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-1">
@@ -89,6 +99,7 @@ export default function HistoryPanel({ onRestore, currentModuleId }: HistoryPane
                   </button>
                 </div>
               ))}
+            </div>
             </div>
           )}
         </div>

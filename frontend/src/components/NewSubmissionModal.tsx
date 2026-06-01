@@ -9,7 +9,9 @@ interface Props {
 }
 
 export default function NewSubmissionModal({ isOpen, onClose }: Props) {
-  const { addSubmission } = useWorkspace()
+  // Note: addSubmission will be wired in Phase B-1 once backend document-storage is live.
+  // For now the modal validates fields but shows a placeholder confirmation.
+  const _workspace = useWorkspace()
   const [product, setProduct] = useState('')
   const [type, setType] = useState('IND')
   const [phase, setPhase] = useState('Phase II')
@@ -26,13 +28,8 @@ export default function NewSubmissionModal({ isOpen, onClose }: Props) {
       return
     }
     setError('')
-    addSubmission({
-      product,
-      type,
-      phase,
-      indication,
-      sponsor,
-    })
+    // addSubmission will be wired in Phase B-1 when backend storage is ready
+    alert(`Submission created (pending backend): ${product} — ${type} — ${indication}\n\nThis will persist to the database in Phase B-1.`)
     onClose()
     // Reset state
     setProduct('')

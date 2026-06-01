@@ -4,7 +4,19 @@
 
 "use client"
 
-import { AgentResponse } from "@/lib/api"
+// AgentResponse covers all possible shape variants returned by backend agents
+interface AgentResponse {
+  result?: string
+  output?: string
+  analysis?: string
+  findings?: string
+  answer?: string
+  summary?: string
+  gaps?: string
+  classification?: string
+  report?: string
+  [key: string]: unknown
+}
 
 interface AgentResultPanelProps {
   result: AgentResponse
