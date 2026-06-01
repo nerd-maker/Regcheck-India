@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { COMPLIANCE_SCORES, SUBMISSIONS } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
+import { fetchSubmissions } from '@/services/workspaceData'
+import type { SubmissionRecord } from '@/lib/mockData'
 
 const RANGES = [
   { id: '7',   label: 'Last 7 days' },
@@ -19,6 +21,16 @@ export default function ReportsView() {
   const [showRange, setShowRange] = useState(false)
   const rangeLabel = RANGES.find(r => r.id === range)?.label ?? 'Last 30 days'
 
+  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchSubmissions().then(data => {
+      setSubmissions(data)
+      setLoading(false)
+    })
+  }, [])
+
   const factor = range === '7' ? 0.30 : range === '30' ? 1 : range === '90' ? 2.4 : range === 'ytd' ? 4.2 : 6.0
   const throughput = {
     Submitted: Math.round(14 * factor),
@@ -26,6 +38,11 @@ export default function ReportsView() {
     Deficiency:Math.round(3 * factor),
     'In Review':Math.round(6 * factor),
   }
+
+  const sortedSubmissions = useMemo(() => {
+    const list = submissions.length > 0 ? submissions : SUBMISSIONS
+    return [...list].sort((a, b) => b.openGaps - a.openGaps).slice(0, 5)
+  }, [submissions])
 
   return (
     <div data-testid="view-reports">
@@ -96,27 +113,34 @@ export default function ReportsView() {
 
         <div className="rc-card" style={{ gridColumn: 'span 2' }}>
           <div className="rc-card-header"><span>Top submissions by gap count</span></div>
-          <table className="rc-table">
-            <thead><tr><th>Submission</th><th>Product</th><th>Phase</th><th style={{ textAlign: 'right' }}>Open Gaps</th><th style={{ width: 140 }}>Compliance</th></tr></thead>
-            <tbody>
-              {[...SUBMISSIONS].sort((a, b) => b.openGaps - a.openGaps).slice(0, 5).map(s => (
-                <tr key={s.id}>
-                  <td><span className="rc-table-link">{s.name}</span><div style={{ fontSize: 11, color: 'var(--rc-text-muted)', fontFamily: 'var(--rc-font-mono)' }}>{s.number}</div></td>
-                  <td>{s.product}</td>
-                  <td>{s.phase}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600, color: s.openGaps > 0 ? 'var(--rc-rejected)' : 'var(--rc-approved)' }}>{s.openGaps}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div className="rc-scorebar" style={{ flex: 1 }}>
-                        <div className="rc-scorebar-fill" style={{ width: `${s.complianceScore}%`, background: s.complianceScore >= 85 ? 'var(--rc-approved)' : s.complianceScore >= 65 ? 'var(--rc-review)' : 'var(--rc-rejected)' }}/>
+          {loading ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--rc-text-muted)', fontSize: 12 }}>
+              <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
+              Loading metrics...
+            </div>
+          ) : (
+            <table className="rc-table">
+              <thead><tr><th>Submission</th><th>Product</th><th>Phase</th><th style={{ textAlign: 'right' }}>Open Gaps</th><th style={{ width: 140 }}>Compliance</th></tr></thead>
+              <tbody>
+                {sortedSubmissions.map(s => (
+                  <tr key={s.id}>
+                    <td><span className="rc-table-link">{s.name}</span><div style={{ fontSize: 11, color: 'var(--rc-text-muted)', fontFamily: 'var(--rc-font-mono)' }}>{s.number}</div></td>
+                    <td>{s.product}</td>
+                    <td>{s.phase}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: s.openGaps > 0 ? 'var(--rc-rejected)' : 'var(--rc-approved)' }}>{s.openGaps}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div className="rc-scorebar" style={{ flex: 1 }}>
+                          <div className="rc-scorebar-fill" style={{ width: `${s.complianceScore}%`, background: s.complianceScore >= 85 ? 'var(--rc-approved)' : s.complianceScore >= 65 ? 'var(--rc-review)' : 'var(--rc-rejected)' }}/>
+                        </div>
+                        <span style={{ fontSize: 11.5, fontWeight: 600 }}>{s.complianceScore}%</span>
                       </div>
-                      <span style={{ fontSize: 11.5, fontWeight: 600 }}>{s.complianceScore}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

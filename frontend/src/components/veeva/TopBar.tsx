@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useWorkspace } from '@/lib/workspaceStore'
-import { AUDIT_EVENTS, HA_CORRESPONDENCE } from '@/lib/mockData'
+import { AUDIT_EVENTS } from '@/lib/mockData'
+import { fetchCorrespondence } from '@/services/workspaceData'
+import type { HACorrespondenceRecord } from '@/lib/mockData'
 
 export default function TopBar() {
   const { setActiveView } = useWorkspace()
@@ -12,6 +14,12 @@ export default function TopBar() {
   const [showVault, setShowVault] = useState(false)
   const [showUser, setShowUser] = useState(false)
   const notifRef = useRef<HTMLDivElement | null>(null)
+
+  const [correspondence, setCorrespondence] = useState<HACorrespondenceRecord[]>([])
+
+  useEffect(() => {
+    fetchCorrespondence().then(setCorrespondence)
+  }, [])
 
   // Close popovers on outside click
   useEffect(() => {
@@ -33,7 +41,7 @@ export default function TopBar() {
 
   // Generate notifications from recent events + open HA correspondence
   const notifs = [
-    ...HA_CORRESPONDENCE.filter(c => c.state === 'open').slice(0, 2).map(c => ({
+    ...correspondence.filter(c => c.state === 'open').slice(0, 2).map(c => ({
       id: `ha-${c.id}`, icon: 'ti-mail', title: c.subject,
       meta: `${c.authority} · ${c.priority === 'critical' ? '⚠ Critical' : 'Awaiting response'}`,
       onClick: () => { setActiveView('correspondence'); setShowNotif(false) },

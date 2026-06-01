@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { REGISTRATIONS } from '@/lib/mockData'
+import { useState, useMemo, useEffect } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
+import { fetchRegistrations } from '@/services/workspaceData'
+import type { RegistrationRecord } from '@/lib/mockData'
 
 const STATE_COLOR: Record<string, { bg: string; color: string }> = {
   'Effective':       { bg: 'var(--rc-approved-bg)',   color: 'var(--rc-approved)' },
@@ -19,20 +20,30 @@ export default function RegistrationsView() {
   const [active, setActive] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
 
+  const [registrations, setRegistrations] = useState<RegistrationRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchRegistrations().then(data => {
+      setRegistrations(data)
+      setLoading(false)
+    })
+  }, [])
+
   const STATE_OPTS = ['Effective', 'Expiring Soon', 'Expired', 'Withdrawn']
 
-  const filtered = useMemo(() => REGISTRATIONS.filter(r => {
+  const filtered = useMemo(() => registrations.filter(r => {
     if (active.state && r.state !== active.state) return false
     if (search && !`${r.number} ${r.product} ${r.certificate}`.toLowerCase().includes(search.toLowerCase())) return false
     return true
-  }), [active, search])
+  }), [registrations, active, search])
 
   return (
     <div data-testid="view-registrations">
       <PageHeader
         crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Registrations' }]}
         title="Registrations"
-        subtitle={`${filtered.length} of ${REGISTRATIONS.length} active product registrations · India`}
+        subtitle={`${filtered.length} of ${registrations.length} active product registrations · India`}
         icon="ti-certificate"
         actions={
           <>
@@ -50,44 +61,56 @@ export default function RegistrationsView() {
         onSearch={setSearch}
         searchPlaceholder="Search number, product, certificate…"
         filters={[
-          { key: 'state', label: 'State', chips: STATE_OPTS.map(s => ({ id: s, label: s, count: REGISTRATIONS.filter(r => r.state === s).length })) },
+          { key: 'state', label: 'State', chips: STATE_OPTS.map(s => ({ id: s, label: s, count: registrations.filter(r => r.state === s).length })) },
         ]}
       />
       <div style={{ padding: 24 }}>
-        <div className="rc-card">
-          <table className="rc-table">
-            <thead>
-              <tr>
-                <th>Registration</th>
-                <th>Product</th>
-                <th>Certificate</th>
-                <th>Market</th>
-                <th>State</th>
-                <th>Approved</th>
-                <th>Expires</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => {
-                const st = STATE_COLOR[r.state]
-                return (
-                  <tr key={r.id} data-testid={`regrow-${r.id}`}>
-                    <td><span className="rc-table-link" style={{ fontFamily: 'var(--rc-font-mono)', fontSize: 12 }}>{r.number}</span></td>
-                    <td><strong>{r.product}</strong></td>
-                    <td>{r.certificate}</td>
-                    <td>{r.market}</td>
-                    <td><span className="rc-pill" style={{ background: st.bg, color: st.color }}>{r.state}</span></td>
-                    <td><span style={{ fontSize: 12, color: 'var(--rc-text-secondary)' }}>{r.approvedDate}</span></td>
-                    <td><span style={{ fontSize: 12, color: 'var(--rc-text-secondary)' }}>{r.expiryDate}</span></td>
-                  </tr>
-                )
-              })}
-              {filtered.length === 0 && (
-                <tr><td colSpan={7}><div className="rc-empty"><i className="ti ti-search-off"/><div>No registrations match the filters.</div></div></td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <div style={{
+            padding: '40px', textAlign: 'center',
+            color: 'var(--rc-text-muted)', fontSize: 13, background: 'var(--rc-surface)',
+            borderRadius: 'var(--rc-radius-md)', border: '1px solid var(--rc-border)'
+          }}>
+            <i className="ti ti-loader-2"
+               style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
+            Loading registrations...
+          </div>
+        ) : (
+          <div className="rc-card">
+            <table className="rc-table">
+              <thead>
+                <tr>
+                  <th>Registration</th>
+                  <th>Product</th>
+                  <th>Certificate</th>
+                  <th>Market</th>
+                  <th>State</th>
+                  <th>Approved</th>
+                  <th>Expires</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(r => {
+                  const st = STATE_COLOR[r.state] || { bg: 'var(--rc-surface-tertiary)', color: 'var(--rc-text-secondary)' }
+                  return (
+                    <tr key={r.id} data-testid={`regrow-${r.id}`}>
+                      <td><span className="rc-table-link" style={{ fontFamily: 'var(--rc-font-mono)', fontSize: 12 }}>{r.number}</span></td>
+                      <td><strong>{r.product}</strong></td>
+                      <td>{r.certificate}</td>
+                      <td>{r.market}</td>
+                      <td><span className="rc-pill" style={{ background: st.bg, color: st.color }}>{r.state}</span></td>
+                      <td><span style={{ fontSize: 12, color: 'var(--rc-text-secondary)' }}>{r.approvedDate}</span></td>
+                      <td><span style={{ fontSize: 12, color: 'var(--rc-text-secondary)' }}>{r.expiryDate}</span></td>
+                    </tr>
+                  )
+                })}
+                {filtered.length === 0 && (
+                  <tr><td colSpan={7}><div className="rc-empty"><i className="ti ti-search-off"/><div>No registrations match the filters.</div></div></td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

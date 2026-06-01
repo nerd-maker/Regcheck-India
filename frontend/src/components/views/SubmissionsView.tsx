@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { SUBMISSIONS, LifecycleState, SubmissionRecord } from '@/lib/mockData'
+import { LifecycleState, SubmissionRecord } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
 import { exportCSV, timestampedName } from '@/lib/csv'
+import { fetchSubmissions, createSubmission } from '@/services/workspaceData'
+import NewSubmissionModal from '@/components/NewSubmissionModal'
 
 const SAVED_VIEWS_KEY = 'rc_saved_views_submissions'
 
@@ -38,6 +40,27 @@ export default function SubmissionsView() {
   const [selected, setSelected] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<{ k: keyof SubmissionRecord; dir: 'asc' | 'desc' }>({ k: 'updatedAt', dir: 'asc' })
 
+  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isNewModalOpen, setIsNewModalOpen] = useState(false)
+
+  const loadSubmissions = () => {
+    setLoading(true)
+    fetchSubmissions().then(data => {
+      setSubmissions(data)
+      setLoading(false)
+    })
+  }
+
+  useEffect(() => {
+    loadSubmissions()
+  }, [])
+
+  const handleCreateSubmission = async (formData: any) => {
+    await createSubmission(formData)
+    loadSubmissions()
+  }
+
   // ── Saved Views ────────────────────────────────────────────────────────
   const [savedViews, setSavedViews] = useState<SavedView[]>([])
   const [showSaved, setShowSaved] = useState(false)
@@ -69,14 +92,14 @@ export default function SubmissionsView() {
   const deleteView = (id: string) => persistSaved(savedViews.filter(v => v.id !== id))
 
   const filtered = useMemo(() => {
-    return SUBMISSIONS.filter(s => {
+    return submissions.filter(s => {
       if (stateFilter.size && !stateFilter.has(s.state)) return false
       if (typeFilter.size  && !typeFilter.has(s.type))   return false
       if (phaseFilter.size && !phaseFilter.has(s.phase)) return false
       if (search && !`${s.name} ${s.number} ${s.product}`.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
-  }, [stateFilter, typeFilter, phaseFilter, search])
+  }, [submissions, stateFilter, typeFilter, phaseFilter, search])
 
   const toggleSet = (s: Set<string>, val: string, fn: (n: Set<string>) => void) => {
     const ns = new Set(s)
@@ -84,9 +107,9 @@ export default function SubmissionsView() {
     fn(ns)
   }
 
-  const countByState = (st: string) => SUBMISSIONS.filter(s => s.state === st).length
-  const countByType  = (st: string) => SUBMISSIONS.filter(s => s.type === st).length
-  const countByPhase = (st: string) => SUBMISSIONS.filter(s => s.phase === st).length
+  const countByState = (st: string) => submissions.filter(s => s.state === st).length
+  const countByType  = (st: string) => submissions.filter(s => s.type === st).length
+  const countByPhase = (st: string) => submissions.filter(s => s.phase === st).length
 
   const open = (s: SubmissionRecord) => {
     setSelectedSubmissionId(s.id)
@@ -98,7 +121,7 @@ export default function SubmissionsView() {
       <PageHeader
         crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Submissions' }]}
         title="Submissions"
-        subtitle={`${filtered.length} of ${SUBMISSIONS.length} submissions`}
+        subtitle={`${filtered.length} of ${submissions.length} submissions`}
         icon="ti-folder-open"
         actions={
           <>
@@ -115,7 +138,7 @@ export default function SubmissionsView() {
                     <div style={{ padding: '12px 16px', fontSize: 11.5, color: 'var(--rc-text-muted)' }}>No saved views yet.</div>
                   ) : savedViews.map(v => (
                     <div key={v.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--rc-divider)' }}>
-                      <button className="rc-nav-item" style={{ flex: 1, borderLeft: 'none' }} onClick={() => applyView(v)} data-testid={`apply-view-${v.id}`}>
+                       <button className="rc-nav-item" style={{ flex: 1, borderLeft: 'none' }} onClick={() => applyView(v)} data-testid={`apply-view-${v.id}`}>
                         <i className="ti ti-filter"/> {v.name}
                       </button>
                       <button className="rc-btn rc-btn-ghost rc-btn-sm" onClick={() => deleteView(v.id)} style={{ padding: '0 8px' }}>
@@ -136,7 +159,7 @@ export default function SubmissionsView() {
                 updated: s.updatedAt,
               })),
             )} data-testid="submissions-export-btn"><i className="ti ti-download"/> Export ({filtered.length})</button>
-            <button className="rc-btn rc-btn-primary" data-testid="submissions-new-btn"><i className="ti ti-plus"/> New submission</button>
+            <button className="rc-btn rc-btn-primary" onClick={() => setIsNewModalOpen(true)} data-testid="submissions-new-btn"><i className="ti ti-plus"/> New submission</button>
           </>
         }
       />
@@ -196,75 +219,92 @@ export default function SubmissionsView() {
 
         {/* Table */}
         <div className="rc-scroll" style={{ overflow: 'auto', background: 'var(--rc-surface)' }}>
-          <table className="rc-table" data-testid="submissions-table">
-            <thead>
-              <tr>
-                <th style={{ width: 26 }}><input type="checkbox" aria-label="Select all"/></th>
-                <th>Submission</th>
-                <th>Type</th>
-                <th>Phase</th>
-                <th>Authority</th>
-                <th>State</th>
-                <th style={{ textAlign: 'right' }}>Docs</th>
-                <th style={{ textAlign: 'right' }}>Gaps</th>
-                <th style={{ width: 130 }}>Compliance</th>
-                <th>Owner</th>
-                <th>Target</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(s => (
-                <tr key={s.id}
-                  className={selected === s.id ? 'is-selected' : ''}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelected(s.id)
-                    setSelectedSubmissionId(s.id)
-                    openInspector('details')
-                  }}
-                  onDoubleClick={() => open(s)}
-                  data-testid={`subrow-${s.id}`}
-                >
-                  <td onClick={e => e.stopPropagation()}><input type="checkbox"/></td>
-                  <td>
-                    <button className="rc-table-link" onClick={(e) => { e.stopPropagation(); open(s); }} style={{ background: 'none', border: 0, padding: 0, fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer' }}>
-                      {s.name}
-                    </button>
-                    <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', fontFamily: 'var(--rc-font-mono)' }}>{s.number}</div>
-                  </td>
-                  <td><span style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)' }}>{s.type}</span></td>
-                  <td><span style={{ fontSize: 11.5 }}>{s.phase}</span></td>
-                  <td><span style={{ fontSize: 11.5 }}>{s.haAuthority}</span></td>
-                  <td><StatusBadge state={s.state} label={s.stateLabel} size="sm"/></td>
-                  <td style={{ textAlign: 'right' }}>{s.documents}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600, color: s.openGaps > 0 ? 'var(--rc-rejected)' : 'var(--rc-approved)' }}>{s.openGaps}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div className="rc-scorebar" style={{ flex: 1 }}>
-                        <div className="rc-scorebar-fill" style={{
-                          width: `${s.complianceScore}%`,
-                          background: s.complianceScore >= 85 ? 'var(--rc-approved)' : s.complianceScore >= 65 ? 'var(--rc-review)' : 'var(--rc-rejected)',
-                        }}/>
-                      </div>
-                      <span style={{ fontSize: 11.5, fontWeight: 600, minWidth: 30, textAlign: 'right' }}>{s.complianceScore}%</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div className="rc-avatar" style={{ width: 22, height: 22, fontSize: 9.5, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)' }}>{s.owner.initials}</div>
-                      <span style={{ fontSize: 11.5 }}>{s.owner.name.split(' ')[0]}</span>
-                    </div>
-                  </td>
-                  <td><span style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)' }}>{s.targetSubmitDate}</span></td>
+          {loading && (
+            <div style={{
+              padding: '40px', textAlign: 'center',
+              color: 'var(--rc-text-muted)', fontSize: 13
+            }}>
+              <i className="ti ti-loader-2"
+                 style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
+              Loading submissions...
+            </div>
+          )}
+          {!loading && (
+            <table className="rc-table" data-testid="submissions-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 26 }}><input type="checkbox" aria-label="Select all"/></th>
+                  <th>Submission</th>
+                  <th>Type</th>
+                  <th>Phase</th>
+                  <th>Authority</th>
+                  <th>State</th>
+                  <th style={{ textAlign: 'right' }}>Docs</th>
+                  <th style={{ textAlign: 'right' }}>Gaps</th>
+                  <th style={{ width: 130 }}>Compliance</th>
+                  <th>Owner</th>
+                  <th>Target</th>
                 </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={11}><div className="rc-empty"><i className="ti ti-search-off"/><div>No submissions match the current filters.</div></div></td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map(s => (
+                  <tr key={s.id}
+                    className={selected === s.id ? 'is-selected' : ''}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelected(s.id)
+                      setSelectedSubmissionId(s.id)
+                      openInspector('details')
+                    }}
+                    onDoubleClick={() => open(s)}
+                    data-testid={`subrow-${s.id}`}
+                  >
+                    <td onClick={e => e.stopPropagation()}><input type="checkbox"/></td>
+                    <td>
+                      <button className="rc-table-link" onClick={(e) => { e.stopPropagation(); open(s); }} style={{ background: 'none', border: 0, padding: 0, fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer' }}>
+                        {s.name}
+                      </button>
+                      <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', fontFamily: 'var(--rc-font-mono)' }}>{s.number}</div>
+                    </td>
+                    <td><span style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)' }}>{s.type}</span></td>
+                    <td><span style={{ fontSize: 11.5 }}>{s.phase}</span></td>
+                    <td><span style={{ fontSize: 11.5 }}>{s.haAuthority}</span></td>
+                    <td><StatusBadge state={s.state} label={s.stateLabel} size="sm"/></td>
+                    <td style={{ textAlign: 'right' }}>{s.documents}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600, color: s.openGaps > 0 ? 'var(--rc-rejected)' : 'var(--rc-approved)' }}>{s.openGaps}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div className="rc-scorebar" style={{ flex: 1 }}>
+                          <div className="rc-scorebar-fill" style={{
+                            width: `${s.complianceScore}%`,
+                            background: s.complianceScore >= 85 ? 'var(--rc-approved)' : s.complianceScore >= 65 ? 'var(--rc-review)' : 'var(--rc-rejected)',
+                          }}/>
+                        </div>
+                        <span style={{ fontSize: 11.5, fontWeight: 600, minWidth: 30, textAlign: 'right' }}>{s.complianceScore}%</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div className="rc-avatar" style={{ width: 22, height: 22, fontSize: 9.5, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)' }}>{s.owner.initials}</div>
+                        <span style={{ fontSize: 11.5 }}>{s.owner.name.split(' ')[0]}</span>
+                      </div>
+                    </td>
+                    <td><span style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)' }}>{s.targetSubmitDate}</span></td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr><td colSpan={11}><div className="rc-empty"><i className="ti ti-search-off"/><div>No submissions match the current filters.</div></div></td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
+      <NewSubmissionModal
+        isOpen={isNewModalOpen}
+        onClose={() => setIsNewModalOpen(false)}
+        onCreate={handleCreateSubmission}
+      />
     </div>
   )
 }

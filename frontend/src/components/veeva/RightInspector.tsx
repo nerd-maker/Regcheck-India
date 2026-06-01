@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
-import { DOCUMENTS, SUBMISSIONS, PEOPLE, AUDIT_EVENTS } from '@/lib/mockData'
+import { DOCUMENTS, SUBMISSIONS, AUDIT_EVENTS } from '@/lib/mockData'
 import StatusBadge from './StatusBadge'
+import { fetchSubmissions, fetchDocuments } from '@/services/workspaceData'
+import type { SubmissionRecord, DocumentRecord } from '@/lib/mockData'
 
 // Available "Compliance Actions" — AI agents that can be run on a document
 const COMPLIANCE_ACTIONS = [
@@ -26,10 +28,19 @@ export default function RightInspector() {
     setActiveView, setPrefilledInput,
   } = useWorkspace()
 
+  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
+  const [documents, setDocuments] = useState<DocumentRecord[]>([])
+
+  useEffect(() => {
+    if (!inspectorOpen) return
+    fetchSubmissions().then(setSubmissions)
+    fetchDocuments().then(setDocuments)
+  }, [inspectorOpen, selectedSubmissionId, selectedDocumentId])
+
   if (!inspectorOpen) return null
 
-  const doc = DOCUMENTS.find(d => d.id === selectedDocumentId)
-  const sub = SUBMISSIONS.find(s => s.id === selectedSubmissionId)
+  const doc = documents.find(d => d.id === selectedDocumentId) ?? DOCUMENTS.find(d => d.id === selectedDocumentId)
+  const sub = submissions.find(s => s.id === selectedSubmissionId) ?? SUBMISSIONS.find(s => s.id === selectedSubmissionId)
 
   const subject = doc ?? sub
   if (!subject) {

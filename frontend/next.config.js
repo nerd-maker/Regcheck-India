@@ -18,6 +18,28 @@ const nextConfig = {
                 source: '/api/regcheck/agent-runs/:path*',
                 destination: `${REGCHECK_API_BASE}/api/v1/agent-runs/:path*`,
             },
+            // ── Workspace CRUD (P1) — must come BEFORE the catch-all agents rule ──
+            {
+                source: '/api/regcheck/submissions/:path*',
+                destination: `${REGCHECK_API_BASE}/api/v1/submissions/:path*`,
+            },
+            {
+                source: '/api/regcheck/documents/:path*',
+                destination: `${REGCHECK_API_BASE}/api/v1/documents/:path*`,
+            },
+            {
+                source: '/api/regcheck/applications/:path*',
+                destination: `${REGCHECK_API_BASE}/api/v1/applications/:path*`,
+            },
+            {
+                source: '/api/regcheck/registrations/:path*',
+                destination: `${REGCHECK_API_BASE}/api/v1/registrations/:path*`,
+            },
+            {
+                source: '/api/regcheck/correspondence/:path*',
+                destination: `${REGCHECK_API_BASE}/api/v1/correspondence/:path*`,
+            },
+            // ── Catch-all for AI agents ──────────────────────────────────────────
             {
                 source: '/api/regcheck/:path*',
                 destination: `${REGCHECK_API_BASE}/api/v1/agents/:path*`,

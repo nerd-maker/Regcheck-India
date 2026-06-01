@@ -6,11 +6,18 @@ import { useWorkspace } from '@/lib/workspaceStore'
 interface Props {
   isOpen: boolean
   onClose: () => void
+  onCreate?: (data: {
+    name: string
+    type: string
+    product: string
+    indication: string
+    phase: string
+    ha_authority: string
+    target_submit_date: string
+  }) => Promise<void>
 }
 
-export default function NewSubmissionModal({ isOpen, onClose }: Props) {
-  // Note: addSubmission will be wired in Phase B-1 once backend document-storage is live.
-  // For now the modal validates fields but shows a placeholder confirmation.
+export default function NewSubmissionModal({ isOpen, onClose, onCreate }: Props) {
   const _workspace = useWorkspace()
   const [product, setProduct] = useState('')
   const [type, setType] = useState('IND')
@@ -18,23 +25,44 @@ export default function NewSubmissionModal({ isOpen, onClose }: Props) {
   const [indication, setIndication] = useState('')
   const [sponsor, setSponsor] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!product.trim() || !indication.trim() || !sponsor.trim()) {
       setError('All fields are required.')
       return
     }
     setError('')
-    // addSubmission will be wired in Phase B-1 when backend storage is ready
-    alert(`Submission created (pending backend): ${product} — ${type} — ${indication}\n\nThis will persist to the database in Phase B-1.`)
-    onClose()
-    // Reset state
-    setProduct('')
-    setIndication('')
-    setSponsor('')
+    setSubmitting(true)
+    try {
+      if (onCreate) {
+        const name = `${product} – ${type}`
+        const target_submit_date = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        await onCreate({
+          name,
+          type,
+          product,
+          indication,
+          phase,
+          ha_authority: 'CDSCO',
+          target_submit_date,
+        })
+      } else {
+        alert(`Submission created (pending backend): ${product} — ${type} — ${indication}\n\nThis will persist to the database in Phase B-1.`)
+      }
+      onClose()
+      // Reset state
+      setProduct('')
+      setIndication('')
+      setSponsor('')
+    } catch (err: any) {
+      setError(err.message || 'Failed to create submission.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -154,9 +182,11 @@ export default function NewSubmissionModal({ isOpen, onClose }: Props) {
             </button>
             <button
               type="submit"
-              className="flex-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 font-semibold text-sm transition-colors"
+              disabled={submitting}
+              className="flex-1 bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 font-semibold text-sm transition-colors flex items-center justify-center gap-2"
             >
-              Create
+              {submitting && <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} />}
+              {submitting ? 'Creating...' : 'Create'}
             </button>
           </div>
         </form>

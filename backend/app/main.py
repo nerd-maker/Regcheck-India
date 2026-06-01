@@ -45,7 +45,10 @@ from app.services.runtime_state_store import runtime_state_store
 from app.config.llm_config import LLMConfig
 from app.core.datetime_utils import utc_now
 from agents_router import router as agents_router
-from routers.agent_runs import router as agent_runs_router, init_db
+from routers.agent_runs import router as agent_runs_router, init_db as init_agent_runs_table
+from routers.workspace import router as workspace_router
+from db import init_all_tables
+from seed import seed as seed_db
 
 logger = logging.getLogger(__name__)
 _APP_START_TIME = time_module.time()
@@ -117,8 +120,11 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle handler."""
-    # Create agent_runs table if it doesn't exist (idempotent)
-    await init_db()
+    # Create all workspace + agent_runs tables (idempotent)
+    await init_all_tables()
+    await init_agent_runs_table()
+    # Seed mockData equivalents on first run (ON CONFLICT DO NOTHING)
+    await seed_db()
     yield
     # Shutdown — nothing to clean up currently
 
@@ -234,6 +240,7 @@ app.include_router(comparison_endpoints.router, prefix="/api/compare", tags=["Co
 app.include_router(classification_endpoints.router, prefix="/api/classify", tags=["Classification"])
 app.include_router(agents_router, prefix="/api/v1/agents", tags=["AI Agents"])
 app.include_router(agent_runs_router, tags=["Agent Runs"])
+app.include_router(workspace_router, tags=["Workspace"])
 
 # Create upload directory
 UPLOAD_DIR = Path(settings.upload_dir)

@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { DOCUMENTS, LifecycleState, DocumentRecord } from '@/lib/mockData'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { LifecycleState, DocumentRecord } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import { exportCSV, timestampedName } from '@/lib/csv'
+import { fetchDocuments, uploadDocument } from '@/services/workspaceData'
 
 const STATES: LifecycleState[] = ['draft', 'review', 'approved', 'effective', 'superseded']
 
@@ -15,11 +16,42 @@ export default function DocumentsView() {
   const [view, setView] = useState<'flat' | 'folder'>('flat')
   const [search, setSearch] = useState('')
 
-  const filtered = useMemo(() => DOCUMENTS.filter(d => {
+  const [documents, setDocuments] = useState<DocumentRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const loadDocuments = () => {
+    setLoading(true)
+    fetchDocuments().then(data => {
+      setDocuments(data)
+      setLoading(false)
+    })
+  }
+
+  useEffect(() => {
+    loadDocuments()
+  }, [])
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      await uploadDocument(file)
+      loadDocuments()
+    } catch (err: any) {
+      alert(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const filtered = useMemo(() => documents.filter(d => {
     if (filter && d.state !== filter) return false
     if (search && !`${d.name} ${d.number} ${d.classification}`.toLowerCase().includes(search.toLowerCase())) return false
     return true
-  }), [filter, search])
+  }), [documents, filter, search])
 
   // Group by classification root (everything before the first " / ")
   const grouped = useMemo(() => {
@@ -37,7 +69,7 @@ export default function DocumentsView() {
       <PageHeader
         crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Documents' }]}
         title="Documents"
-        subtitle={`${filtered.length} of ${DOCUMENTS.length} documents · India Regulatory Vault`}
+        subtitle={`${filtered.length} of ${documents.length} documents · India Regulatory Vault`}
         icon="ti-file-text"
         actions={
           <>
@@ -58,7 +90,21 @@ export default function DocumentsView() {
             <button className="rc-btn" onClick={() => exportCSV(timestampedName('regcheck_documents'),
               filtered.map(d => ({ number: d.number, name: d.name, type: d.type, classification: d.classification, version: d.version, state: d.state, owner: d.owner.name, size: d.size, updated: d.updatedAt, compliance: d.complianceScore ?? '', submission: d.submissionId ?? '' }))
             )} data-testid="docs-export-btn"><i className="ti ti-download"/> Export</button>
-            <button className="rc-btn"><i className="ti ti-upload"/> Upload</button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleUpload}
+            />
+            <button
+              className="rc-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              data-testid="docs-upload-btn"
+            >
+              <i className={uploading ? "ti ti-loader-2" : "ti ti-upload"} style={uploading ? { animation: 'spin 1s linear infinite', marginRight: 4, display: 'inline-block' } : {}}/>
+              {uploading ? 'Uploading...' : 'Upload'}
+            </button>
             <button className="rc-btn rc-btn-primary"><i className="ti ti-plus"/> New document</button>
           </>
         }
@@ -68,14 +114,14 @@ export default function DocumentsView() {
         <button
           className={`rc-btn rc-btn-sm ${filter === '' ? 'rc-btn-primary' : ''}`}
           onClick={() => setFilter('')} data-testid="docfilter-all"
-        >All <span style={{ opacity: 0.7, marginLeft: 4 }}>{DOCUMENTS.length}</span></button>
+        >All <span style={{ opacity: 0.7, marginLeft: 4 }}>{documents.length}</span></button>
         {STATES.map(s => (
           <button key={s}
             className={`rc-btn rc-btn-sm ${filter === s ? 'rc-btn-primary' : ''}`}
             onClick={() => setFilter(s)} data-testid={`docfilter-${s}`}
           >
             {s.charAt(0).toUpperCase() + s.slice(1)}
-            <span style={{ opacity: 0.7, marginLeft: 4 }}>{DOCUMENTS.filter(d => d.state === s).length}</span>
+            <span style={{ opacity: 0.7, marginLeft: 4 }}>{documents.filter(d => d.state === s).length}</span>
           </button>
         ))}
         <div style={{ position: 'relative', minWidth: 240, marginLeft: 'auto' }}>
@@ -85,25 +131,38 @@ export default function DocumentsView() {
       </div>
 
       <div style={{ padding: 24 }}>
-        {view === 'flat' ? (
-          <div className="rc-card">
-            <DocTable docs={filtered} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
+        {loading && (
+          <div style={{
+            padding: '40px', textAlign: 'center',
+            color: 'var(--rc-text-muted)', fontSize: 13, background: 'var(--rc-surface)',
+            borderRadius: 'var(--rc-radius-md)', border: '1px solid var(--rc-border)'
+          }}>
+            <i className="ti ti-loader-2"
+               style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
+            Loading documents...
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {Object.entries(grouped).map(([group, docs]) => (
-              <div key={group} className="rc-card" data-testid={`folder-${group}`}>
-                <div className="rc-card-header">
-                  <span><i className="ti ti-folder-open" style={{ marginRight: 6, color: 'var(--rc-primary)' }}/>{group}</span>
-                  <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--rc-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+        )}
+        {!loading && (
+          view === 'flat' ? (
+            <div className="rc-card">
+              <DocTable docs={filtered} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {Object.entries(grouped).map(([group, docs]) => (
+                <div key={group} className="rc-card" data-testid={`folder-${group}`}>
+                  <div className="rc-card-header">
+                    <span><i className="ti ti-folder-open" style={{ marginRight: 6, color: 'var(--rc-primary)' }}/>{group}</span>
+                    <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--rc-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <DocTable docs={docs} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
                 </div>
-                <DocTable docs={docs} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
-              </div>
-            ))}
-            {Object.keys(grouped).length === 0 && (
-              <div className="rc-card"><div className="rc-empty"><i className="ti ti-folder-off"/><div>No documents match the filters.</div></div></div>
-            )}
-          </div>
+              ))}
+              {Object.keys(grouped).length === 0 && (
+                <div className="rc-card"><div className="rc-empty"><i className="ti ti-folder-off"/><div>No documents match the filters.</div></div></div>
+              )}
+            </div>
+          )
         )}
       </div>
     </div>

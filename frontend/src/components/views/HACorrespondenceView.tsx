@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { HA_CORRESPONDENCE } from '@/lib/mockData'
+import { useState, useMemo, useEffect } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
+import { fetchCorrespondence, updateCorrespondenceState } from '@/services/workspaceData'
+import type { HACorrespondenceRecord } from '@/lib/mockData'
 
 const STATE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
   'open':              { bg: 'var(--rc-rejected-bg)',  color: 'var(--rc-rejected)',  label: 'Open' },
@@ -19,11 +20,26 @@ export default function HACorrespondenceView() {
   const [active, setActive] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
 
-  const byDir = useMemo(() => HA_CORRESPONDENCE.filter(c =>
+  const [correspondence, setCorrespondence] = useState<HACorrespondenceRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const loadCorrespondence = () => {
+    setLoading(true)
+    fetchCorrespondence().then(data => {
+      setCorrespondence(data)
+      setLoading(false)
+    })
+  }
+
+  useEffect(() => {
+    loadCorrespondence()
+  }, [])
+
+  const byDir = useMemo(() => correspondence.filter(c =>
     tab === 'inbox'  ? c.direction === 'inbound'
     : tab === 'sent' ? c.direction === 'outbound'
     : true,
-  ), [tab])
+  ), [correspondence, tab])
 
   const list = useMemo(() => byDir.filter(c => {
     if (active.state    && c.state    !== active.state)    return false
@@ -33,9 +49,39 @@ export default function HACorrespondenceView() {
     return true
   }), [byDir, active, search])
 
-  const [active2, setActive2] = useState<string | null>(list[0]?.id ?? null)
-  const current = HA_CORRESPONDENCE.find(c => c.id === active2) ?? list[0]
+  const [active2, setActive2] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (list.length > 0 && !active2) {
+      setActive2(list[0].id)
+    }
+  }, [list, active2])
+
+  const current = useMemo(() => {
+    return correspondence.find(c => c.id === active2) ?? list[0] ?? null
+  }, [correspondence, active2, list])
+
   const currentId = current?.id ?? null
+
+  const handleDraftResponse = async () => {
+    if (!current) return
+    try {
+      await updateCorrespondenceState(current.id, 'response-drafted')
+      loadCorrespondence()
+    } catch (err: any) {
+      alert(err.message || 'Failed to update state')
+    }
+  }
+
+  const handleArchive = async () => {
+    if (!current) return
+    try {
+      await updateCorrespondenceState(current.id, 'closed')
+      loadCorrespondence()
+    } catch (err: any) {
+      alert(err.message || 'Failed to update state')
+    }
+  }
 
   return (
     <div data-testid="view-correspondence" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -53,9 +99,9 @@ export default function HACorrespondenceView() {
           </>
         }
         tabs={[
-          { id: 'inbox',  label: 'Inbox',  count: HA_CORRESPONDENCE.filter(c => c.direction === 'inbound').length },
-          { id: 'sent',   label: 'Sent',   count: HA_CORRESPONDENCE.filter(c => c.direction === 'outbound').length },
-          { id: 'all',    label: 'All',    count: HA_CORRESPONDENCE.length },
+          { id: 'inbox',  label: 'Inbox',  count: correspondence.filter(c => c.direction === 'inbound').length },
+          { id: 'sent',   label: 'Sent',   count: correspondence.filter(c => c.direction === 'outbound').length },
+          { id: 'all',    label: 'All',    count: correspondence.length },
         ]}
         activeTab={tab}
         onTabChange={setTab}
@@ -81,80 +127,92 @@ export default function HACorrespondenceView() {
         ]}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', flex: 1, overflow: 'hidden' }}>
-        {/* List */}
-        <div className="rc-scroll" style={{ overflow: 'auto', borderRight: '1px solid var(--rc-border)', background: 'var(--rc-surface)' }}>
-          {list.map(c => {
-            const sb = STATE_BADGE[c.state]
-            return (
-              <div key={c.id}
-                onClick={() => setActive2(c.id)}
-                data-testid={`corrrow-${c.id}`}
-                style={{
-                  padding: '14px 16px',
-                  borderBottom: '1px solid var(--rc-divider)',
-                  borderLeft: `3px solid ${currentId === c.id ? 'var(--rc-primary)' : 'transparent'}`,
-                  background: currentId === c.id ? 'var(--rc-surface-selected)' : undefined,
-                  cursor: 'pointer',
-                }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontFamily: 'var(--rc-font-mono)', color: 'var(--rc-text-muted)' }}>{c.number}</span>
-                  <span className="rc-pill" style={{ background: sb.bg, color: sb.color, fontSize: 10 }}>{sb.label}</span>
-                  {c.priority === 'critical' && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--rc-rejected)', textTransform: 'uppercase', letterSpacing: 0.4 }}>Critical</span>}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--rc-text-primary)' }}>{c.subject}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--rc-text-muted)', marginTop: 4, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' }}>{c.preview}</div>
-                <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', marginTop: 6 }}>
-                  {c.authority} · {c.receivedAt}{c.dueAt ? ` · Due ${c.dueAt}` : ''}
-                </div>
-              </div>
-            )
-          })}
+      {loading ? (
+        <div style={{
+          padding: '40px', textAlign: 'center',
+          color: 'var(--rc-text-muted)', fontSize: 13, flex: 1, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center'
+        }}>
+          <i className="ti ti-loader-2"
+             style={{ animation: 'spin 1s linear infinite', marginRight: 8, fontSize: 18 }}/>
+          <div style={{ marginTop: 8 }}>Loading correspondence...</div>
         </div>
-
-        {/* Detail */}
-        <div className="rc-scroll" style={{ overflow: 'auto', padding: 24 }}>
-          {current ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <span style={{ fontSize: 12, fontFamily: 'var(--rc-font-mono)', color: 'var(--rc-text-muted)' }}>{current.number}</span>
-                <span className="rc-pill" style={{ background: STATE_BADGE[current.state].bg, color: STATE_BADGE[current.state].color }}>{STATE_BADGE[current.state].label}</span>
-                <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 3, background: 'var(--rc-surface-tertiary)', color: 'var(--rc-text-secondary)' }}>{current.category}</span>
-              </div>
-              <h2 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 6px' }}>{current.subject}</h2>
-              <div style={{ fontSize: 12, color: 'var(--rc-text-muted)', marginBottom: 18 }}>
-                From {current.authority} · Received {current.receivedAt}{current.dueAt ? ` · Response due ${current.dueAt}` : ''}
-              </div>
-
-              <div className="rc-card">
-                <div className="rc-card-body" style={{ fontSize: 13, color: 'var(--rc-text-secondary)', lineHeight: 1.7 }}>
-                  <p style={{ margin: 0 }}>{current.preview}</p>
-                  <p style={{ marginTop: 14 }}>
-                    [Excerpt — full correspondence is mocked for the UI rewire.] The Authority requests a comprehensive response within the stipulated timeframe, addressing the deficiencies enumerated above. Failure to respond may result in suspension of the application per NDCTR 2019 Rule 24.
-                  </p>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', flex: 1, overflow: 'hidden' }}>
+          {/* List */}
+          <div className="rc-scroll" style={{ overflow: 'auto', borderRight: '1px solid var(--rc-border)', background: 'var(--rc-surface)' }}>
+            {list.map(c => {
+              const sb = STATE_BADGE[c.state]
+              return (
+                <div key={c.id}
+                  onClick={() => setActive2(c.id)}
+                  data-testid={`corrrow-${c.id}`}
+                  style={{
+                    padding: '14px 16px',
+                    borderBottom: '1px solid var(--rc-divider)',
+                    borderLeft: `3px solid ${currentId === c.id ? 'var(--rc-primary)' : 'transparent'}`,
+                    background: currentId === c.id ? 'var(--rc-surface-selected)' : undefined,
+                    cursor: 'pointer',
+                  }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, fontFamily: 'var(--rc-font-mono)', color: 'var(--rc-text-muted)' }}>{c.number}</span>
+                    <span className="rc-pill" style={{ background: sb.bg, color: sb.color, fontSize: 10 }}>{sb.label}</span>
+                    {c.priority === 'critical' && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--rc-rejected)', textTransform: 'uppercase', letterSpacing: 0.4 }}>Critical</span>}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--rc-text-primary)' }}>{c.subject}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--rc-text-muted)', marginTop: 4, display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' }}>{c.preview}</div>
+                  <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', marginTop: 6 }}>
+                    {c.authority} · {c.receivedAt}{c.dueAt ? ` · Due ${c.dueAt}` : ''}
+                  </div>
                 </div>
-              </div>
+              )
+            })}
+          </div>
 
-              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                <button className="rc-btn rc-btn-primary" data-testid="corr-draft-btn"><i className="ti ti-edit"/> Draft response</button>
-                <button className="rc-btn" onClick={() => {
-                  setPrefilledInput(`Draft a CDSCO response to the following correspondence:\n\nNumber: ${current.number}\nSubject: ${current.subject}\nCategory: ${current.category}\nAuthority: ${current.authority}\nReceived: ${current.receivedAt}\n${current.dueAt ? `Due: ${current.dueAt}\n` : ''}\nContent:\n${current.preview}\n\nGenerate a response that addresses the deficiencies, cites the relevant NDCTR 2019 / Schedule Y / ICH provisions, and includes a CAPA plan.`)
-                  setActiveView('m6-qa')
-                }} data-testid="corr-genai-btn"><i className="ti ti-sparkles"/> Generate with AI</button>
-                <button className="rc-btn" onClick={() => exportCSV(timestampedName(`correspondence_${current.number}`), [{
-                  number: current.number, subject: current.subject, direction: current.direction,
-                  authority: current.authority, category: current.category, state: current.state,
-                  priority: current.priority, received: current.receivedAt, due: current.dueAt ?? '',
-                  content: current.preview,
-                }])} data-testid="corr-detail-export-btn"><i className="ti ti-file-export"/> Export</button>
-                <button className="rc-btn rc-btn-ghost"><i className="ti ti-archive"/> Archive</button>
-              </div>
-            </>
-          ) : (
-            <div className="rc-empty"><i className="ti ti-mail-off"/><div>Select an item to view details.</div></div>
-          )}
+          {/* Detail */}
+          <div className="rc-scroll" style={{ overflow: 'auto', padding: 24 }}>
+            {current ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--rc-font-mono)', color: 'var(--rc-text-muted)' }}>{current.number}</span>
+                  <span className="rc-pill" style={{ background: STATE_BADGE[current.state].bg, color: STATE_BADGE[current.state].color }}>{STATE_BADGE[current.state].label}</span>
+                  <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 3, background: 'var(--rc-surface-tertiary)', color: 'var(--rc-text-secondary)' }}>{current.category}</span>
+                </div>
+                <h2 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 6px' }}>{current.subject}</h2>
+                <div style={{ fontSize: 12, color: 'var(--rc-text-muted)', marginBottom: 18 }}>
+                  From {current.authority} · Received {current.receivedAt}{current.dueAt ? ` · Response due ${current.dueAt}` : ''}
+                </div>
+
+                <div className="rc-card">
+                  <div className="rc-card-body" style={{ fontSize: 13, color: 'var(--rc-text-secondary)', lineHeight: 1.7 }}>
+                    <p style={{ margin: 0 }}>{current.preview}</p>
+                    <p style={{ marginTop: 14 }}>
+                      [Excerpt — full correspondence is mocked for the UI rewire.] The Authority requests a comprehensive response within the stipulated timeframe, addressing the deficiencies enumerated above. Failure to respond may result in suspension of the application per NDCTR 2019 Rule 24.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                  <button className="rc-btn rc-btn-primary" onClick={handleDraftResponse} data-testid="corr-draft-btn"><i className="ti ti-edit"/> Draft response</button>
+                  <button className="rc-btn" onClick={() => {
+                    setPrefilledInput(`Draft a CDSCO response to the following correspondence:\n\nNumber: ${current.number}\nSubject: ${current.subject}\nCategory: ${current.category}\nAuthority: ${current.authority}\nReceived: ${current.receivedAt}\n${current.dueAt ? `Due: ${current.dueAt}\n` : ''}\nContent:\n${current.preview}\n\nGenerate a response that addresses the deficiencies, cites the relevant NDCTR 2019 / Schedule Y / ICH provisions, and includes a CAPA plan.`)
+                    setActiveView('m6-qa')
+                  }} data-testid="corr-genai-btn"><i className="ti ti-sparkles"/> Generate with AI</button>
+                  <button className="rc-btn" onClick={() => exportCSV(timestampedName(`correspondence_${current.number}`), [{
+                    number: current.number, subject: current.subject, direction: current.direction,
+                    authority: current.authority, category: current.category, state: current.state,
+                    priority: current.priority, received: current.receivedAt, due: current.dueAt ?? '',
+                    content: current.preview,
+                  }])} data-testid="corr-detail-export-btn"><i className="ti ti-file-export"/> Export</button>
+                  <button className="rc-btn rc-btn-ghost" onClick={handleArchive}><i className="ti ti-archive"/> Archive</button>
+                </div>
+              </>
+            ) : (
+              <div className="rc-empty"><i className="ti ti-mail-off"/><div>Select an item to view details.</div></div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

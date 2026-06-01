@@ -1,17 +1,104 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { SUBMISSIONS, DOCUMENTS, HA_CORRESPONDENCE, AUDIT_EVENTS } from '@/lib/mockData'
-import { useWorkspace, useSelectedSubmission } from '@/lib/workspaceStore'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { SUBMISSIONS, AUDIT_EVENTS } from '@/lib/mockData'
+import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import LifecycleBar from '@/components/veeva/LifecycleBar'
 import { ComplianceTrendChart } from '@/components/ComplianceTrendChart'
+import { fetchSubmissions, fetchDocuments, fetchCorrespondence, uploadDocument } from '@/services/workspaceData'
+import type { SubmissionRecord, DocumentRecord, HACorrespondenceRecord } from '@/lib/mockData'
 
 export default function SubmissionDetailView() {
-  const { setActiveView, setSelectedDocumentId, openInspector, setPrefilledInput } = useWorkspace()
-  const sub = useSelectedSubmission(SUBMISSIONS)
+  const { selectedSubmissionId, setActiveView, setSelectedDocumentId, openInspector, setPrefilledInput } = useWorkspace()
   const [tab, setTab] = useState('overview')
+
+  const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
+  const [documents, setDocuments] = useState<DocumentRecord[]>([])
+  const [correspondence, setCorrespondence] = useState<HACorrespondenceRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const loadData = () => {
+    if (!selectedSubmissionId) return
+    setLoading(true)
+    Promise.all([
+      fetchSubmissions(),
+      fetchDocuments(selectedSubmissionId),
+      fetchCorrespondence(selectedSubmissionId)
+    ]).then(([subs, docs, corrs]) => {
+      setSubmissions(subs)
+      setDocuments(docs)
+      setCorrespondence(corrs)
+      setLoading(false)
+    }).catch(() => {
+      setLoading(false)
+    })
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [selectedSubmissionId])
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedSubmissionId) return
+    setUploading(true)
+    try {
+      await uploadDocument(file, selectedSubmissionId)
+      loadData()
+    } catch (err: any) {
+      alert(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const sub = useMemo(() => {
+    return submissions.find(s => s.id === selectedSubmissionId) ?? SUBMISSIONS.find(s => s.id === selectedSubmissionId) ?? null
+  }, [submissions, selectedSubmissionId])
+
+  const docs = useMemo(() => {
+    return documents
+  }, [documents])
+
+  const corr = useMemo(() => {
+    return correspondence
+  }, [correspondence])
+
+  const activity = useMemo(() => {
+    if (!sub) return []
+    return AUDIT_EVENTS.filter(e => e.target.includes(sub.number) || e.target.includes(sub.product))
+  }, [sub])
+
+  const tabs = useMemo(() => {
+    if (!sub) return []
+    return [
+      { id: 'overview',       label: 'Overview' },
+      { id: 'documents',      label: 'Documents',       count: docs.length },
+      { id: 'correspondence', label: 'HA Correspondence', count: corr.length },
+      { id: 'gaps',           label: 'Compliance Gaps', count: sub.openGaps },
+      { id: 'activity',       label: 'Activity' },
+    ]
+  }, [sub, docs, corr])
+
+  if (loading && selectedSubmissionId) {
+    return (
+      <div data-testid="view-submission-detail">
+        <PageHeader
+          crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Submissions', onClick: () => setActiveView('submissions') }, { label: 'Detail' }]}
+          title="Loading..."
+          icon="ti-loader-2"
+        />
+        <div className="rc-empty">
+          <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }}/>
+          <div style={{ marginTop: 8 }}>Loading submission details...</div>
+        </div>
+      </div>
+    )
+  }
 
   if (!sub) {
     return (
@@ -25,18 +112,6 @@ export default function SubmissionDetailView() {
       </div>
     )
   }
-
-  const docs = DOCUMENTS.filter(d => d.submissionId === sub.id)
-  const corr = HA_CORRESPONDENCE.filter(h => h.submissionId === sub.id)
-  const activity = AUDIT_EVENTS.filter(e => e.target.includes(sub.number) || e.target.includes(sub.product))
-
-  const tabs = [
-    { id: 'overview',       label: 'Overview' },
-    { id: 'documents',      label: 'Documents',       count: docs.length },
-    { id: 'correspondence', label: 'HA Correspondence', count: corr.length },
-    { id: 'gaps',           label: 'Compliance Gaps', count: sub.openGaps },
-    { id: 'activity',       label: 'Activity' },
-  ]
 
   return (
     <div data-testid="view-submission-detail" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -57,7 +132,21 @@ export default function SubmissionDetailView() {
               navigator.clipboard?.writeText(url).then(() => alert(`Link copied to clipboard:\n${url}`)).catch(() => alert(`Share link:\n${url}`))
             }} data-testid="sub-share-btn"><i className="ti ti-link"/> Copy link</button>
             <button className="rc-btn" onClick={() => openInspector('details')} data-testid="sub-inspect-btn"><i className="ti ti-layout-sidebar-right-expand"/> Inspect</button>
-            <button className="rc-btn" onClick={() => alert('File upload — coming in Phase B-1 (real document storage). For now, documents are pre-loaded mock data.')} data-testid="sub-upload-btn"><i className="ti ti-upload"/> Upload</button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleUpload}
+            />
+            <button
+              className="rc-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              data-testid="sub-upload-btn"
+            >
+              <i className={uploading ? "ti ti-loader-2" : "ti ti-upload"} style={uploading ? { animation: 'spin 1s linear infinite', marginRight: 4, display: 'inline-block' } : {}}/>
+              {uploading ? 'Uploading...' : 'Upload'}
+            </button>
             <button className="rc-btn rc-btn-primary" onClick={() => openInspector('actions')} data-testid="sub-run-actions">
               <i className="ti ti-sparkles"/> Run AI Actions
             </button>
@@ -124,7 +213,10 @@ export default function SubmissionDetailView() {
           <div className="rc-card">
             <div className="rc-card-header">
               <span>{docs.length} documents</span>
-              <button className="rc-btn rc-btn-primary rc-btn-sm" onClick={() => alert('Add Document — comes online in Phase B-1 once the backend document-storage endpoint is wired. Until then, documents are pre-loaded mock data linked to each submission.')} data-testid="add-doc-btn"><i className="ti ti-plus"/> Add document</button>
+              <button className="rc-btn rc-btn-primary rc-btn-sm" onClick={() => fileInputRef.current?.click()} data-testid="add-doc-btn" disabled={uploading}>
+                <i className={uploading ? "ti ti-loader-2" : "ti ti-plus"} style={uploading ? { animation: 'spin 1s linear infinite', marginRight: 4, display: 'inline-block' } : {}}/>
+                {uploading ? 'Uploading...' : 'Add document'}
+              </button>
             </div>
             <table className="rc-table">
               <thead>
