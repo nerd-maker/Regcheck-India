@@ -25,7 +25,7 @@ export default function WorkspaceRouter() {
   if (activeView === 'registrations')       return <RegistrationsView/>
   if (activeView === 'documents')           return <DocumentsView/>
   if (activeView === 'correspondence')      return <HACorrespondenceView/>
-  if (activeView === 'audit')               return <AuditTrailView/>
+  if (activeView === 'audit-trail')         return <AuditTrailView/>
   if (activeView === 'reports')             return <ReportsView/>
   if (activeView === 'settings')            return <SettingsView section="settings"/>
   if (activeView === 'apikeys')             return <SettingsView section="apikeys"/>

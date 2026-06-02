@@ -20,7 +20,7 @@ interface Props {
   setActiveModule: (id: string) => void
 }
 
-const WORKSPACE_IDS = ['dashboard', 'submissions', 'documents', 'reports', 'audit']
+const WORKSPACE_IDS = ['dashboard', 'submissions', 'documents', 'reports', 'audit-trail']
 
 const MODULE_MAP: Record<string, React.ReactNode> = {
   'm1-anonymiser':  <AnonymisationTool />,

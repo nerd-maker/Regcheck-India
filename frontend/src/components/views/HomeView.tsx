@@ -169,7 +169,7 @@ export default function HomeView() {
             <div className="rc-card">
               <div className="rc-card-header">
                 <span>Recent activity</span>
-                <button className="rc-btn rc-btn-ghost rc-btn-sm" onClick={() => setActiveView('audit')}>Audit trail</button>
+                <button className="rc-btn rc-btn-ghost rc-btn-sm" onClick={() => setActiveView('audit-trail')}>Audit trail</button>
               </div>
               <div>
                 {AUDIT_EVENTS.slice(0, 5).map(e => (

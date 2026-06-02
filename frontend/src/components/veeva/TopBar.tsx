@@ -49,7 +49,7 @@ export default function TopBar() {
     ...AUDIT_EVENTS.slice(0, 3).map(e => ({
       id: `ev-${e.id}`, icon: 'ti-history', title: e.action,
       meta: `${e.target} · ${e.ts}`,
-      onClick: () => { setActiveView('audit'); setShowNotif(false) },
+      onClick: () => { setActiveView('audit-trail'); setShowNotif(false) },
     })),
   ]
 

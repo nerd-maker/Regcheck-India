@@ -18,7 +18,7 @@ const PRIMARY: NavItem[] = [
   { id: 'registrations',  label: 'Registrations',       icon: 'ti-certificate' },
   { id: 'documents',      label: 'Documents',           icon: 'ti-file-text' },
   { id: 'correspondence', label: 'HA Correspondence',   icon: 'ti-mail',          badge: 3 },
-  { id: 'audit',          label: 'Audit Trail',         icon: 'ti-clock-history' },
+  { id: 'audit-trail',    label: 'Audit Trail',         icon: 'ti-clock-history' },
   { id: 'reports',        label: 'Reports',             icon: 'ti-chart-line' },
 ]
 
