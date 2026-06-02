@@ -132,6 +132,39 @@ async def init_all_tables():
             )
         """)
 
+        # ── GAP REMEDIATIONS ─────────────────────────────────────────
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS gap_remediations (
+                id TEXT PRIMARY KEY,
+                submission_id TEXT,
+                document_id TEXT,
+                agent_id TEXT NOT NULL,
+                agent_name TEXT NOT NULL,
+                agent_run_id TEXT,
+                gap_text TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'major',
+                framework TEXT,
+                section_ref TEXT,
+                status TEXT NOT NULL DEFAULT 'open',
+                owner_name TEXT NOT NULL DEFAULT 'Anika Sharma',
+                owner_initials TEXT NOT NULL DEFAULT 'AS',
+                due_date TEXT,
+                resolution_note TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_remediations_submission
+            ON gap_remediations(submission_id)
+        """)
+
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_remediations_status
+            ON gap_remediations(status)
+        """)
+
         # Indexes
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_docs_submission "

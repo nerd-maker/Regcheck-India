@@ -17,6 +17,8 @@ import {
   getStoredKey,
   getRawStoredKey,
 } from '@/services/api'
+import { GapRemediationPanel } from '@/components/GapRemediationPanel'
+import { parseGapsFromResult } from '@/utils/parseGaps'
 
 interface AgentMeta {
   id: string
@@ -280,6 +282,17 @@ export default function AgentActionView({ agentId }: { agentId: string }) {
           </div>
         </div>
       </div>
+
+      {result.kind === 'ok' && (
+        <div style={{ padding: '0 24px 24px' }}>
+          <GapRemediationPanel
+            submissionId={selectedSubmissionId ?? undefined}
+            agentId={agentId}
+            agentName={agent.title}
+            pendingGaps={parseGapsFromResult(result.data)}
+          />
+        </div>
+      )}
     </div>
   )
 }

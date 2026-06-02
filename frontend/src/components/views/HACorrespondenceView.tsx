@@ -5,7 +5,7 @@ import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
-import { updateCorrespondenceState } from '@/services/workspaceData'
+import { transitionCorrespondenceState } from '@/services/workspaceData'
 import { useCorrespondence } from '@/hooks/useWorkspaceData'
 
 const STATE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
@@ -53,7 +53,7 @@ export default function HACorrespondenceView() {
   const handleDraftResponse = async () => {
     if (!current) return
     try {
-      await updateCorrespondenceState(current.id, 'response-drafted')
+      await transitionCorrespondenceState(current.id, 'response-drafted')
       loadCorrespondence()
     } catch (err: any) {
       alert(err.message || 'Failed to update state')
@@ -63,7 +63,7 @@ export default function HACorrespondenceView() {
   const handleArchive = async () => {
     if (!current) return
     try {
-      await updateCorrespondenceState(current.id, 'closed')
+      await transitionCorrespondenceState(current.id, 'closed')
       loadCorrespondence()
     } catch (err: any) {
       alert(err.message || 'Failed to update state')

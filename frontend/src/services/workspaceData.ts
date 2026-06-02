@@ -270,3 +270,148 @@ export async function updateCorrespondenceState(
   )
   return toCorrespondence(data)
 }
+
+// ── Gap Remediation types ─────────────────────────────────────────────────────
+
+export interface RemediationTask {
+  id: string
+  submissionId?: string
+  documentId?: string
+  agentId: string
+  agentName: string
+  agentRunId?: string
+  gapText: string
+  severity: 'critical' | 'major' | 'minor'
+  framework?: string
+  sectionRef?: string
+  status: 'open' | 'in-progress' | 'resolved'
+  ownerName: string
+  ownerInitials: string
+  dueDate?: string
+  resolutionNote?: string
+  createdAt: string
+}
+
+function toRemediation(r: any): RemediationTask {
+  return {
+    id: r.id,
+    submissionId: r.submission_id ?? undefined,
+    documentId: r.document_id ?? undefined,
+    agentId: r.agent_id,
+    agentName: r.agent_name,
+    agentRunId: r.agent_run_id ?? undefined,
+    gapText: r.gap_text,
+    severity: r.severity,
+    framework: r.framework ?? undefined,
+    sectionRef: r.section_ref ?? undefined,
+    status: r.status,
+    ownerName: r.owner_name,
+    ownerInitials: r.owner_initials,
+    dueDate: r.due_date ?? undefined,
+    resolutionNote: r.resolution_note ?? undefined,
+    createdAt: r.created_at ?? '',
+  }
+}
+
+export async function fetchRemediations(
+  submissionId?: string,
+  status?: string,
+): Promise<RemediationTask[]> {
+  try {
+    const params: Record<string, string> = {}
+    if (submissionId) params.submission_id = submissionId
+    if (status) params.status = status
+    const { data } = await axios.get(`${PROXY}/remediations`, {
+      headers: headers(),
+      params,
+      timeout: 8000,
+    })
+    return data.map(toRemediation)
+  } catch {
+    return []
+  }
+}
+
+export async function createRemediation(body: {
+  submission_id?: string
+  document_id?: string
+  agent_id: string
+  agent_name: string
+  agent_run_id?: string
+  gap_text: string
+  severity: 'critical' | 'major' | 'minor'
+  framework?: string
+  section_ref?: string
+  owner_name?: string
+  due_date?: string
+}): Promise<RemediationTask> {
+  const { data } = await axios.post(`${PROXY}/remediations`, body, {
+    headers: headers(),
+    timeout: 8000,
+  })
+  return toRemediation(data)
+}
+
+export async function updateRemediation(
+  id: string,
+  updates: {
+    status?: string
+    owner_name?: string
+    owner_initials?: string
+    due_date?: string
+    resolution_note?: string
+  },
+): Promise<RemediationTask> {
+  const { data } = await axios.patch(
+    `${PROXY}/remediations/${id}`,
+    updates,
+    { headers: headers(), timeout: 8000 },
+  )
+  return toRemediation(data)
+}
+
+export async function deleteRemediation(id: string): Promise<void> {
+  await axios.delete(`${PROXY}/remediations/${id}`, {
+    headers: headers(),
+    timeout: 8000,
+  })
+}
+
+export async function transitionCorrespondenceState(
+  id: string,
+  newState: 'open' | 'response-drafted' | 'closed',
+): Promise<HACorrespondenceRecord> {
+  const { data } = await axios.patch(
+    `${PROXY}/correspondence/${id}/state`,
+    { state: newState },
+    { headers: headers(), timeout: 8000 },
+  )
+  return toCorrespondence(data)
+}
+
+export async function fetchRemediationsSummary(
+  submissionId?: string,
+): Promise<{
+  critical: { open: number; in_progress: number; resolved: number }
+  major: { open: number; in_progress: number; resolved: number }
+  minor: { open: number; in_progress: number; resolved: number }
+  total_open: number
+}> {
+  try {
+    const params = submissionId ? { submission_id: submissionId } : {}
+    const { data } = await axios.get(`${PROXY}/remediations/summary`, {
+      headers: headers(),
+      params,
+      timeout: 8000,
+    })
+    return data
+  } catch {
+    return {
+      critical: { open: 0, in_progress: 0, resolved: 0 },
+      major: { open: 0, in_progress: 0, resolved: 0 },
+      minor: { open: 0, in_progress: 0, resolved: 0 },
+      total_open: 0,
+    }
+  }
+}
+

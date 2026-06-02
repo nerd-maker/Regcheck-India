@@ -8,6 +8,7 @@ import StatusBadge from '@/components/veeva/StatusBadge'
 import LifecycleBar from '@/components/veeva/LifecycleBar'
 import { ComplianceTrendChart } from '@/components/ComplianceTrendChart'
 import { uploadDocument } from '@/services/workspaceData'
+import { GapRemediationPanel } from '@/components/GapRemediationPanel'
 import { useSubmissions, useDocuments, useCorrespondence } from '@/hooks/useWorkspaceData'
 import type { SubmissionRecord, DocumentRecord, HACorrespondenceRecord } from '@/lib/mockData'
 
@@ -300,33 +301,7 @@ export default function SubmissionDetailView() {
         )}
 
         {tab === 'gaps' && (
-          <div className="rc-card">
-            <div className="rc-card-header"><span>{sub.openGaps} open compliance gaps</span></div>
-            {sub.openGaps === 0 ? (
-              <div className="rc-empty"><i className="ti ti-circle-check"/><div>No open gaps. Submission is ready for the next lifecycle stage.</div></div>
-            ) : (
-              <div style={{ padding: 0 }}>
-                {[
-                  { id: 'g1', sev: 'critical', framework: 'Schedule Y · Appendix III', text: 'Dose justification missing for paediatric subgroup' },
-                  { id: 'g2', sev: 'major',    framework: 'ICH E6(R3) §7.1',           text: 'Risk-based monitoring plan does not include site visit triggers' },
-                  { id: 'g3', sev: 'major',    framework: 'NDCTR 2019 Rule 33',        text: 'CTRI registration number not referenced in cover letter' },
-                  { id: 'g4', sev: 'minor',    framework: 'DPDP Act 2023',             text: 'PII in 2 protocol appendices not anonymised' },
-                ].slice(0, sub.openGaps).map(g => (
-                  <div key={g.id} style={{ padding: '12px 18px', borderBottom: '1px solid var(--rc-divider)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    <span className={`rc-pill ${g.sev === 'critical' ? 'rc-pill-rejected' : g.sev === 'major' ? 'rc-pill-review' : 'rc-pill-draft'}`} style={{ textTransform: 'uppercase', fontSize: 10 }}>{g.sev}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{g.text}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>{g.framework}</div>
-                    </div>
-                    <button className="rc-btn rc-btn-sm" onClick={() => {
-                      setPrefilledInput(`Resolve the following compliance gap:\n\nGap: ${g.text}\nFramework: ${g.framework}\nSubmission: ${sub.name} (${sub.number})\nProduct: ${sub.product}\nIndication: ${sub.indication}\n\nProvide a detailed remediation plan with citations to the relevant NDCTR / Schedule Y / ICH provisions and concrete content to add to the document.`)
-                      setActiveView('m6-qa')
-                    }} data-testid={`gap-resolve-${g.id}`}><i className="ti ti-sparkles"/> Resolve with AI</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <GapRemediationPanel submissionId={sub.id} />
         )}
 
         {tab === 'activity' && (
