@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
 import { saveToHistory } from '@/services/history'
 import PageHeader from '@/components/veeva/PageHeader'
@@ -16,6 +16,7 @@ import {
   crossDocumentCheck,
   getStoredKey,
   getRawStoredKey,
+  extractTextFromFile,
 } from '@/services/api'
 import { GapRemediationPanel } from '@/components/GapRemediationPanel'
 import { parseGapsFromResult } from '@/utils/parseGaps'
@@ -100,6 +101,31 @@ export default function AgentActionView({ agentId }: { agentId: string }) {
   const [input, setInput] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [result, setResult] = useState<ResultState>({ kind: 'idle' })
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [extracting, setExtracting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.name.match(/\.(pdf|docx|txt)$/i)) {
+      alert('Please upload a PDF, DOCX, or TXT file.')
+      return
+    }
+    setUploadedFile(file)
+    setExtracting(true)
+    try {
+      const extracted = await extractTextFromFile(file)
+      setInput(extracted?.extracted_text ?? '')
+    } catch (err) {
+      console.error('Extraction failed:', err)
+      alert('Could not extract text automatically. Try copy-pasting the content.')
+    } finally {
+      setExtracting(false)
+    }
+  }
 
   // Pre-fill the input when this view is launched from the Inspector
   // "Compliance Actions" panel on a document / submission.
@@ -219,14 +245,107 @@ export default function AgentActionView({ agentId }: { agentId: string }) {
             {agent.id === 'm9-crossdoc' ? (
               <FileDropzone files={files} setFiles={setFiles}/>
             ) : (
-              <textarea
-                className="rc-textarea"
-                placeholder={agent.inputPlaceholder}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                style={{ minHeight: 240 }}
-                data-testid="agent-input"
-              />
+              <>
+                {/* File upload zone */}
+                <div style={{ marginBottom: 12 }}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.txt"
+                    style={{ display: 'none' }}
+                    onChange={handleFileUpload}
+                    data-testid="agent-file-upload"
+                  />
+                  {!uploadedFile ? (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        border: '2px dashed var(--rc-border-strong)',
+                        borderRadius: 'var(--rc-radius-md)',
+                        padding: '16px 20px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        background: 'var(--rc-surface-raised)',
+                        transition: 'border-color 0.15s',
+                      }}
+                      onMouseEnter={e =>
+                        ((e.currentTarget as HTMLDivElement).style.borderColor = 'var(--rc-primary)')
+                      }
+                      onMouseLeave={e =>
+                        ((e.currentTarget as HTMLDivElement).style.borderColor = 'var(--rc-border-strong)')
+                      }
+                    >
+                      <i
+                        className="ti ti-upload"
+                        style={{ fontSize: 22, color: 'var(--rc-primary)', display: 'block', marginBottom: 6 }}
+                      />
+                      <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--rc-text-primary)' }}>
+                        Upload a regulatory document
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', marginTop: 3 }}>
+                        PDF · DOCX · TXT &nbsp;·&nbsp; Max 50 MB
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', marginTop: 6 }}>
+                        or paste document text below
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '10px 14px',
+                        background: 'var(--rc-approved-bg)',
+                        border: '1px solid var(--rc-approved)',
+                        borderRadius: 'var(--rc-radius)',
+                      }}
+                    >
+                      {extracting ? (
+                        <>
+                          <i
+                            className="ti ti-loader-2 spin"
+                            style={{ color: 'var(--rc-primary)' }}
+                          />
+                          <span style={{ fontSize: 12.5 }}>
+                            Extracting text from {uploadedFile.name}…
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <i
+                            className="ti ti-circle-check"
+                            style={{ color: 'var(--rc-approved)', fontSize: 16 }}
+                          />
+                          <span style={{ fontSize: 12.5, color: 'var(--rc-text-primary)', flex: 1 }}>
+                            {uploadedFile.name}
+                          </span>
+                          <button
+                            className="rc-btn rc-btn-ghost rc-btn-sm"
+                            onClick={() => {
+                              setUploadedFile(null)
+                              setInput('')
+                              if (fileInputRef.current) fileInputRef.current.value = ''
+                            }}
+                          >
+                            <i className="ti ti-x" /> Remove
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Text area */}
+                <textarea
+                  className="rc-textarea"
+                  placeholder={agent.inputPlaceholder}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  style={{ minHeight: 180 }}
+                  data-testid="agent-input"
+                />
+              </>
             )}
           </div>
         </div>
