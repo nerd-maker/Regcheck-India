@@ -120,38 +120,25 @@ export default function DocumentsView() {
       </div>
 
       <div style={{ padding: 24 }}>
-        {loading && (
-          <div style={{
-            padding: '40px', textAlign: 'center',
-            color: 'var(--rc-text-muted)', fontSize: 13, background: 'var(--rc-surface)',
-            borderRadius: 'var(--rc-radius-md)', border: '1px solid var(--rc-border)'
-          }}>
-            <i className="ti ti-loader-2"
-               style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
-            Loading documents...
+        {view === 'flat' ? (
+          <div className="rc-card">
+            <DocTable docs={filtered} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
           </div>
-        )}
-        {!loading && (
-          view === 'flat' ? (
-            <div className="rc-card">
-              <DocTable docs={filtered} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {Object.entries(grouped).map(([group, docs]) => (
-                <div key={group} className="rc-card" data-testid={`folder-${group}`}>
-                  <div className="rc-card-header">
-                    <span><i className="ti ti-folder-open" style={{ marginRight: 6, color: 'var(--rc-primary)' }}/>{group}</span>
-                    <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--rc-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
-                  </div>
-                  <DocTable docs={docs} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {Object.entries(grouped).map(([group, docs]) => (
+              <div key={group} className="rc-card" data-testid={`folder-${group}`}>
+                <div className="rc-card-header">
+                  <span><i className="ti ti-folder-open" style={{ marginRight: 6, color: 'var(--rc-primary)' }}/>{group}</span>
+                  <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--rc-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
                 </div>
-              ))}
-              {Object.keys(grouped).length === 0 && (
-                <div className="rc-card"><div className="rc-empty"><i className="ti ti-folder-off"/><div>No documents match the filters.</div></div></div>
-              )}
-            </div>
-          )
+                <DocTable docs={docs} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
+              </div>
+            ))}
+            {Object.keys(grouped).length === 0 && (
+              <div className="rc-card"><div className="rc-empty"><i className="ti ti-folder-off"/><div>No documents match the filters.</div></div></div>
+            )}
+          </div>
         )}
       </div>
     </div>

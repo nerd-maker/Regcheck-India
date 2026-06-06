@@ -210,17 +210,18 @@ export default function SubmissionsView() {
 
         {/* Table */}
         <div className="rc-scroll" style={{ overflow: 'auto', background: 'var(--rc-surface)' }}>
-          {loading && (
-            <div style={{
-              padding: '40px', textAlign: 'center',
-              color: 'var(--rc-text-muted)', fontSize: 13
-            }}>
-              <i className="ti ti-loader-2"
-                 style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
-              Loading submissions...
-            </div>
-          )}
-          {!loading && (
+          {/* Thin progress bar while refreshing — UI stays unblocked */}
+          <div style={{ position: 'relative' }}>
+            {loading && (
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0,
+                height: 2,
+                background: 'var(--rc-primary)',
+                animation: 'pulse 1.5s ease-in-out infinite',
+                zIndex: 10,
+                borderRadius: 1,
+              }}/>
+            )}
             <table className="rc-table" data-testid="submissions-table">
               <thead>
                 <tr>
@@ -288,7 +289,7 @@ export default function SubmissionsView() {
                 )}
               </tbody>
             </table>
-          )}
+          </div>
         </div>
       </div>
       <NewSubmissionModal

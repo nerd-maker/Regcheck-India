@@ -69,7 +69,7 @@ export default function HomeView() {
           {dynamicKPIs.map((k, i) => (
             <div key={i} className="rc-kpi" data-testid={`home-kpi-${i}`}>
               <div className="rc-kpi-label">{k.label}</div>
-              <div className="rc-kpi-value">{loading ? '...' : k.value}</div>
+              <div className="rc-kpi-value">{k.value}</div>
               <div className={`rc-kpi-delta ${k.trend}`}>
                 <i className={`ti ${k.trend === 'up' ? 'ti-trending-up' : k.trend === 'down' ? 'ti-trending-down' : 'ti-minus'}`}/>
                 {k.delta} <span style={{ color: 'var(--rc-text-muted)' }}>· {k.sub}</span>
@@ -86,13 +86,7 @@ export default function HomeView() {
               <span>My Queue · Needs Action</span>
               <button className="rc-btn rc-btn-ghost rc-btn-sm" onClick={() => setActiveView('submissions')}>View all <i className="ti ti-arrow-right" style={{ fontSize: 13 }}/></button>
             </div>
-            {loading ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--rc-text-muted)', fontSize: 12 }}>
-                <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
-                Loading queue...
-              </div>
-            ) : (
-              <table className="rc-table">
+            <table className="rc-table">
                 <thead>
                   <tr>
                     <th style={{ width: 28 }}></th>
@@ -138,12 +132,11 @@ export default function HomeView() {
                       </td>
                     </tr>
                   ))}
-                  {!loading && myQueue.length === 0 && (
+                  {myQueue.length === 0 && (
                     <tr><td colSpan={6}><div className="rc-empty"><i className="ti ti-circle-check"/><div>No pending tasks in your queue.</div></div></td></tr>
                   )}
                 </tbody>
               </table>
-            )}
           </div>
 
           {/* Right: Compliance & Recent */}
@@ -195,13 +188,7 @@ export default function HomeView() {
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--rc-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10 }}>
             Pinned submissions
           </div>
-          {loading ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--rc-text-muted)', fontSize: 12 }}>
-              <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
-              Loading pinned submissions...
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
               {pinned.map(s => (
                 <div key={s.id} className="rc-card" style={{ padding: 14, cursor: 'pointer' }}
                   onClick={() => { setSelectedSubmissionId(s.id); setActiveView('submission-detail'); }}
@@ -224,11 +211,10 @@ export default function HomeView() {
                   </div>
                 </div>
               ))}
-              {!loading && pinned.length === 0 && (
+              {pinned.length === 0 && (
                 <div className="rc-empty" style={{ gridColumn: 'span 3' }}><i className="ti ti-folder-off"/><div>No pinned submissions.</div></div>
               )}
             </div>
-          )}
         </div>
       </div>
     </div>

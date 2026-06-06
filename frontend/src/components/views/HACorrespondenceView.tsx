@@ -114,18 +114,7 @@ export default function HACorrespondenceView() {
         ]}
       />
 
-      {loading ? (
-        <div style={{
-          padding: '40px', textAlign: 'center',
-          color: 'var(--rc-text-muted)', fontSize: 13, flex: 1, display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center'
-        }}>
-          <i className="ti ti-loader-2"
-             style={{ animation: 'spin 1s linear infinite', marginRight: 8, fontSize: 18 }}/>
-          <div style={{ marginTop: 8 }}>Loading correspondence...</div>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', flex: 1, overflow: 'hidden' }}>
           {/* List */}
           <div className="rc-scroll" style={{ overflow: 'auto', borderRight: '1px solid var(--rc-border)', background: 'var(--rc-surface)' }}>
             {list.map(c => {
@@ -199,7 +188,6 @@ export default function HACorrespondenceView() {
             )}
           </div>
         </div>
-      )}
     </div>
   )
 }

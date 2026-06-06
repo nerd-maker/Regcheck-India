@@ -1,7 +1,7 @@
 // src/hooks/useWorkspaceData.ts
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   fetchSubmissions, fetchDocuments, fetchApplications,
   fetchRegistrations, fetchCorrespondence,
@@ -13,29 +13,42 @@ import {
   REGISTRATIONS, HA_CORRESPONDENCE,
 } from '@/lib/mockData'
 
-// Generic data hook factory
+// Generic data hook
+// - Starts with mockData immediately (no blank loading state)
+// - Fetches real data in background
+// - Replaces mockData with real data silently
+// - loading=false by default so UI is never blocked
+
 function useData<T>(
   fetcher: () => Promise<T[]>,
   fallback: T[]
 ) {
   const [data, setData] = useState<T[]>(fallback)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Ref keeps latest fetcher without causing effect re-runs
+  const fetcherRef = useRef(fetcher)
+  fetcherRef.current = fetcher
 
   const reload = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await fetcher()
+      const result = await fetcherRef.current()
       setData(result)
       setError(null)
-    } catch (e) {
-      setError('Failed to load data')
+    } catch {
+      setError('Failed to load')
+      // fallback data already shown — no visible failure
     } finally {
       setLoading(false)
     }
-  }, [fetcher])
+  }, []) // stable — never recreated
 
-  useEffect(() => { reload() }, [reload])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    reload()
+  }, []) // run once on mount only
 
   return { data, loading, error, reload, setData }
 }

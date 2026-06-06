@@ -104,12 +104,6 @@ export default function ReportsView() {
 
         <div className="rc-card" style={{ gridColumn: 'span 2' }}>
           <div className="rc-card-header"><span>Top submissions by gap count</span></div>
-          {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--rc-text-muted)', fontSize: 12 }}>
-              <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
-              Loading metrics...
-            </div>
-          ) : (
             <table className="rc-table">
               <thead><tr><th>Submission</th><th>Product</th><th>Phase</th><th style={{ textAlign: 'right' }}>Open Gaps</th><th style={{ width: 140 }}>Compliance</th></tr></thead>
               <tbody>
@@ -131,7 +125,6 @@ export default function ReportsView() {
                 ))}
               </tbody>
             </table>
-          )}
         </div>
       </div>
     </div>

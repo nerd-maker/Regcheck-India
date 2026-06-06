@@ -45,7 +45,7 @@ export default function AuditTrailView() {
       <PageHeader
         crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Audit Trail' }]}
         title="Audit Trail"
-        subtitle="21 CFR Part 11 · DPDP Act 2023 · Immutable log"
+        subtitle="DPDP Act 2023 · Immutable log"
         icon="ti-clock-history"
         actions={
           <>

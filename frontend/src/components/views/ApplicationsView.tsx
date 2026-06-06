@@ -59,17 +59,6 @@ export default function ApplicationsView() {
         ]}
       />
       <div style={{ padding: 24 }}>
-        {loading ? (
-          <div style={{
-            padding: '40px', textAlign: 'center',
-            color: 'var(--rc-text-muted)', fontSize: 13, background: 'var(--rc-surface)',
-            borderRadius: 'var(--rc-radius-md)', border: '1px solid var(--rc-border)'
-          }}>
-            <i className="ti ti-loader-2"
-               style={{ animation: 'spin 1s linear infinite', marginRight: 8, display: 'inline-block' }}/>
-            Loading applications...
-          </div>
-        ) : (
           <div className="rc-card">
             <table className="rc-table">
               <thead>
@@ -113,7 +102,6 @@ export default function ApplicationsView() {
               </tbody>
             </table>
           </div>
-        )}
       </div>
     </div>
   )

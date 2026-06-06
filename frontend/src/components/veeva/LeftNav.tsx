@@ -128,7 +128,7 @@ export default function LeftNav() {
               Vault operational
             </div>
             <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)' }}>
-              v3.2.0 · Last sync 2 min ago
+              v1.0 Beta
             </div>
           </div>
         </div>
