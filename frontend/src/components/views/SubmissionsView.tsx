@@ -246,9 +246,8 @@ export default function SubmissionsView() {
                       e.stopPropagation()
                       setSelected(s.id)
                       setSelectedSubmissionId(s.id)
-                      openInspector('details')
+                      setActiveView('submission-detail')
                     }}
-                    onDoubleClick={() => open(s)}
                     data-testid={`subrow-${s.id}`}
                   >
                     <td onClick={e => e.stopPropagation()}><input type="checkbox"/></td>

@@ -7,6 +7,8 @@ import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
 import { transitionCorrespondenceState } from '@/services/workspaceData'
 import { useCorrespondence } from '@/hooks/useWorkspaceData'
+import axios from 'axios'
+import { getStoredKey } from '@/services/api'
 
 const STATE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
   'open':              { bg: 'var(--rc-rejected-bg)',  color: 'var(--rc-rejected)',  label: 'Open' },
@@ -21,6 +23,43 @@ export default function HACorrespondenceView() {
   const [search, setSearch] = useState('')
 
   const { data: correspondence, loading, reload: loadCorrespondence } = useCorrespondence()
+
+  // ── New correspondence form state ─────────────────────────────────────
+  const [showNewForm, setShowNewForm] = useState(false)
+  const [newSubject, setNewSubject] = useState('')
+  const [newAuthority, setNewAuthority] = useState('CDSCO')
+  const [newCategory, setNewCategory] = useState('Query')
+  const [newPriority, setNewPriority] = useState('standard')
+  const [newSubmitting, setNewSubmitting] = useState(false)
+
+  const handleNewResponse = async () => {
+    if (!newSubject.trim()) return
+    setNewSubmitting(true)
+    try {
+      await axios.post('/api/regcheck/correspondence', {
+        subject: newSubject,
+        authority: newAuthority,
+        category: newCategory,
+        priority: newPriority,
+        direction: 'outbound',
+        preview: newSubject,
+      }, {
+        headers: { 'x-anthropic-api-key': getStoredKey() },
+        timeout: 8000,
+      })
+      await loadCorrespondence()
+      setShowNewForm(false)
+      setNewSubject('')
+    } catch (err) {
+      console.error('Failed to create correspondence:', err)
+      // Optimistically reload anyway — backend may have saved despite error
+      await loadCorrespondence()
+      setShowNewForm(false)
+      setNewSubject('')
+    } finally {
+      setNewSubmitting(false)
+    }
+  }
 
   const byDir = useMemo(() => correspondence.filter(c =>
     tab === 'inbox'  ? c.direction === 'inbound'
@@ -50,26 +89,6 @@ export default function HACorrespondenceView() {
 
   const currentId = current?.id ?? null
 
-  const handleDraftResponse = async () => {
-    if (!current) return
-    try {
-      await transitionCorrespondenceState(current.id, 'response-drafted')
-      loadCorrespondence()
-    } catch (err: any) {
-      alert(err.message || 'Failed to update state')
-    }
-  }
-
-  const handleArchive = async () => {
-    if (!current) return
-    try {
-      await transitionCorrespondenceState(current.id, 'closed')
-      loadCorrespondence()
-    } catch (err: any) {
-      alert(err.message || 'Failed to update state')
-    }
-  }
-
   return (
     <div data-testid="view-correspondence" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PageHeader
@@ -82,7 +101,9 @@ export default function HACorrespondenceView() {
             <button className="rc-btn" onClick={() => exportCSV(timestampedName('regcheck_ha_correspondence'),
               list.map(c => ({ number: c.number, subject: c.subject, direction: c.direction, authority: c.authority, category: c.category, priority: c.priority, state: c.state, received: c.receivedAt, due: c.dueAt ?? '', submission: c.submissionId ?? '' }))
             )} data-testid="corr-export-btn"><i className="ti ti-download"/> Export</button>
-            <button className="rc-btn rc-btn-primary" data-testid="corr-new-btn"><i className="ti ti-edit"/> New Response</button>
+            <button className="rc-btn rc-btn-primary" onClick={() => setShowNewForm(true)} data-testid="corr-new-btn">
+              <i className="ti ti-edit"/> New Response
+            </button>
           </>
         }
         tabs={[
@@ -168,19 +189,62 @@ export default function HACorrespondenceView() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                  <button className="rc-btn rc-btn-primary" onClick={handleDraftResponse} data-testid="corr-draft-btn"><i className="ti ti-edit"/> Draft response</button>
-                  <button className="rc-btn" onClick={() => {
-                    setPrefilledInput(`Draft a CDSCO response to the following correspondence:\n\nNumber: ${current.number}\nSubject: ${current.subject}\nCategory: ${current.category}\nAuthority: ${current.authority}\nReceived: ${current.receivedAt}\n${current.dueAt ? `Due: ${current.dueAt}\n` : ''}\nContent:\n${current.preview}\n\nGenerate a response that addresses the deficiencies, cites the relevant NDCTR 2019 / Schedule Y / ICH provisions, and includes a CAPA plan.`)
-                    setActiveView('m6-qa')
-                  }} data-testid="corr-genai-btn"><i className="ti ti-sparkles"/> Generate with AI</button>
-                  <button className="rc-btn" onClick={() => exportCSV(timestampedName(`correspondence_${current.number}`), [{
+                {/* State-based action buttons */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+                  {current.state === 'open' && (
+                    <button
+                      className="rc-btn rc-btn-sm"
+                      onClick={async () => {
+                        await transitionCorrespondenceState(current.id, 'response-drafted')
+                        await loadCorrespondence()
+                      }}
+                      data-testid="corr-draft-btn"
+                    >
+                      <i className="ti ti-edit"/> Draft Response
+                    </button>
+                  )}
+
+                  {current.state === 'response-drafted' && (
+                    <button
+                      className="rc-btn rc-btn-sm rc-btn-primary"
+                      onClick={async () => {
+                        await transitionCorrespondenceState(current.id, 'closed')
+                        await loadCorrespondence()
+                      }}
+                      data-testid="corr-mark-sent-btn"
+                    >
+                      <i className="ti ti-check"/> Mark Sent
+                    </button>
+                  )}
+
+                  {current.state !== 'closed' && (
+                    <button
+                      className="rc-btn rc-btn-sm"
+                      onClick={() => {
+                        setPrefilledInput(
+                          `CDSCO correspondence: ${current.subject}\n\n${current.preview}`
+                        )
+                        setActiveView('m6-qa')
+                      }}
+                      data-testid="corr-genai-btn"
+                    >
+                      <i className="ti ti-robot"/> Draft with AI
+                    </button>
+                  )}
+
+                  <button className="rc-btn rc-btn-sm" onClick={() => exportCSV(timestampedName(`correspondence_${current.number}`), [{
                     number: current.number, subject: current.subject, direction: current.direction,
                     authority: current.authority, category: current.category, state: current.state,
                     priority: current.priority, received: current.receivedAt, due: current.dueAt ?? '',
                     content: current.preview,
                   }])} data-testid="corr-detail-export-btn"><i className="ti ti-file-export"/> Export</button>
-                  <button className="rc-btn rc-btn-ghost" onClick={handleArchive}><i className="ti ti-archive"/> Archive</button>
+
+                  {current.state !== 'closed' && (
+                    <button className="rc-btn rc-btn-sm rc-btn-ghost" onClick={async () => {
+                      await transitionCorrespondenceState(current.id, 'closed')
+                      await loadCorrespondence()
+                    }}><i className="ti ti-archive"/> Archive</button>
+                  )}
                 </div>
               </>
             ) : (
@@ -188,6 +252,127 @@ export default function HACorrespondenceView() {
             )}
           </div>
         </div>
+
+      {/* New Correspondence modal */}
+      {showNewForm && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center',
+          justifyContent: 'center', zIndex: 100,
+        }}>
+          <div style={{
+            background: 'var(--rc-surface)',
+            border: '1px solid var(--rc-border)',
+            borderRadius: 'var(--rc-radius-lg)',
+            padding: 28, minWidth: 440,
+            boxShadow: 'var(--rc-shadow-xl)',
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 20,
+            }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
+                New Correspondence
+              </h3>
+              <button
+                className="rc-btn rc-btn-ghost rc-btn-sm"
+                onClick={() => setShowNewForm(false)}
+              >
+                <i className="ti ti-x"/>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                  Subject *
+                </label>
+                <input
+                  className="rc-input"
+                  style={{ width: '100%' }}
+                  placeholder="e.g. Response to CDSCO deficiency letter"
+                  value={newSubject}
+                  onChange={e => setNewSubject(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleNewResponse()}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                    Authority
+                  </label>
+                  <select
+                    className="rc-input"
+                    style={{ width: '100%' }}
+                    value={newAuthority}
+                    onChange={e => setNewAuthority(e.target.value)}
+                  >
+                    <option>CDSCO</option>
+                    <option>DCGI</option>
+                    <option>State FDA</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                    Category
+                  </label>
+                  <select
+                    className="rc-input"
+                    style={{ width: '100%' }}
+                    value={newCategory}
+                    onChange={e => setNewCategory(e.target.value)}
+                  >
+                    <option>Query</option>
+                    <option>Deficiency Letter</option>
+                    <option>CAPA Request</option>
+                    <option>Acknowledgement</option>
+                    <option>Approval</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                  Priority
+                </label>
+                <select
+                  className="rc-input"
+                  style={{ width: '100%' }}
+                  value={newPriority}
+                  onChange={e => setNewPriority(e.target.value)}
+                >
+                  <option value="standard">Standard</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button className="rc-btn" onClick={() => setShowNewForm(false)}>
+                Cancel
+              </button>
+              <button
+                className="rc-btn rc-btn-primary"
+                onClick={handleNewResponse}
+                disabled={!newSubject.trim() || newSubmitting}
+              >
+                {newSubmitting ? (
+                  <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }}/> Creating...</>
+                ) : (
+                  <><i className="ti ti-plus"/> Create</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

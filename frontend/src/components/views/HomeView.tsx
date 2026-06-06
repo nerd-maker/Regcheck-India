@@ -7,11 +7,20 @@ import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
 import { exportCSV, timestampedName } from '@/lib/csv'
 import { useSubmissions } from '@/hooks/useWorkspaceData'
+import NewSubmissionModal from '@/components/NewSubmissionModal'
+import { createSubmission } from '@/services/workspaceData'
 
 export default function HomeView() {
   const { setActiveView, setSelectedSubmissionId, openInspector } = useWorkspace()
 
-  const { data: submissions, loading } = useSubmissions()
+  const { data: submissions, loading, reload } = useSubmissions()
+  const [showNewModal, setShowNewModal] = useState(false)
+
+  const handleCreate = async (formData: any) => {
+    await createSubmission(formData)
+    await reload()
+    setShowNewModal(false)
+  }
 
   const pinned = useMemo(() => submissions.slice(0, 3), [submissions])
   
@@ -56,7 +65,7 @@ export default function HomeView() {
         actions={
           <>
             <button className="rc-btn" onClick={handleExport} data-testid="home-export-btn"><i className="ti ti-download"/> Export</button>
-            <button className="rc-btn rc-btn-primary" onClick={() => setActiveView('submissions')} data-testid="home-new-submission">
+            <button className="rc-btn rc-btn-primary" onClick={() => setShowNewModal(true)} data-testid="home-new-submission">
               <i className="ti ti-plus"/> New submission
             </button>
           </>
@@ -217,6 +226,11 @@ export default function HomeView() {
             </div>
         </div>
       </div>
+      <NewSubmissionModal
+        isOpen={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        onCreate={handleCreate}
+      />
     </div>
   )
 }
