@@ -15,6 +15,67 @@ export default function AuditTrailView() {
   const [showESign, setShowESign] = useState(false)
   const [agentEvents, setAgentEvents] = useState<any[]>([])
 
+  // ── Meta parser: turns raw agent result JSON into readable text ──────────
+  const parseAgentMeta = (result: unknown, score?: number): string => {
+    if (!result) return score ? `Compliance score: ${score}%` : 'Analysis complete'
+
+    try {
+      const parsed = typeof result === 'string' ? JSON.parse(result) : result
+      const inner = (parsed as any)?.result ?? parsed
+
+      // Compliance percentage
+      const pct = (inner as any)?.compliance_percentage
+        ?? (inner as any)?.completeness_percentage
+        ?? (inner as any)?.gcp_percentage
+      if (pct) return `Compliance: ${pct}${score ? ` · Score: ${score}%` : ''}`
+
+      // Status + gap count
+      const status = (inner as any)?.overall_compliance_status
+        ?? (inner as any)?.overall_gcp_status
+        ?? (inner as any)?.status
+      if (status) {
+        const gaps = [
+          ...((inner as any)?.critical_non_compliances || []),
+          ...((inner as any)?.major_non_compliances    || []),
+        ].length
+        return `Status: ${status}${gaps > 0 ? ` · ${gaps} gaps found` : ''}`
+      }
+
+      // PII anonymiser
+      if ((inner as any)?.entities_detected !== undefined) {
+        return `${(inner as any).entities_detected} PII entities detected`
+      }
+
+      // Cross-doc check
+      if ((inner as any)?.inconsistencies !== undefined) {
+        return `${(inner as any).inconsistencies} inconsistencies found`
+      }
+
+      // Case classifier
+      if ((inner as any)?.seriousness) {
+        return `Seriousness: ${(inner as any).seriousness} · Causality: ${(inner as any).causality ?? 'N/A'}`
+      }
+
+      // Summariser / Q&A
+      const resultText = (inner as any)?.summary
+        ?? (inner as any)?.answer
+        ?? (inner as any)?.findings
+      if (resultText && typeof resultText === 'string') {
+        return resultText.substring(0, 100) + (resultText.length > 100 ? '…' : '')
+      }
+    } catch {}
+
+    // Fallback: strip JSON noise, show first meaningful text
+    const text = typeof result === 'string' ? result : JSON.stringify(result)
+    const stripped = text
+      .replace(/[{}"\\[\]]/g, '')
+      .replace(/\w+:/g, '')
+      .replace(/,/g, ' · ')
+      .trim()
+      .substring(0, 120)
+    return stripped || (score ? `Score: ${score}%` : 'Analysis complete')
+  }
+
   // Fetch real agent run history and merge with mock events
   useEffect(() => {
     getHistoryFromServer(undefined, undefined, 50)
@@ -26,20 +87,18 @@ export default function AuditTrailView() {
           initials: 'AS',
           action: `AI Compliance Action: ${h.module}`,
           target: h.filename ?? 'Document',
-          meta: typeof h.result === 'string'
-            ? h.result.substring(0, 120)
-            : `Score: ${h.complianceScore ?? 'N/A'}%`,
+          meta: parseAgentMeta(h.result, h.complianceScore ?? undefined),
         }))
         setAgentEvents(events)
       })
       .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const allEvents = useMemo(() => {
     return [...agentEvents, ...AUDIT_EVENTS].sort((a, b) => {
       const ta = new Date(b.ts).getTime()
       const tb = new Date(a.ts).getTime()
-      // If dates are invalid (mock data uses relative strings), keep original order
       return isNaN(ta) || isNaN(tb) ? 0 : ta - tb
     })
   }, [agentEvents])
@@ -58,16 +117,16 @@ export default function AuditTrailView() {
   }, [allEvents])
 
   const categoryOf = (e: any): string => {
-    if (e.action.includes('AI Compliance'))         return 'AI Action'
-    if (e.action.includes('state change'))          return 'State change'
-    if (e.action.toLowerCase().includes('upload'))  return 'Upload'
-    if (e.action.includes('Correspondence'))        return 'HA Correspondence'
+    if (e.action.includes('AI Compliance'))        return 'AI Action'
+    if (e.action.includes('state change'))         return 'State change'
+    if (e.action.toLowerCase().includes('upload')) return 'Upload'
+    if (e.action.includes('Correspondence'))       return 'HA Correspondence'
     return 'Other'
   }
 
   const filtered = useMemo(() => allEvents.filter(e => {
-    if (active.actor    && e.user !== active.actor)             return false
-    if (active.category && categoryOf(e) !== active.category)  return false
+    if (active.actor    && e.user !== active.actor)            return false
+    if (active.category && categoryOf(e) !== active.category) return false
     if (search && !`${e.action} ${e.target} ${e.meta || ''}`.toLowerCase().includes(search.toLowerCase())) return false
     return true
   }), [allEvents, active, search])
@@ -77,7 +136,7 @@ export default function AuditTrailView() {
       <PageHeader
         crumbs={[{ label: 'Workspace', onClick: () => setActiveView('home') }, { label: 'Audit Trail' }]}
         title="Audit Trail"
-        subtitle="DPDP Act 2023 · Immutable log"
+        subtitle="DPDP Act 2023 · ICH E6(R3) §4.9 · Immutable log"
         icon="ti-clock-history"
         actions={
           <>
@@ -111,10 +170,25 @@ export default function AuditTrailView() {
               {filtered.map(e => (
                 <tr key={e.id} data-testid={`auditrow-${e.id}`}>
                   <td style={{ fontFamily: 'var(--rc-font-mono)', fontSize: 11.5, color: 'var(--rc-text-secondary)', whiteSpace: 'nowrap' }}>{e.ts}</td>
+                  {/* Fix 1: avatar properly flex-contained so initials don't concatenate with name */}
                   <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div className="rc-avatar" style={{ width: 22, height: 22, fontSize: 9.5, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)' }}>{e.initials}</div>
-                      <span style={{ fontSize: 12 }}>{e.user}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      <div style={{
+                        width: 26, height: 26,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #93C5FD, #1A56DB)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 9.5, fontWeight: 700, color: '#fff',
+                        flexShrink: 0, letterSpacing: '0.02em',
+                      }}>
+                        {e.initials}
+                      </div>
+                      <span style={{
+                        fontSize: 12, color: 'var(--rc-text-primary)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {e.user}
+                      </span>
                     </div>
                   </td>
                   <td><span style={{ fontSize: 12, fontWeight: 500 }}>{e.action}</span></td>
@@ -174,7 +248,7 @@ export default function AuditTrailView() {
               </div>
 
               {[
-                { label: 'Tamper detection',   value: 'SHA-256 hash chain · No tampering detected' },
+                { label: 'Tamper detection',    value: 'SHA-256 hash chain · No tampering detected' },
                 { label: 'Compliance standard', value: 'DPDP Act 2023 · ICH E6(R3) §4.9' },
                 { label: 'Retention policy',    value: 'Immutable · Configurable retention period' },
                 { label: 'e-Signature support', value: 'Coming soon · IT Act 2000 compliant' },
