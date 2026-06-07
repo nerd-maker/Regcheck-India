@@ -43,14 +43,78 @@ export default function SettingsView({ section }: { section: 'settings' | 'apike
 
 // ── General ──────────────────────────────────────────────────────────────────
 function GeneralTab() {
+  const [vaultName, setVaultName] = useState('India Regulatory Vault')
+  const [authority, setAuthority] = useState('CDSCO (India)')
+  const [timezone, setTimezone] = useState('Asia/Kolkata (IST · UTC+05:30)')
+  const [dateFormat, setDateFormat] = useState('YYYY-MM-DD')
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('rc_settings_general')
+      if (stored) {
+        const s = JSON.parse(stored)
+        if (s.vaultName)  setVaultName(s.vaultName)
+        if (s.authority)  setAuthority(s.authority)
+        if (s.timezone)   setTimezone(s.timezone)
+        if (s.dateFormat) setDateFormat(s.dateFormat)
+      }
+    } catch {}
+  }, [])
+
+  const handleSave = () => {
+    try {
+      localStorage.setItem('rc_settings_general', JSON.stringify({
+        vaultName, authority, timezone, dateFormat,
+      }))
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch {}
+  }
+
   return (
     <div className="rc-card">
-      <div className="rc-card-header"><span>Vault preferences</span></div>
+      <div className="rc-card-header">
+        <span>Vault preferences</span>
+      </div>
       <div className="rc-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Field label="Vault name" value="India Regulatory Vault"/>
-        <Field label="Default authority" value="CDSCO (India)"/>
-        <Field label="Time zone" value="Asia/Kolkata (IST · UTC+05:30)"/>
-        <Field label="Date format" value="YYYY-MM-DD"/>
+        <EditableField label="Vault name" value={vaultName} onChange={setVaultName} />
+        <EditableField
+          label="Default authority"
+          value={authority}
+          onChange={setAuthority}
+          type="select"
+          options={['CDSCO (India)', 'CDSCO + DCGI', 'CDSCO + State FDA']}
+        />
+        <EditableField
+          label="Time zone"
+          value={timezone}
+          onChange={setTimezone}
+          type="select"
+          options={[
+            'Asia/Kolkata (IST · UTC+05:30)',
+            'UTC',
+            'Asia/Dubai (GST · UTC+04:00)',
+          ]}
+        />
+        <EditableField
+          label="Date format"
+          value={dateFormat}
+          onChange={setDateFormat}
+          type="select"
+          options={['YYYY-MM-DD', 'DD/MM/YYYY', 'DD-MMM-YYYY']}
+        />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+          <button className="rc-btn rc-btn-primary" onClick={handleSave}>
+            <i className="ti ti-device-floppy"/> Save changes
+          </button>
+          {saved && (
+            <span style={{ fontSize: 12, color: 'var(--rc-approved)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <i className="ti ti-circle-check"/> Saved
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -256,11 +320,37 @@ function KeyInput({
   )
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function EditableField({
+  label, value, onChange, type = 'text', options = [],
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  type?: 'text' | 'select'
+  options?: string[]
+}) {
   return (
-    <div>
-      <label className="rc-label">{label}</label>
-      <input className="rc-input" defaultValue={value}/>
+    <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', alignItems: 'center', gap: 12 }}>
+      <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--rc-text-secondary)' }}>
+        {label}
+      </label>
+      {type === 'select' ? (
+        <select
+          className="rc-input"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          style={{ maxWidth: 320 }}
+        >
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input
+          className="rc-input"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          style={{ maxWidth: 320 }}
+        />
+      )}
     </div>
   )
 }

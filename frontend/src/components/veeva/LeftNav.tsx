@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { useSubmissions, useCorrespondence } from '@/hooks/useWorkspaceData'
 
 interface NavItem {
   id: string
@@ -13,11 +14,11 @@ interface NavItem {
 
 const PRIMARY: NavItem[] = [
   { id: 'home',           label: 'Home',                icon: 'ti-home-2' },
-  { id: 'submissions',    label: 'Submissions',         icon: 'ti-folder-open',   badge: 12 },
+  { id: 'submissions',    label: 'Submissions',         icon: 'ti-folder-open' },
   { id: 'applications',   label: 'Applications',        icon: 'ti-stack-2' },
   { id: 'registrations',  label: 'Registrations',       icon: 'ti-certificate' },
   { id: 'documents',      label: 'Documents',           icon: 'ti-file-text' },
-  { id: 'correspondence', label: 'HA Correspondence',   icon: 'ti-mail',          badge: 3 },
+  { id: 'correspondence', label: 'HA Correspondence',   icon: 'ti-mail' },
   { id: 'audit-trail',    label: 'Audit Trail',         icon: 'ti-clock-history' },
   { id: 'reports',        label: 'Reports',             icon: 'ti-chart-line' },
 ]
@@ -74,6 +75,14 @@ function Item({ item, active, href }: { item: NavItem; active: boolean; href: st
 export default function LeftNav() {
   const pathname = usePathname()
 
+  // Dynamic badge counts from live data
+  const { data: submissions } = useSubmissions()
+  const { data: correspondence } = useCorrespondence()
+  const submissionCount = submissions.length
+  const openCorrCount = correspondence.filter(
+    c => c.state === 'open' || c.state === 'response-drafted'
+  ).length
+
   const isActive = (item: NavItem) => {
     const href = getHref(item.id)
     if (item.id === 'home') {
@@ -88,11 +97,17 @@ export default function LeftNav() {
         <div className="rc-nav-section-label">
           <span>Workspace</span>
         </div>
-        {PRIMARY.map(item => (
-          <Item key={item.id} item={item}
-            active={isActive(item)}
-            href={getHref(item.id)}/>
-        ))}
+        {PRIMARY.map(item => {
+          const badge =
+            item.id === 'submissions'    ? (submissionCount || undefined) :
+            item.id === 'correspondence' ? (openCorrCount   || undefined) :
+            undefined
+          return (
+            <Item key={item.id} item={{ ...item, badge }}
+              active={isActive(item)}
+              href={getHref(item.id)}/>
+          )
+        })}
       </div>
 
       <div className="rc-nav-section">
