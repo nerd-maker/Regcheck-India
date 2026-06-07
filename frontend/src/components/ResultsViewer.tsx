@@ -147,8 +147,8 @@ ${f.gap ? `<strong>Gap Analysis</strong><span style="color:#dc2626">${f.gap}</sp
 ${f.recommended_language ? `<strong>Recommended Language</strong><div class="remediation">${f.recommended_language}</div>` : ''}
 </div></div>`).join('')}
 <div class="footer">
-<p>RegCheck-India v1.0.0 | AI-Powered Pharmaceutical Regulatory Compliance</p>
-<p>⚠ This is a pilot tool. All outputs must be reviewed by qualified regulatory professionals.</p>
+<p>RegCheck-India v1.0 Beta | AI-Powered Pharmaceutical Regulatory Compliance</p>
+<p>All outputs must be reviewed by qualified regulatory professionals before submission.</p>
 </div>
 </body></html>`;
 

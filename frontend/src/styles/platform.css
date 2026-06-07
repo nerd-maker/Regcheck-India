@@ -849,20 +849,82 @@
 /* ══════════════════════════════════════════════════════════════
    Print styles — Reports → "Print / PDF" button
    ══════════════════════════════════════════════════════════════ */
+
+/* Live preview: rc-printing class hides nav before dialog opens */
+.rc-printing [data-testid="left-nav"],
+.rc-printing [data-testid="top-bar"],
+.rc-printing [data-testid="right-inspector"],
+.rc-printing aside,
+.rc-printing nav,
+.rc-printing header,
+.rc-printing .rc-topbar,
+.rc-printing .rc-leftnav,
+.rc-printing .rc-inspector {
+  display: none !important;
+}
+
 @media print {
+  /* Hide chrome */
+  [data-testid="left-nav"],
+  [data-testid="top-bar"],
+  [data-testid="right-inspector"],
   .rc-topbar,
   .rc-leftnav,
   .rc-inspector,
   .rc-page-actions,
-  .rc-subbar { display: none !important; }
+  .rc-subbar,
+  .rc-btn,
+  button,
+  nav,
+  aside,
+  header { display: none !important; }
+
+  /* Make main content full width */
   .rc-shell {
     grid-template-columns: 1fr !important;
     grid-template-rows: auto !important;
     height: auto !important;
     overflow: visible !important;
   }
-  .rc-card { box-shadow: none !important; break-inside: avoid; }
-  body, .rc-shell { background: #fff !important; }
+
+  main,
+  [data-testid*="view-"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  /* Page setup */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  body {
+    font-size: 10pt !important;
+    color: #000 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Cards */
+  .rc-card {
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    break-inside: avoid !important;
+    margin-bottom: 16px !important;
+  }
+
+  /* Score bars */
+  .rc-scorebar {
+    border: 1px solid #ccc !important;
+    background: #f5f5f5 !important;
+  }
+  .rc-scorebar-fill {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
 }
 
 /* Legacy compatibility (used by some old components) */

@@ -21,6 +21,14 @@ export default function ReportsView() {
   const [showRange, setShowRange] = useState(false)
   const rangeLabel = RANGES.find(r => r.id === range)?.label ?? 'Last 30 days'
 
+  const handlePrint = () => {
+    document.body.classList.add('rc-printing')
+    window.print()
+    setTimeout(() => {
+      document.body.classList.remove('rc-printing')
+    }, 1000)
+  }
+
   const { data: submissions, loading } = useSubmissions()
 
   const factor = range === '7' ? 0.30 : range === '30' ? 1 : range === '90' ? 2.4 : range === 'ytd' ? 4.2 : 6.0
@@ -60,7 +68,7 @@ export default function ReportsView() {
                 </div>
               )}
             </div>
-            <button className="rc-btn rc-btn-primary" onClick={() => window.print()} data-testid="reports-pdf-btn">
+            <button className="rc-btn rc-btn-primary" onClick={handlePrint} data-testid="reports-pdf-btn">
               <i className="ti ti-printer"/> Print / PDF
             </button>
           </>
