@@ -15,6 +15,7 @@ export default function TopBar() {
   const [showVault, setShowVault] = useState(false)
   const [showUser, setShowUser] = useState(false)
   const [showQuick, setShowQuick] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [showNewSubmission, setShowNewSubmission] = useState(false)
   const [creating, setCreating] = useState(false)
   const notifRef = useRef<HTMLDivElement | null>(null)
@@ -29,7 +30,7 @@ export default function TopBar() {
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (!notifRef.current?.contains(e.target as Node)) {
-        setShowNotif(false); setShowVault(false); setShowUser(false); setShowQuick(false)
+        setShowNotif(false); setShowVault(false); setShowUser(false); setShowQuick(false); setShowHelp(false)
       }
     }
     document.addEventListener('click', onClick)
@@ -78,7 +79,7 @@ export default function TopBar() {
         </Link>
 
         <div style={{ position: 'relative' }}>
-          <button className="rc-topbar-vault" onClick={(e) => { e.stopPropagation(); setShowVault(v => !v); setShowNotif(false); setShowUser(false); setShowQuick(false) }} data-testid="topbar-vault-picker">
+          <button className="rc-topbar-vault" onClick={(e) => { e.stopPropagation(); setShowVault(v => !v); setShowNotif(false); setShowUser(false); setShowQuick(false); setShowHelp(false) }} data-testid="topbar-vault-picker">
             <i className="ti ti-database"/>
             <span>India Regulatory Vault</span>
             <i className="ti ti-chevron-down" style={{ fontSize: 12 }}/>
@@ -127,6 +128,7 @@ export default function TopBar() {
                 setShowNotif(false)
                 setShowVault(false)
                 setShowUser(false)
+                setShowHelp(false)
               }}
               data-testid="topbar-quick"
             >
@@ -142,7 +144,7 @@ export default function TopBar() {
                   { icon: 'ti-folder-open',   label: 'New Submission',    action: () => { setShowNewSubmission(true); setShowQuick(false) } },
                   { icon: 'ti-file-text',     label: 'Go to Documents',   action: () => { setActiveView('documents');    setShowQuick(false) } },
                   { icon: 'ti-mail',          label: 'HA Correspondence', action: () => { setActiveView('correspondence'); setShowQuick(false) } },
-                  { icon: 'ti-clock-history', label: 'Audit Trail',       action: () => { setActiveView('audit-trail');  setShowQuick(false) } },
+                  { icon: 'ti-history', label: 'Audit Trail',       action: () => { setActiveView('audit-trail');  setShowQuick(false) } },
                   { icon: 'ti-chart-line',    label: 'Reports',           action: () => { setActiveView('reports');      setShowQuick(false) } },
                 ].map(item => (
                   <button key={item.label} className="rc-nav-item" onClick={item.action}>
@@ -154,11 +156,140 @@ export default function TopBar() {
             )}
           </div>
 
-          <a className="rc-topbar-icon-btn" title="Help & docs" href="https://github.com/nerd-maker/Regcheck-India" target="_blank" rel="noopener noreferrer" data-testid="topbar-help">
-            <i className="ti ti-help-circle"/>
-          </a>
           <div style={{ position: 'relative' }}>
-            <button className="rc-topbar-icon-btn" title="Notifications" onClick={(e) => { e.stopPropagation(); setShowNotif(v => !v); setShowVault(false); setShowUser(false); setShowQuick(false) }} data-testid="topbar-notifications">
+            <button
+              className="rc-topbar-icon-btn"
+              title="Help & docs"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowHelp(v => !v)
+                setShowNotif(false)
+                setShowVault(false)
+                setShowUser(false)
+                setShowQuick(false)
+              }}
+              data-testid="topbar-help"
+            >
+              <i className="ti ti-help-circle"/>
+            </button>
+
+            {showHelp && (
+              <div
+                style={{
+                  ...popoverStyle,
+                  left: 'auto',
+                  right: 0,
+                  width: 300,
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={popoverHeader}>Help & Resources</div>
+
+                {[
+                  {
+                    icon: 'ti-book',
+                    label: 'Getting started guide',
+                    sub: 'Learn how to use RegCheck-India',
+                    action: () => window.open(
+                      'https://github.com/nerd-maker/Regcheck-India/blob/main/README.md',
+                      '_blank'
+                    ),
+                  },
+                  {
+                    icon: 'ti-file-description',
+                    label: 'Regulatory frameworks',
+                    sub: 'Schedule Y, NDCTR 2019, ICH E6(R3)',
+                    action: () => window.open(
+                      'https://cdsco.gov.in/opencms/opencms/en/Regulations/Acts-Rules/',
+                      '_blank'
+                    ),
+                  },
+                  {
+                    icon: 'ti-robot',
+                    label: 'AI agents overview',
+                    sub: '9 compliance agents and how to use them',
+                    action: () => {
+                      setActiveView('home')
+                      setShowHelp(false)
+                    },
+                  },
+                  {
+                    icon: 'ti-keyboard',
+                    label: 'Keyboard shortcuts',
+                    sub: 'Enter: global search · Ctrl+N: new submission',
+                    action: () => {},
+                  },
+                  {
+                    icon: 'ti-mail',
+                    label: 'Contact support',
+                    sub: 'contact@regcheck.in',
+                    action: () => window.open('mailto:contact@regcheck.in'),
+                  },
+                ].map(item => (
+                  <button
+                    key={item.label}
+                    className="rc-nav-item"
+                    onClick={item.action}
+                    style={{
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      paddingTop: 10,
+                      paddingBottom: 10,
+                    }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      width: '100%',
+                    }}>
+                      <i className={`ti ${item.icon}`}
+                         style={{ color: 'var(--rc-primary)' }}/>
+                      <span style={{
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        color: 'var(--rc-text-primary)',
+                      }}>
+                        {item.label}
+                      </span>
+                    </div>
+                    <span style={{
+                      fontSize: 11,
+                      color: 'var(--rc-text-muted)',
+                      paddingLeft: 22,
+                      marginTop: 2,
+                    }}>
+                      {item.sub}
+                    </span>
+                  </button>
+                ))}
+
+                <div style={{
+                  padding: '10px 14px',
+                  borderTop: '1px solid var(--rc-divider)',
+                  fontSize: 11,
+                  color: 'var(--rc-text-muted)',
+                  textAlign: 'center',
+                }}>
+                  RegCheck-India v1.0 Beta · 
+                  <a
+                    href="https://github.com/nerd-maker/Regcheck-India"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: 'var(--rc-primary)',
+                      textDecoration: 'none',
+                      marginLeft: 4,
+                    }}
+                  >
+                    GitHub ↗
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ position: 'relative' }}>
+            <button className="rc-topbar-icon-btn" title="Notifications" onClick={(e) => { e.stopPropagation(); setShowNotif(v => !v); setShowVault(false); setShowUser(false); setShowQuick(false); setShowHelp(false) }} data-testid="topbar-notifications">
               <i className="ti ti-bell"/>
               {notifs.length > 0 && <span className="badge-dot"/>}
             </button>
@@ -184,7 +315,7 @@ export default function TopBar() {
           </div>
 
           <div style={{ position: 'relative' }}>
-            <div className="rc-topbar-user" onClick={(e) => { e.stopPropagation(); setShowUser(v => !v); setShowVault(false); setShowNotif(false); setShowQuick(false) }} data-testid="topbar-user">
+            <div className="rc-topbar-user" onClick={(e) => { e.stopPropagation(); setShowUser(v => !v); setShowVault(false); setShowNotif(false); setShowQuick(false); setShowHelp(false) }} data-testid="topbar-user">
               <div className="rc-avatar" aria-hidden="true">AS</div>
               <div style={{ lineHeight: 1.2 }}>
                 <div style={{ fontSize: 12, fontWeight: 600 }}>Anika Sharma</div>
