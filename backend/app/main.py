@@ -49,6 +49,7 @@ from routers.agent_runs import router as agent_runs_router, init_db as init_agen
 from routers.workspace import router as workspace_router
 from db import init_all_tables
 from seed import seed as seed_db
+from app.services.storage_service import verify_storage_bucket_exists
 
 logger = logging.getLogger(__name__)
 _APP_START_TIME = time_module.time()
@@ -123,6 +124,7 @@ async def lifespan(app: FastAPI):
     # Create all workspace + agent_runs tables (idempotent)
     await init_all_tables()
     await init_agent_runs_table()
+    await verify_storage_bucket_exists()
     # Seed mockData equivalents on first run (ON CONFLICT DO NOTHING)
     await seed_db()
     yield
@@ -162,7 +164,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=[
         "Content-Type",
         "X-Anthropic-Api-Key",
@@ -241,6 +243,8 @@ app.include_router(classification_endpoints.router, prefix="/api/classify", tags
 app.include_router(agents_router, prefix="/api/v1/agents", tags=["AI Agents"])
 app.include_router(agent_runs_router, tags=["Agent Runs"])
 app.include_router(workspace_router, tags=["Workspace"])
+from app.routers.vault_documents import router as vault_documents_router
+app.include_router(vault_documents_router, prefix="/api/v1")
 
 # Create upload directory
 UPLOAD_DIR = Path(settings.upload_dir)

@@ -2,6 +2,7 @@
 Configuration management for RegCheck-India backend.
 """
 import os
+from functools import lru_cache
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import List
@@ -62,6 +63,26 @@ class Settings(BaseSettings):
         """Convert MB to bytes."""
         return self.max_upload_size_mb * 1024 * 1024
 
+    # ── Supabase Storage (Document Vault Engine) ────────────────────────────
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+    supabase_service_key: str = ""
+    supabase_storage_bucket: str = "regcheck-documents"
 
-# Global settings instance
+    # PostgreSQL URL (for SQLAlchemy async engine used by vault router)
+    database_url: str = os.getenv("DATABASE_URL", "")
+
+
+# Global settings instance (kept for backward compatibility)
 settings = Settings()
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the singleton Settings instance.
+
+    Using lru_cache ensures env vars are read exactly once — not on every
+    FastAPI dependency injection call. Always import via get_settings() in
+    new code; legacy code may continue using the module-level `settings`.
+    """
+    return Settings()

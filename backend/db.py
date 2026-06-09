@@ -179,6 +179,138 @@ async def init_all_tables():
             "ON submissions(state)"
         )
 
+        # Primary vault document record
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS vault_documents (
+                id              TEXT PRIMARY KEY,
+                workspace_id    TEXT NOT NULL DEFAULT '',
+                doc_number      TEXT NOT NULL,
+                title           TEXT NOT NULL,
+                doc_type        TEXT NOT NULL DEFAULT 'Other',
+                lifecycle_state TEXT NOT NULL DEFAULT 'draft',
+                current_version TEXT NOT NULL DEFAULT '1.0',
+                storage_path    TEXT NOT NULL,
+                storage_bucket  TEXT NOT NULL,
+                file_name       TEXT NOT NULL,
+                file_size_bytes BIGINT NOT NULL DEFAULT 0,
+                mime_type       TEXT NOT NULL DEFAULT 'application/octet-stream',
+                page_count      INTEGER,
+                extracted_text  TEXT,
+                owner_name      TEXT NOT NULL DEFAULT '',
+                owner_initials  TEXT NOT NULL DEFAULT '',
+                classification  TEXT NOT NULL DEFAULT 'Regulatory / General',
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                CONSTRAINT uq_vault_documents_workspace_number UNIQUE (workspace_id, doc_number)
+            )
+        """)
+
+        await conn.execute("""
+            ALTER TABLE vault_documents
+            ADD COLUMN IF NOT EXISTS workspace_id TEXT NOT NULL DEFAULT ''
+        """)
+
+        await conn.execute("""
+            DO $$
+            DECLARE
+                constraint_name TEXT;
+            BEGIN
+                SELECT c.conname INTO constraint_name
+                FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+                WHERE t.relname = 'vault_documents'
+                  AND c.contype = 'u'
+                  AND a.attname = 'doc_number'
+                  AND array_length(c.conkey, 1) = 1
+                LIMIT 1;
+
+                IF constraint_name IS NOT NULL THEN
+                    EXECUTE format('ALTER TABLE vault_documents DROP CONSTRAINT %I', constraint_name);
+                END IF;
+            END $$;
+        """)
+
+        await conn.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname = 'uq_vault_documents_workspace_number'
+                ) THEN
+                    ALTER TABLE vault_documents
+                    ADD CONSTRAINT uq_vault_documents_workspace_number UNIQUE (workspace_id, doc_number);
+                END IF;
+            END $$;
+        """)
+
+        # Version history
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS vault_document_versions (
+                id              TEXT PRIMARY KEY,
+                document_id     TEXT NOT NULL REFERENCES vault_documents(id) ON DELETE CASCADE,
+                version_number  TEXT NOT NULL,
+                storage_path    TEXT NOT NULL,
+                file_name       TEXT NOT NULL,
+                file_size_bytes BIGINT NOT NULL DEFAULT 0,
+                uploaded_by     TEXT NOT NULL DEFAULT '',
+                upload_note     TEXT,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+
+        # Audit trail
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS vault_document_audit (
+                id          TEXT PRIMARY KEY,
+                document_id TEXT NOT NULL REFERENCES vault_documents(id) ON DELETE CASCADE,
+                action      TEXT NOT NULL,
+                from_state  TEXT,
+                to_state    TEXT,
+                user_name   TEXT NOT NULL DEFAULT '',
+                user_initials TEXT NOT NULL DEFAULT '',
+                note        TEXT,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+
+        # Compliance scan results
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS vault_compliance_scans (
+                id              TEXT PRIMARY KEY,
+                document_id     TEXT NOT NULL REFERENCES vault_documents(id) ON DELETE CASCADE,
+                scan_type       TEXT NOT NULL DEFAULT 'completeness',
+                status          TEXT NOT NULL DEFAULT 'pending',
+                score           INTEGER,
+                findings        JSONB NOT NULL DEFAULT '[]',
+                agent_run_id    TEXT,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+
+        # Vault indexes
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vault_docs_state "
+            "ON vault_documents(lifecycle_state)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vault_docs_workspace "
+            "ON vault_documents(workspace_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vault_versions_doc "
+            "ON vault_document_versions(document_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vault_audit_doc "
+            "ON vault_document_audit(document_id)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_vault_scans_doc "
+            "ON vault_compliance_scans(document_id)"
+        )
+
         print("All workspace tables ready.")
     finally:
         await conn.close()

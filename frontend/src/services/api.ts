@@ -1,4 +1,11 @@
 import axios from 'axios';
+import type {
+  DocumentDetail,
+  DocumentListResponse,
+  DocumentListItem,
+  LifecycleState as VaultLifecycleState,
+  UploadDocumentPayload,
+} from '@/types/vault';
 
 // ─── Proxy base ──────────────────────────────────────────────────────────────
 // /api/regcheck/* is server-side rewritten by Next.js to the Render backend
@@ -406,3 +413,95 @@ export const crossDocumentCheck = async (files: File[]): Promise<unknown> => {
 // ─── Health check ─────────────────────────────────────────────────────────────
 export const checkAgentsHealth = () =>
   axios.get(`${PROXY_BASE}/health`).then(r => r.data);
+
+export async function fetchVaultDocuments(
+  workspaceId?: string,
+  lifecycleState?: VaultLifecycleState | 'review',
+): Promise<DocumentListResponse> {
+  const params: Record<string, string> = {}
+  if (workspaceId) params.workspace_id = workspaceId
+  if (lifecycleState) params.lifecycle_state = lifecycleState
+
+  const { data } = await axios.get<DocumentListResponse>(
+    `${PROXY_BASE}/vault/documents`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      params,
+      timeout: 10000,
+    },
+  )
+  return data
+}
+
+export async function fetchVaultDocumentDetail(
+  documentId: string,
+): Promise<DocumentDetail> {
+  const { data } = await axios.get<DocumentDetail>(
+    `${PROXY_BASE}/vault/documents/${documentId}`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      timeout: 10000,
+    },
+  )
+  return data
+}
+
+export async function uploadVaultDocument(
+  file: File,
+  payload: UploadDocumentPayload,
+): Promise<DocumentListItem> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('workspace_id', payload.workspace_id)
+  if (payload.title) formData.append('title', payload.title)
+  if (payload.doc_type) formData.append('doc_type', payload.doc_type)
+  if (payload.owner_name) formData.append('owner_name', payload.owner_name)
+  if (payload.owner_initials) formData.append('owner_initials', payload.owner_initials)
+  if (payload.classification) formData.append('classification', payload.classification)
+
+  const { data } = await axios.post<DocumentListItem>(
+    `${PROXY_BASE}/vault/documents/upload`,
+    formData,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      timeout: 60000,
+    },
+  )
+  return data
+}
+
+export async function transitionVaultDocumentState(
+  id: string,
+  newState: VaultLifecycleState | 'review',
+  userName: string,
+  userInitials: string,
+  reason?: string,
+): Promise<DocumentDetail> {
+  const { data } = await axios.patch<DocumentDetail>(
+    `${PROXY_BASE}/vault/documents/${id}/state`,
+    {
+      new_state: newState,
+      user_name: userName,
+      user_initials: userInitials,
+      reason,
+    },
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      timeout: 10000,
+    },
+  )
+  return data
+}
+
+export async function fetchVaultDocumentDownloadUrl(
+  id: string,
+): Promise<{ document_id: string; download_url: string; expires_in: number }> {
+  const { data } = await axios.get(
+    `${PROXY_BASE}/vault/documents/${id}/download-url`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      timeout: 10000,
+    },
+  )
+  return data
+}

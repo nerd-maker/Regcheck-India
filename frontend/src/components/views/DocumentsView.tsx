@@ -1,38 +1,69 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { LifecycleState, DocumentRecord } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import StatusBadge from '@/components/veeva/StatusBadge'
-import { uploadDocument } from '@/services/workspaceData'
-import { useDocuments } from '@/hooks/useWorkspaceData'
+import { fetchVaultDocuments, uploadVaultDocument } from '@/services/api'
 import { exportCSV, timestampedName } from '@/lib/csv'
+import type { DocumentListItem } from '@/types/vault'
 
 
 const STATES: LifecycleState[] = ['draft', 'review', 'approved', 'effective', 'superseded']
 
 export default function DocumentsView() {
-  const { setActiveView, setSelectedDocumentId, openInspector } = useWorkspace()
+  const { selectedSubmissionId, setActiveView, setSelectedDocumentId, openInspector } = useWorkspace()
   const [filter, setFilter] = useState<string>('')
   const [view, setView] = useState<'flat' | 'folder'>('flat')
   const [search, setSearch] = useState('')
-
-  const { data: documents, loading, reload } = useDocuments()
+  const [documents, setDocuments] = useState<DocumentRecord[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const workspaceId = "india-regulatory-vault"
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    try {
+      const response = await fetchVaultDocuments(workspaceId)
+      setDocuments(response.documents.map(toDocumentRecord))
+      setError(null)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load documents')
+    } finally {
+      setLoading(false)
+    }
+  }, [workspaceId])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!workspaceId) {
+      alert('Select a submission before uploading to the vault.')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
     setUploading(true)
     try {
-      await uploadDocument(file)
+      await uploadVaultDocument(file, {
+        workspace_id: workspaceId,
+        title: file.name,
+        owner_name: 'Anika Sharma',
+        owner_initials: 'AS',
+      })
       await reload()
     } catch (err: any) {
       alert(err.message || 'Upload failed')
     } finally {
       setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -120,6 +151,16 @@ export default function DocumentsView() {
       </div>
 
       <div style={{ padding: 24 }}>
+        {loading && (
+          <div className="rc-card" style={{ marginBottom: 12 }}>
+            <div className="rc-empty"><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }}/><div>Loading vault documents...</div></div>
+          </div>
+        )}
+        {error && (
+          <div className="rc-card" style={{ marginBottom: 12 }}>
+            <div className="rc-empty"><i className="ti ti-alert-circle"/><div>{error}</div></div>
+          </div>
+        )}
         {view === 'flat' ? (
           <div className="rc-card">
             <DocTable docs={filtered} onSelect={(d) => { setSelectedDocumentId(d.id); openInspector('details') }}/>
@@ -143,6 +184,53 @@ export default function DocumentsView() {
       </div>
     </div>
   )
+}
+
+function toDocumentRecord(item: DocumentListItem): DocumentRecord {
+  return {
+    id: item.id,
+    number: item.doc_number,
+    name: item.title,
+    type: toDocumentType(item.doc_type),
+    classification: item.classification || 'Regulatory / General',
+    state: toWorkspaceState(item.lifecycle_state),
+    version: item.current_version,
+    owner: {
+      id: item.owner_initials || item.owner_name || 'vault-owner',
+      name: item.owner_name || 'Unassigned',
+      initials: item.owner_initials || 'NA',
+      role: 'Regulatory Lead',
+    },
+    country: 'India',
+    language: 'en',
+    size: formatFileSize(item.file_size_bytes),
+    updatedAt: formatUpdatedAt(item.updated_at),
+    updatedBy: item.owner_name || 'System',
+    submissionId: item.workspace_id,
+    flags: [],
+    excerpt: undefined,
+  }
+}
+
+function toWorkspaceState(state: DocumentListItem['lifecycle_state']): LifecycleState {
+  return state === 'in_review' ? 'review' : state
+}
+
+function toDocumentType(value: string): DocumentRecord['type'] {
+  const allowed: DocumentRecord['type'][] = ['Protocol', 'ICF', 'IB', 'CSR', 'SAE Narrative', 'CTRI', 'CT-04', 'Cover Letter', 'Inspection Report']
+  return allowed.includes(value as DocumentRecord['type']) ? value as DocumentRecord['type'] : 'Protocol'
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function formatUpdatedAt(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value || 'just now'
+  return date.toLocaleString()
 }
 
 function DocTable({ docs, onSelect }: { docs: DocumentRecord[]; onSelect: (d: DocumentRecord) => void }) {
