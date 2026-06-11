@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -82,3 +84,28 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
+
+
+@asynccontextmanager
+async def get_async_session() -> AsyncIterator[AsyncSession]:
+    """Async context manager for DB sessions outside of FastAPI request context.
+
+    Used by background tasks (e.g. compliance scans) that manage their own
+    session lifecycle.  Always commits on clean exit, rolls back on error.
+
+    Usage::
+
+        async with get_async_session() as db:
+            result = await db.execute(select(VaultDocument).where(...))
+    """
+    _, factory = _get_engine()
+    session = factory()
+    try:
+        yield session
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+

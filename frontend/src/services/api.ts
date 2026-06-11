@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type {
+  ComplianceScanSchema,
   DocumentDetail,
   DocumentListResponse,
   DocumentListItem,
@@ -505,3 +506,17 @@ export async function fetchVaultDocumentDownloadUrl(
   )
   return data
 }
+
+export async function fetchVaultDocumentScans(
+  documentId: string,
+): Promise<{ document_id: string; scans: ComplianceScanSchema[]; total: number }> {
+  const { data } = await axios.get(
+    `${PROXY_BASE}/vault/documents/${documentId}/scans`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      timeout: 10000,
+    },
+  )
+  return data
+}
+

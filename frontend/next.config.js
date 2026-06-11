@@ -56,6 +56,8 @@ const nextConfig = {
               destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/:documentId/download-url` },
             { source: '/api/regcheck/vault/documents/:documentId/state',
               destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/:documentId/state` },
+            { source: '/api/regcheck/vault/documents/:documentId/scans',
+              destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/:documentId/scans` },
             { source: '/api/regcheck/vault/documents/:documentId',
               destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/:documentId` },
             { source: '/api/regcheck/vault/documents',

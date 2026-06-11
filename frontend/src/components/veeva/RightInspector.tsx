@@ -1,11 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
 import { DOCUMENTS, SUBMISSIONS, AUDIT_EVENTS } from '@/lib/mockData'
 import StatusBadge from './StatusBadge'
 import { fetchSubmissions, fetchDocuments } from '@/services/workspaceData'
+import { fetchVaultDocumentDetail } from '@/services/api'
 import type { SubmissionRecord, DocumentRecord } from '@/lib/mockData'
+import type { DocumentDetail, LifecycleState } from '@/types/vault'
+import { LifecycleTransitionButton } from '@/components/vault/LifecycleTransitionButton'
+import { ComplianceScansPanel } from '@/components/vault/ComplianceScansPanel'
 
 // Available "Compliance Actions" — AI agents that can be run on a document
 const COMPLIANCE_ACTIONS = [
@@ -31,11 +35,40 @@ export default function RightInspector() {
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
 
+  // Vault document detail — fetched when a vault document is selected
+  const [vaultDetail, setVaultDetail] = useState<DocumentDetail | null>(null)
+  const [scanRefreshTrigger, setScanRefreshTrigger] = useState(0)
+
   useEffect(() => {
     if (!inspectorOpen) return
     fetchSubmissions().then(setSubmissions)
     fetchDocuments().then(setDocuments)
   }, [inspectorOpen, selectedSubmissionId, selectedDocumentId])
+
+  // Fetch vault document detail when a document is selected
+  useEffect(() => {
+    if (!inspectorOpen || !selectedDocumentId) {
+      setVaultDetail(null)
+      return
+    }
+    let cancelled = false
+    fetchVaultDocumentDetail(selectedDocumentId)
+      .then(detail => { if (!cancelled) setVaultDetail(detail) })
+      .catch(() => { if (!cancelled) setVaultDetail(null) })
+    return () => { cancelled = true }
+  }, [inspectorOpen, selectedDocumentId])
+
+  // Handle lifecycle transition success
+  const handleTransitionSuccess = useCallback((newState: LifecycleState) => {
+    // Update vault detail optimistically
+    setVaultDetail(prev => prev ? { ...prev, lifecycle_state: newState } : prev)
+    // Trigger scan refresh if moved to in_review
+    if (newState === 'in_review') {
+      setScanRefreshTrigger(t => t + 1)
+    }
+    // Re-fetch documents list to update state badge in the table
+    fetchDocuments().then(setDocuments)
+  }, [])
 
   if (!inspectorOpen) return null
 
@@ -69,6 +102,15 @@ export default function RightInspector() {
   const title = isDoc ? doc!.name : sub!.name
   const number = isDoc ? doc!.number : sub!.number
 
+  // Use vault detail for lifecycle state if available (most up-to-date)
+  const currentLifecycleState: LifecycleState | null = vaultDetail?.lifecycle_state ?? null
+  // Display state: use vault detail if available, otherwise use the DocumentRecord state
+  const displayState = isDoc
+    ? (currentLifecycleState
+        ? (currentLifecycleState === 'in_review' ? 'review' : currentLifecycleState) as DocumentRecord['state']
+        : doc!.state)
+    : sub!.state
+
   return (
     <div className="rc-inspector rc-scroll" style={{ width: 'var(--rc-inspector-width)' }} data-testid="right-inspector">
       {/* Header */}
@@ -81,7 +123,7 @@ export default function RightInspector() {
             {title}
           </div>
           <div style={{ marginTop: 6 }}>
-            <StatusBadge state={subject.state} label={isDoc ? undefined : sub!.stateLabel}/>
+            <StatusBadge state={displayState} label={isDoc ? undefined : sub!.stateLabel}/>
           </div>
         </div>
         <button className="rc-inspector-close" onClick={closeInspector} aria-label="Close" data-testid="inspector-close">
@@ -114,7 +156,7 @@ export default function RightInspector() {
                 <PropRow k="Type" v={doc!.type}/>
                 <PropRow k="Classification" v={doc!.classification}/>
                 <PropRow k="Version" v={doc!.version}/>
-                <PropRow k="Lifecycle" v={<StatusBadge state={doc!.state} size="sm"/>}/>
+                <PropRow k="Lifecycle" v={<StatusBadge state={displayState} size="sm"/>}/>
                 <PropRow k="Owner" v={<OwnerCell name={doc!.owner.name} initials={doc!.owner.initials} role={doc!.owner.role}/>}/>
                 <PropRow k="Country" v="India"/>
                 <PropRow k="Language" v={doc!.language.toUpperCase()}/>
@@ -136,6 +178,32 @@ export default function RightInspector() {
                       ))}
                     </div>
                   }/>
+                )}
+
+                {/* Lifecycle Transition Buttons — vault documents only */}
+                {isDoc && vaultDetail && currentLifecycleState && (
+                  <div style={{ padding: '4px 0' }}>
+                    <div style={{
+                      fontSize: 10.5,
+                      color: 'var(--rc-text-muted)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      fontWeight: 600,
+                      marginBottom: 2,
+                      padding: '8px 16px 0',
+                    }}>
+                      Actions
+                    </div>
+                    <div style={{ padding: '0 16px' }}>
+                      <LifecycleTransitionButton
+                        documentId={vaultDetail.id}
+                        currentState={currentLifecycleState}
+                        ownerName={vaultDetail.owner_name}
+                        ownerInitials={vaultDetail.owner_initials}
+                        onTransitionSuccess={handleTransitionSuccess}
+                      />
+                    </div>
+                  </div>
                 )}
               </>
             ) : (
@@ -166,34 +234,74 @@ export default function RightInspector() {
         )}
 
         {inspectorTab === 'actions' && (
-          <ComplianceActions
-            isDoc={isDoc}
-            onRun={(actionId) => {
-              // Pre-fill the agent's input box with the document excerpt
-              // (or a representative summary for submission-level runs).
-              if (isDoc && doc?.excerpt) {
-                setPrefilledInput(doc.excerpt)
-              } else if (!isDoc && sub) {
-                setPrefilledInput(`Submission: ${sub.name} (${sub.number})\nType: ${sub.type}\nProduct: ${sub.product}\nIndication: ${sub.indication}\nPhase: ${sub.phase}\nAuthority: ${sub.haAuthority}\nFrameworks: ${sub.frameworks.join(', ')}`)
-              }
-              setActiveView(actionId)
-              closeInspector()
-            }}
-          />
+          <>
+            {/* Real compliance scan results (vault documents only) */}
+            {isDoc && selectedDocumentId && (
+              <ComplianceScansPanel
+                documentId={selectedDocumentId}
+                refreshTrigger={scanRefreshTrigger}
+              />
+            )}
+
+            {/* Divider between scan results and manual agent actions */}
+            {isDoc && selectedDocumentId && (
+              <div style={{
+                borderTop: '1px solid var(--rc-divider)',
+                margin: '4px 0',
+              }}/>
+            )}
+
+            {/* Existing manual agent action buttons */}
+            <ComplianceActions
+              isDoc={isDoc}
+              onRun={(actionId) => {
+                // Pre-fill the agent's input box with the document excerpt
+                // (or a representative summary for submission-level runs).
+                if (isDoc && doc?.excerpt) {
+                  setPrefilledInput(doc.excerpt)
+                } else if (!isDoc && sub) {
+                  setPrefilledInput(`Submission: ${sub.name} (${sub.number})\nType: ${sub.type}\nProduct: ${sub.product}\nIndication: ${sub.indication}\nPhase: ${sub.phase}\nAuthority: ${sub.haAuthority}\nFrameworks: ${sub.frameworks.join(', ')}`)
+                }
+                setActiveView(actionId)
+                closeInspector()
+              }}
+            />
+          </>
         )}
 
         {inspectorTab === 'activity' && (
           <div>
-            {AUDIT_EVENTS.slice(0, 6).map(e => (
-              <div key={e.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--rc-divider)' }}>
-                <div className="rc-avatar" style={{ width: 24, height: 24, fontSize: 10, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)' }}>{e.initials}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.action}</div>
-                  {e.meta && <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>{e.meta}</div>}
-                  <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>{e.user} · {e.ts}</div>
+            {/* Show real audit entries from vault if available */}
+            {vaultDetail && vaultDetail.audit.length > 0 ? (
+              vaultDetail.audit.slice(0, 10).map(e => (
+                <div key={e.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--rc-divider)' }}>
+                  <div className="rc-avatar" style={{ width: 24, height: 24, fontSize: 10, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)', flexShrink: 0 }}>{e.user_initials}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.action.replace('_', ' ')}</div>
+                    {e.from_state && e.to_state && (
+                      <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>
+                        {e.from_state.replace('_', ' ')} → {e.to_state.replace('_', ' ')}
+                      </div>
+                    )}
+                    {e.note && <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', marginTop: 2, fontStyle: 'italic' }}>{e.note}</div>}
+                    <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>
+                      {e.user_name} · {new Date(e.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              AUDIT_EVENTS.slice(0, 6).map(e => (
+                <div key={e.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--rc-divider)' }}>
+                  <div className="rc-avatar" style={{ width: 24, height: 24, fontSize: 10, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)' }}>{e.initials}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.action}</div>
+                    {e.meta && <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>{e.meta}</div>}
+                    <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>{e.user} · {e.ts}</div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>

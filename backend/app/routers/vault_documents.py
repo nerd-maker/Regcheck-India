@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +29,7 @@ from app.models.vault import (
     VaultDocumentAudit,
     VaultDocumentVersion,
 )
+from app.services.compliance_scan_service import trigger_auto_scan
 from app.services.doc_number_service import generate_doc_number
 from app.services.extraction_service import extract_document_text
 from app.services.storage_service import (
@@ -28,10 +39,22 @@ from app.services.storage_service import (
     upload_file_to_storage,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/vault/documents", tags=["Document Vault"])
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 ALLOWED_STATES = {"draft", "in_review", "approved", "effective", "rejected", "superseded"}
+
+# Valid lifecycle transitions: current_state -> set of allowed next states
+VALID_TRANSITIONS: dict[str, set[str]] = {
+    "draft":      {"in_review", "superseded"},
+    "in_review":  {"approved", "draft", "superseded"},
+    "approved":   {"effective", "superseded"},
+    "effective":  {"superseded"},
+    "superseded": set(),  # terminal state
+    "rejected":   {"draft", "superseded"},
+}
 
 
 class StateTransitionRequest(BaseModel):
@@ -273,6 +296,7 @@ async def get_vault_document(
 async def transition_vault_document_state(
     document_id: str,
     payload: StateTransitionRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     new_state = "in_review" if payload.new_state == "review" else payload.new_state
@@ -281,6 +305,18 @@ async def transition_vault_document_state(
 
     document = await _get_document_or_404(db, document_id)
     old_state = document.lifecycle_state
+
+    # Enforce valid transitions
+    allowed_next = VALID_TRANSITIONS.get(old_state, set())
+    if new_state not in allowed_next:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Cannot transition from '{old_state}' to '{new_state}'. "
+                f"Valid transitions: {', '.join(sorted(allowed_next)) or 'none (terminal state)'}."
+            ),
+        )
+
     document.lifecycle_state = new_state
     db.add(
         VaultDocumentAudit(
@@ -306,6 +342,19 @@ async def transition_vault_document_state(
         .execution_options(populate_existing=True)
     )
     refreshed = result.scalar_one()
+
+    # Auto-trigger compliance scans when moving to in_review
+    if new_state == "in_review":
+        background_tasks.add_task(
+            trigger_auto_scan,
+            document_id=document_id,
+            doc_type=document.doc_type,
+        )
+        logger.info(
+            "auto_scan_scheduled document_id=%s doc_type=%s",
+            document_id, document.doc_type,
+        )
+
     return _document_detail(refreshed)
 
 
@@ -324,4 +373,42 @@ async def get_vault_document_download_url(
         "document_id": document.id,
         "download_url": signed_url,
         "expires_in": 3600,
+    }
+
+
+@router.get("/{document_id}/scans")
+async def get_compliance_scans(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Return all compliance scan results for a document, most recent first.
+
+    Used by the Compliance Actions tab in the document detail inspector.
+    """
+    # Validate document exists
+    await _get_document_or_404(db, document_id)
+
+    result = await db.execute(
+        select(VaultComplianceScan)
+        .where(VaultComplianceScan.document_id == document_id)
+        .order_by(VaultComplianceScan.created_at.desc())
+    )
+    scans = result.scalars().all()
+
+    return {
+        "document_id": document_id,
+        "scans": [
+            {
+                "id": s.id,
+                "document_id": s.document_id,
+                "scan_type": s.scan_type,
+                "status": s.status,
+                "score": s.score,
+                "findings": s.findings,
+                "agent_run_id": s.agent_run_id,
+                "created_at": _iso(s.created_at),
+            }
+            for s in scans
+        ],
+        "total": len(scans),
     }
