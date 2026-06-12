@@ -72,8 +72,79 @@ export default function RightInspector() {
 
   if (!inspectorOpen) return null
 
-  const doc = documents.find(d => d.id === selectedDocumentId) ?? DOCUMENTS.find(d => d.id === selectedDocumentId)
+  // Synthesize a DocumentRecord from vault detail when available.
+  // The legacy fetchDocuments() / DOCUMENTS mockData use different IDs and
+  // will never match a vault UUID, so we must derive the record here.
+  const vaultDocRecord: DocumentRecord | null = vaultDetail
+    ? {
+        id: vaultDetail.id,
+        number: vaultDetail.doc_number,
+        name: vaultDetail.title,
+        type: (() => {
+          const allowed: DocumentRecord['type'][] = ['Protocol', 'ICF', 'IB', 'CSR', 'SAE Narrative', 'CTRI', 'CT-04', 'Cover Letter', 'Inspection Report']
+          return allowed.includes(vaultDetail.doc_type as DocumentRecord['type'])
+            ? vaultDetail.doc_type as DocumentRecord['type']
+            : 'Protocol'
+        })(),
+        classification: vaultDetail.classification || 'Regulatory / General',
+        state: (vaultDetail.lifecycle_state === 'in_review' ? 'review' : vaultDetail.lifecycle_state) as DocumentRecord['state'],
+        version: vaultDetail.current_version,
+        owner: {
+          id: vaultDetail.owner_initials || 'vault-owner',
+          name: vaultDetail.owner_name || 'Unassigned',
+          initials: vaultDetail.owner_initials || 'NA',
+          role: 'Regulatory Lead',
+        },
+        country: 'India',
+        language: 'en',
+        size: (() => {
+          const bytes = vaultDetail.file_size_bytes
+          if (bytes < 1024) return `${bytes} B`
+          if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+          return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+        })(),
+        updatedAt: (() => {
+          const d = new Date(vaultDetail.updated_at)
+          return Number.isNaN(d.getTime()) ? vaultDetail.updated_at : d.toLocaleString()
+        })(),
+        updatedBy: vaultDetail.owner_name || 'System',
+        submissionId: vaultDetail.workspace_id,
+        flags: [],
+        excerpt: vaultDetail.extracted_text?.slice(0, 500) ?? undefined,
+      }
+    : null
+
+  // Prefer the synthesized vault record when a vault doc is selected, then
+  // fall back to legacy data (for non-vault selections).
+  const doc: DocumentRecord | undefined =
+    (selectedDocumentId && vaultDocRecord) ||
+    documents.find(d => d.id === selectedDocumentId) ||
+    DOCUMENTS.find(d => d.id === selectedDocumentId) ||
+    undefined
+
   const sub = submissions.find(s => s.id === selectedSubmissionId) ?? SUBMISSIONS.find(s => s.id === selectedSubmissionId)
+
+  // If a vault doc is selected but vaultDetail hasn't loaded yet, show a
+  // loading placeholder instead of "Nothing selected".
+  if (selectedDocumentId && !doc && !sub) {
+    return (
+      <div className="rc-inspector" style={{ width: 'var(--rc-inspector-width)' }} data-testid="right-inspector">
+        <div className="rc-inspector-header">
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11.5, color: 'var(--rc-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Inspector</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>Loading…</div>
+          </div>
+          <button className="rc-inspector-close" onClick={closeInspector} aria-label="Close" data-testid="inspector-close">
+            <i className="ti ti-x" style={{ fontSize: 16 }}/>
+          </button>
+        </div>
+        <div className="rc-empty">
+          <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }}/>
+          <div style={{ fontSize: 12 }}>Loading document details…</div>
+        </div>
+      </div>
+    )
+  }
 
   const subject = doc ?? sub
   if (!subject) {
