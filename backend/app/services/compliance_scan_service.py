@@ -4,24 +4,34 @@ Auto-scan service for the Document Vault Engine.
 
 When a document transitions to ``in_review``, this service:
 1. Creates pending ``VaultComplianceScan`` rows (one per relevant agent).
-2. Calls each agent via loopback HTTP on the same FastAPI process.
+2. Calls each compliance agent directly via Python import (no HTTP).
 3. Writes the score and findings back to ``vault_compliance_scans``.
 
 The function ``trigger_auto_scan`` is designed to run as a FastAPI
 ``BackgroundTasks`` job — it manages its own DB sessions via
 ``get_async_session()``.
+
+Architecture note: agents are called in-process via ``agent_runner``
+functions, not via loopback HTTP. This is the correct approach for a
+single-worker Render deployment — no port dependencies, no network
+overhead, and no risk of self-calling a not-yet-listening server.
 """
 from __future__ import annotations
 
 import logging
 from typing import Any, Optional
 
-import httpx
 from sqlalchemy import select, update
 
-from app.core.config import get_settings
 from app.core.database import get_async_session
 from app.models.vault import VaultComplianceScan, VaultDocument
+from app.services.agent_runner import (
+    run_pii_anonymiser,
+    run_completeness,
+    run_sae_classifier,
+    run_schedule_y,
+    run_ich_gcp,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,14 +54,14 @@ AGENT_MAP: dict[str, list[str]] = {
 
 DEFAULT_AGENTS: list[str] = ["completeness"]
 
-# Agent type → actual backend endpoint path (relative to base URL)
-# The agents router is mounted at /api/v1/agents in main.py.
-AGENT_ENDPOINTS: dict[str, str | None] = {
-    "schedule_y":     "/api/v1/agents/schedule-y",
-    "ich_e6r3":       "/api/v1/agents/ich-gcp",
-    "completeness":   "/api/v1/agents/completeness",
-    "pii_anonymiser": "/api/v1/agents/anonymise",
-    "sae_classifier": "/api/v1/agents/classify",
+# Agent type → runner function (direct in-process call, no HTTP)
+# cross_doc requires file uploads and cannot be called via text alone.
+AGENT_RUNNERS: dict[str, Any] = {
+    "schedule_y":     run_schedule_y,
+    "ich_e6r3":       run_ich_gcp,
+    "completeness":   run_completeness,
+    "pii_anonymiser": run_pii_anonymiser,
+    "sae_classifier": run_sae_classifier,
     "cross_doc":      None,  # requires file uploads — not callable via text
 }
 
@@ -143,26 +153,6 @@ def _extract_agent_results(
 
 
 # ---------------------------------------------------------------------------
-# Build the correct request body per agent
-# ---------------------------------------------------------------------------
-
-def _build_request_body(agent_type: str, extracted_text: str, doc_type: str) -> dict[str, Any]:
-    """Build the JSON body matching each agent's Pydantic request model."""
-    if agent_type == "completeness":
-        # CompletenessRequest(document, metadata, document_type)
-        return {
-            "document": extracted_text,
-            "metadata": {"source": "vault_auto_scan"},
-            "document_type": doc_type or "GENERAL",
-        }
-    # All other agents use AgentRequest(document, metadata)
-    return {
-        "document": extracted_text,
-        "metadata": {"source": "vault_auto_scan"},
-    }
-
-
-# ---------------------------------------------------------------------------
 # Main entry point — called as a FastAPI BackgroundTasks job
 # ---------------------------------------------------------------------------
 
@@ -229,7 +219,7 @@ async def trigger_auto_scan(document_id: str, doc_type: Optional[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Run one agent scan via loopback HTTP
+# Run one agent scan — direct in-process Python call
 # ---------------------------------------------------------------------------
 
 async def _run_single_agent_scan(
@@ -239,11 +229,15 @@ async def _run_single_agent_scan(
     extracted_text: str,
     doc_type: str,
 ) -> None:
-    """Call one compliance agent via internal loopback and write results back."""
-    endpoint = AGENT_ENDPOINTS.get(agent_type)
+    """Call one compliance agent directly via Python import and write results back.
+
+    No HTTP, no httpx, no localhost. The agent runner functions live in
+    app/services/agent_runner.py and call Claude in-process.
+    """
+    runner = AGENT_RUNNERS.get(agent_type)
 
     # cross_doc requires file uploads — return graceful failure
-    if endpoint is None:
+    if runner is None:
         await _write_scan_result(
             scan_id=scan_id,
             status="failed",
@@ -256,23 +250,13 @@ async def _run_single_agent_scan(
         )
         return
 
-    settings = get_settings()
-    port = settings.backend_port
-    base_url = f"http://localhost:{port}"
-    body = _build_request_body(agent_type, extracted_text, doc_type)
-
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                f"{base_url}{endpoint}",
-                json=body,
-                headers={"x-anthropic-api-key": "admin-regcheck"},
-            )
-            response.raise_for_status()
-            response_json = response.json()
+        # Call the agent function directly — returns the inner result dict
+        inner_result: dict[str, Any] = await runner(
+            extracted_text=extracted_text,
+            doc_type=doc_type,
+        )
 
-        # AgentResponse wraps the actual output in "result"
-        inner_result = response_json.get("result", {})
         if not isinstance(inner_result, dict):
             inner_result = {}
 
@@ -289,31 +273,16 @@ async def _run_single_agent_scan(
             agent_type, scan_id, score,
         )
 
-    except httpx.TimeoutException:
-        logger.error("agent_scan_timeout agent_type=%s scan_id=%s", agent_type, scan_id)
-        await _write_scan_result(
-            scan_id=scan_id,
-            status="failed",
-            score=None,
-            findings=["Agent timed out after 120 seconds."],
-        )
-    except httpx.HTTPStatusError as e:
+    except Exception as exc:
         logger.error(
-            "agent_scan_http_error agent_type=%s status=%s", agent_type, e.response.status_code,
+            "agent_scan_error agent_type=%s scan_id=%s error=%s",
+            agent_type, scan_id, str(exc),
         )
         await _write_scan_result(
             scan_id=scan_id,
             status="failed",
             score=None,
-            findings=[f"Agent returned HTTP {e.response.status_code}"],
-        )
-    except Exception as e:
-        logger.error("agent_scan_unexpected_error agent_type=%s error=%s", agent_type, str(e))
-        await _write_scan_result(
-            scan_id=scan_id,
-            status="failed",
-            score=None,
-            findings=[str(e)],
+            findings=[f"Agent error: {exc}"],
         )
 
 
