@@ -41,6 +41,20 @@ from app.services.ocr_service import extract_text_from_image_bytes
 from app.services.audio_service import transcribe_audio
 from app.services.case_store import get_case_collection
 from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET
+from app.services.claude_client import (
+    call_claude_agent as call_claude,
+    structure_prompt_input,
+    AgentResponse,
+)
+from app.services.agent_utils import (
+    retrieve_regulatory_context,
+    AGENT_01_SYSTEM_PROMPT,
+    AGENT_03_SYSTEM_PROMPT,
+    AGENT_03_SAE_SYSTEM_PROMPT,
+    AGENT_04_SYSTEM_PROMPT,
+    AGENT_07_SYSTEM_PROMPT,
+    AGENT_08_SYSTEM_PROMPT,
+)
 
 # Patterns that must never appear in logs
 _SENSITIVE_PATTERNS = [
@@ -74,13 +88,6 @@ class QARequest(BaseModel):
     metadata: Optional[dict] = Field(default_factory=dict, description="Optional query metadata")
 
 
-class AgentResponse(BaseModel):
-    agent: str
-    model: str
-    result: Any
-    timestamp: str
-    token_usage: dict
-
 
 class DeAnonymiseRequest(BaseModel):
     text: str = Field(..., description="Pseudonymised text containing replacement tokens")
@@ -95,83 +102,7 @@ class FeedbackRequest(BaseModel):
     timestamp: Optional[str] = ""
 
 
-def structure_prompt_input(text: str, document_type: str = "general", agent_id: str = "") -> str:
-    """
-    Convert raw text input into structured format before sending to Claude.
-    Reduces token cost, improves accuracy, strips unnecessary whitespace.
-    """
-    # Clean the text
-    cleaned = " ".join(text.split())  # normalize whitespace
-    word_count = len(cleaned.split())
-
-    # Truncate if extremely long — keep first 5000 words
-    if word_count > 5000:
-        words = cleaned.split()
-        cleaned = " ".join(words[:5000])
-        truncated = True
-    else:
-        truncated = False
-
-    structured = f"""[INPUT DOCUMENT]
-Document Type: {document_type}
-Word Count: {word_count}{"  [TRUNCATED TO 5000 WORDS]" if truncated else ""}
-Agent: {agent_id}
-
-[CONTENT]
-{cleaned}
-
-[END OF INPUT]"""
-
-    return structured
-
-
-def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
-    """
-    Query ChromaDB regulatory_documents collection for relevant chunks.
-    Returns formatted context string or empty string if retrieval fails.
-    Used by M3, M7, M8 to ground responses in actual regulatory documents.
-    """
-    try:
-
-        chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
-        client = chromadb.PersistentClient(
-            path=chromadb_path,
-            settings=chromadb.Settings(anonymized_telemetry=False)
-        )
-        embedding_fn = embedding_functions.DefaultEmbeddingFunction()
-        collection = client.get_collection(
-            name="regulatory_documents",
-            embedding_function=embedding_fn
-        )
-
-        count = collection.count()
-        if count == 0:
-            logger.warning("RAG: regulatory_documents collection is empty")
-            return ""
-
-        actual_n = min(n_results, count)
-        results = collection.query(
-            query_texts=[query],
-            n_results=actual_n
-        )
-
-        if not results or not results["documents"] or not results["documents"][0]:
-            return ""
-
-        # Format retrieved chunks with source metadata
-        chunks = []
-        for i, doc in enumerate(results["documents"][0]):
-            metadata = results["metadatas"][0][i] if results.get("metadatas") else {}
-            source = metadata.get("short_name", metadata.get("title", "Regulatory Document"))
-            chunks.append(f"[Source: {source}]\n{doc}")
-
-        context = "\n\n---\n\n".join(chunks)
-        logger.info(f"RAG: retrieved {len(chunks)} chunks for query: {query[:60]}...")
-        return context
-
-    except Exception as e:
-        logger.warning(f"RAG retrieval failed silently: {e}")
-        return ""
+# structure_prompt_input, retrieve_regulatory_context: imported from app.services.agent_utils
 
 
 @router.post("/extract-text")
@@ -247,159 +178,13 @@ async def extract_text_from_file(
         )
 
 
-def _utc_timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat()
+# _utc_timestamp, _parse_json_block, _attach_response_metadata, call_claude:
+# all imported from app.services.agent_utils
 
 
-def _parse_json_block(raw_text: str) -> Any:
-    text = raw_text.strip()
-    if text.startswith("```"):
-        parts = text.split("```")
-        if len(parts) >= 2:
-            text = parts[1]
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Model did not return valid JSON: {exc}"
-        )
-
-
-def _attach_response_metadata(parsed: Any, model: str, has_rag_context: bool) -> Any:
-    if not isinstance(parsed, dict):
-        return parsed
-
-    try:
-        try:
-            # Re-verify in case it was passed as a local variable name in some contexts
-            # but usually we rely on the has_rag_context boolean argument
-            has_context = bool(has_rag_context)
-        except NameError:
-            has_context = False
-
-        parsed["_metadata"] = {
-            "confidence_level": "HIGH" if has_context else "MEDIUM",
-            "confidence_reason": (
-                "Based on retrieved official regulatory documents"
-                if has_context
-                else "Based on Claude's training knowledge of regulations"
-            ),
-            "reviewed_by": "AI — requires qualified RA professional review",
-            "generated_at": datetime.utcnow().isoformat(),
-            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-        }
-    except Exception as meta_err:
-        logger.warning(f"Could not set metadata: {meta_err}")
-        parsed["_metadata"] = {
-            "confidence_level": "MEDIUM",
-            "confidence_reason": "Based on Claude's training knowledge of regulations",
-            "reviewed_by": "AI — requires qualified RA professional review",
-            "generated_at": datetime.utcnow().isoformat(),
-            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-        }
-    return parsed
-
-
-def call_claude(
-    agent_name: str,
-    model: str,
-    system_prompt: str,
-    user_content: str,
-    api_key: str,
-    max_tokens: int = 4096,
-    has_rag_context: bool = False,
-) -> AgentResponse:
-    """Shared Anthropic caller for the v1 agents router.
-
-    Uses the caller-supplied ``api_key`` so that each public user's own
-    Anthropic credits are consumed rather than the server key.
-    """
-    admin_password = "admin-regcheck"
-    if api_key == admin_password:
-        server_key = os.getenv("ANTHROPIC_API_KEY")
-        if not server_key:
-            raise HTTPException(status_code=500, detail="Server Anthropic API key missing.")
-        client = anthropic.Anthropic(api_key=server_key)
-    else:
-        if not api_key:
-            raise HTTPException(
-                status_code=401,
-                detail="No Anthropic API key provided. Add your key via the ⚙ Settings panel in the app.",
-            )
-        client = anthropic.Anthropic(api_key=api_key)
-    try:
-        response = client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_content}],
-        )
-        raw_text = response.content[0].text.strip()
-        parsed = _attach_response_metadata(
-            _parse_json_block(raw_text),
-            model,
-            has_rag_context
-        )
-        return AgentResponse(
-            agent=agent_name,
-            model=model,
-            result=parsed,
-            timestamp=_utc_timestamp(),
-            token_usage={
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
-            },
-        )
-    except anthropic.AuthenticationError:
-        logger.error("Anthropic auth failed for %s", agent_name)
-        raise HTTPException(status_code=401, detail="Anthropic API key is invalid. Please check and update your key in Settings.")
-    except anthropic.RateLimitError:
-        logger.warning("Anthropic rate limit hit for %s", agent_name)
-        raise HTTPException(status_code=429, detail="Rate limit reached - retry after a moment")
-    except anthropic.APIError as exc:
-        logger.error("Anthropic API error in %s: %s", agent_name, exc)
-        raise HTTPException(status_code=502, detail=f"Anthropic API error: {exc}")
-    except Exception as exc:
-        logger.error("Unexpected error in %s: %s", agent_name, exc)
-        raise HTTPException(status_code=500, detail=f"Agent error: {exc}")
-
-
-AGENT_01_SYSTEM_PROMPT = """You are the RegCheck-India PII and PHI anonymisation agent.
-Detect personally identifiable information in Indian pharmaceutical and clinical documents.
-Keep clinical and regulatory meaning intact. Replace patient identifiers, investigator identifiers,
-institution details, and hard IDs with placeholders.
-
-You MUST return a JSON object with EXACTLY this structure — no extra fields, no renamed fields:
-
-{
-  "anonymised_content": "string with placeholders",
-  "entities_detected": [
-    {"entity_type": "string", "value": "string", "category": "PII|PHI", "position": "string"}
-  ],
-  "entities_anonymised": 8,
-  "compliance_frameworks": ["string", "string"],
-  "audit_log": {
-    "timestamp": "ISO string",
-    "mode": "string",
-    "entities_processed": 8,
-    "anonymisation_method": "string",
-    "status": "COMPLETED|FAILED"
-  },
-  "anonymisation_report": {
-    "summary": "string",
-    "pii_removed": 0,
-    "phi_removed": 0,
-    "clinical_integrity": "string",
-    "notes": "string"
-  }
-}
-
-Return ONLY valid JSON. No markdown. No explanation. No extra fields.
-"""
+# AGENT_01_SYSTEM_PROMPT through AGENT_08_SYSTEM_PROMPT:
+# imported from app.services.agent_utils (AGENT_01/03/03_SAE/04/07/08)
+# AGENT_02/05/06 remain defined below for agents not used in auto-scan.
 
 AGENT_02_SYSTEM_PROMPT = """You are the RegCheck-India document summarisation agent.
 Summarise pharmaceutical regulatory filings, clinical trial reports, or safety narratives into structured reviewer-first packets.
@@ -476,142 +261,8 @@ Return EXACTLY this JSON structure:
 }
 """
 
-AGENT_03_SYSTEM_PROMPT = """You are the RegCheck-India completeness assessment agent.
-Evaluate whether a pharmaceutical submission is complete against CDSCO, Schedule Y, NDCTR 2019, and ICH requirements.
-Return JSON only with: document_type, overall_status, completeness_score, sections_present, sections_missing,
-data_gaps, submission_readiness, conditions.
 
-CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
-1. Return ONLY valid JSON — no markdown, no code fences (no ```json), no explanation text before or after
-2. Use EXACTLY the field names shown below — no renaming, no adding extra fields
-3. Arrays must always be arrays — never return an object where an array is expected
-4. Objects must always be objects — never return an array where an object is expected
-5. String fields must always be strings — never return null, use empty string "" instead
-6. Number fields must always be numbers — never return a string like "8" where 8 is expected
-7. Boolean fields must be true or false — never return "yes", "no", "true" as a string
-8. If uncertain about a value use a sensible default — never omit a required field
-
-Return EXACTLY this JSON structure:
-{
-  "overall_completeness_score": 0.0,
-  "completeness_percentage": "string — e.g. 85%",
-  "missing_sections": ["string", "string"],
-  "present_sections": ["string", "string"],
-  "incomplete_sections": ["string", "string"],
-  "critical_gaps": ["string", "string"],
-  "minor_gaps": ["string", "string"],
-  "regulatory_requirements_met": {
-    "schedule_y": true,
-    "ich_e6": true,
-    "cdsco": true,
-    "icmr": true
-  },
-  "recommendations": ["string", "string"],
-  "submission_readiness": "READY|NEEDS_REVISION|NOT_READY",
-  "priority_actions": ["string", "string"],
-  "audit_log": {
-    "timestamp": "ISO datetime string",
-    "sections_checked": 0,
-    "sections_passed": 0,
-    "status": "COMPLETED|FAILED"
-  }
-}
-"""
-
-AGENT_03_SAE_SYSTEM_PROMPT = """You are the RegCheck-India SAE Report Completeness Assessment agent.
-Evaluate Serious Adverse Event (SAE) reports for completeness and consistency against NDCTR 2019 Rule 19, ICH E2A, CDSCO pharmacovigilance guidelines, and Schedule Y requirements.
-
-CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
-1. Return ONLY valid JSON — no markdown, no code fences, no explanation text before or after
-2. Use EXACTLY the field names shown below — no renaming, no adding extra fields
-3. Arrays must always be arrays — never return an object where an array is expected
-4. Objects must always be objects — never return an array where an object is expected
-5. String fields must always be strings — never return null, use empty string instead
-6. Boolean fields must be true or false — never return "yes", "no", "true" as string
-7. If uncertain about a value use a sensible default — never omit a required field
-
-SAE MANDATORY FIELDS per NDCTR 2019 Rule 19 and ICH E2A:
-- Patient initials or identifier
-- Age and gender
-- Date of adverse event onset
-- Date of adverse event reporting to sponsor
-- Description of adverse event
-- Seriousness criteria met (death/disability/hospitalisation/life-threatening/congenital anomaly/other)
-- Study drug name, dose, route, frequency
-- Date of last dose before event
-- Causality assessment by investigator
-- Action taken with study drug
-- Outcome of adverse event
-- Investigator name and signature
-- Site name and address
-- Protocol number and study title
-- Ethics committee name
-- Date of IEC notification
-- Narrative description
-
-Return EXACTLY this JSON structure:
-{
-  "document_type": "SAE_REPORT",
-  "overall_completeness_score": 0.0,
-  "completeness_percentage": "string — e.g. 85%",
-  "sae_classification": {
-    "is_serious": true,
-    "seriousness_criteria_identified": ["string"],
-    "reporting_category": "SUSAR|SAE|Non-serious AE",
-    "expedited_reporting_required": true,
-    "reporting_timeline_days": 0
-  },
-  "mandatory_fields": [
-    {
-      "field_name": "string — mandatory field name",
-      "regulation": "string — NDCTR 2019 Rule X or ICH E2A Section Y",
-      "status": "PRESENT|MISSING|INCOMPLETE|INCONSISTENT",
-      "value_found": "string — what was found, empty if missing",
-      "issue": "string — specific problem if not PRESENT, empty if PRESENT"
-    }
-  ],
-  "missing_fields": ["string"],
-  "incomplete_fields": ["string"],
-  "inconsistent_fields": [
-    {
-      "field": "string",
-      "issue": "string — what is inconsistent"
-    }
-  ],
-  "critical_gaps": ["string"],
-  "timeline_compliance": {
-    "event_date_present": true,
-    "report_date_present": true,
-    "sponsor_notification_date_present": true,
-    "timeline_calculable": true,
-    "days_to_report": 0,
-    "timeline_compliant": true,
-    "timeline_issue": "string — if any"
-  },
-  "causality_assessment": {
-    "present": true,
-    "method_used": "string — WHO-UMC/Naranjo/Other",
-    "assessment_value": "string",
-    "adequate": true,
-    "issues": "string"
-  },
-  "narrative_quality": {
-    "present": true,
-    "word_count": 0,
-    "adequate_detail": true,
-    "missing_elements": ["string"]
-  },
-  "recommendations": ["string"],
-  "submission_readiness": "READY|NEEDS_REVISION|NOT_READY",
-  "regulatory_risk": "LOW|MEDIUM|HIGH|CRITICAL",
-  "audit_log": {
-    "timestamp": "ISO datetime string",
-    "fields_checked": 0,
-    "fields_present": 0,
-    "status": "COMPLETED|FAILED"
-  }
-}
-"""
+# AGENT_03_SYSTEM_PROMPT, AGENT_03_SAE_SYSTEM_PROMPT: imported from app.services.agent_utils
 
 
 class CompletenessRequest(BaseModel):
@@ -619,78 +270,9 @@ class CompletenessRequest(BaseModel):
     metadata: Optional[dict] = Field(default_factory=dict, description="Optional document metadata")
     document_type: Optional[str] = Field("GENERAL", description="Type of document (GENERAL, SAE_REPORT, PROTOCOL, ICF)")
 
-AGENT_04_SYSTEM_PROMPT = """You are the RegCheck-India case classification agent.
-Classify serious adverse event narratives using ICH E2A seriousness, WHO-UMC causality,
-and Indian pharmacovigilance timelines. Return JSON only with:
-primary_category, secondary_categories, confidence, reporting_timeline, priority_score,
-classification_rationale, causality, product_relatedness, requires_expedited_reporting,
-flags, seriousness_criteria.
 
-CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
-1. Return ONLY valid JSON — no markdown, no code fences (no ```json), no explanation text before or after
-2. Use EXACTLY the field names shown below — no renaming, no adding extra fields
-3. Arrays must always be arrays — never return an object where an array is expected
-4. Objects must always be objects — never return an array where an object is expected
-5. String fields must always be strings — never return null, use empty string "" instead
-6. Number fields must always be numbers — never return a string like "8" where 8 is expected
-7. Boolean fields must be true or false — never return "yes", "no", "true" as a string
-8. seriousness_criteria MUST always be an object with boolean values — never an array
-9. If uncertain about a value use a sensible default — never omit a required field
+# AGENT_04_SYSTEM_PROMPT: imported from app.services.agent_utils
 
-Return EXACTLY this JSON structure:
-{
-  "primary_category": "string",
-  "secondary_categories": ["string", "string"],
-  "confidence": 0.0,
-  "priority_score": 0.0,
-  "requires_expedited_reporting": true,
-  "classification_rationale": "string",
-  "seriousness_criteria": {
-    "life_threatening": false,
-    "hospitalization": false,
-    "icu_admission": false,
-    "requires_intervention_for_life": false,
-    "unexpected_severity": false
-  },
-  "causality": {
-    "assessment": "string — PROBABLE|POSSIBLE|UNLIKELY|UNRELATED",
-    "who_umc_category": "string",
-    "rationale": "string",
-    "temporal_relationship": "string",
-    "dose_response": "string",
-    "dechallenge": "string",
-    "alternative_causes": "string"
-  },
-  "reporting_timeline": {
-    "event_date": "string",
-    "sponsor_notification": "string",
-    "timeline_status": "COMPLIANT|NON_COMPLIANT|PENDING",
-    "regulatory_deadline_india": "string",
-    "days_to_deadline": 0,
-    "urgency_note": "string"
-  },
-  "product_relatedness": {
-    "related_to_study_drug": false,
-    "relationship_strength": "string",
-    "safety_signal": "string",
-    "signal_severity": "LOW|MEDIUM|HIGH|CRITICAL"
-  },
-  "flags": ["string", "string"],
-  "regulatory_actions_required": ["string", "string"],
-  "case_quality_assessment": {
-    "documentation_completeness": "string",
-    "causality_evidence": "string",
-    "temporal_data": "string",
-    "follow_up_status": "string",
-    "data_integrity": "string"
-  },
-  "audit_log": {
-    "timestamp": "ISO datetime string",
-    "status": "COMPLETED|FAILED",
-    "study_drug": "string — extract the study drug name from the narrative if mentioned, empty string if not found"
-  }
-}
-"""
 
 AGENT_05_SYSTEM_PROMPT = """You are the RegCheck-India inspection report generation agent.
 Turn inspection findings into a structured CDSCO-style report with observations, CAPA, and compliance rating.
@@ -795,110 +377,8 @@ Return EXACTLY this JSON structure:
 }
 """
 
-AGENT_07_SYSTEM_PROMPT = """You are the RegCheck-India Schedule Y and CDSCO compliance agent.
-Perform a deep compliance review against Schedule Y and NDCTR 2019.
-Return JSON only with: compliance_evaluation, findings, compliant_areas, priority_actions,
-estimated_remediation_effort.
 
-CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
-1. Return ONLY valid JSON — no markdown, no code fences (no ```json), no explanation text before or after
-2. Use EXACTLY the field names shown below — no renaming, no adding extra fields
-3. Arrays must always be arrays — never return an object where an array is expected
-4. Objects must always be objects — never return an array where an object is expected
-5. String fields must always be strings — never return null, use empty string "" instead
-6. Number fields must always be numbers — never return a string like "8" where 8 is expected
-7. Boolean fields must be true or false — never return "yes", "no", "true" as a string
-8. compliance_checklist MUST always be an array of objects — never a plain object
-9. If uncertain about a value use a sensible default — never omit a required field
-
-Return EXACTLY this JSON structure:
-{
-  "overall_compliance_status": "COMPLIANT|PARTIAL|NON_COMPLIANT",
-  "compliance_score": 0.0,
-  "compliance_percentage": "string — e.g. 78%",
-  "compliance_checklist": [
-    {
-      "requirement": "string — Schedule Y requirement name",
-      "section": "string — e.g. Schedule Y Part I Section 2",
-      "status": "COMPLIANT|PARTIAL|NON_COMPLIANT|NOT_APPLICABLE",
-      "finding": "string — what was found",
-      "corrective_action": "string — what needs to be done"
-    }
-  ],
-  "critical_non_compliances": ["string", "string"],
-  "major_non_compliances": ["string", "string"],
-  "minor_non_compliances": ["string", "string"],
-  "strengths": ["string", "string"],
-  "recommendations": ["string", "string"],
-  "submission_readiness": "READY|NEEDS_REVISION|NOT_READY",
-  "regulatory_risk": "LOW|MEDIUM|HIGH|CRITICAL",
-  "audit_log": {
-    "timestamp": "ISO datetime string",
-    "requirements_checked": 0,
-    "requirements_passed": 0,
-    "status": "COMPLETED|FAILED"
-  }
-}
-"""
-
-AGENT_08_SYSTEM_PROMPT = """You are the RegCheck-India ICH E6(R3) GCP compliance agent.
-Assess the document against ICH E6(R3) and identify R3-specific gaps, inspection risks, and remediation.
-Return JSON only with: gcp_compliance, findings, r3_gaps, strengths, inspection_readiness,
-inspection_risk_areas.
-
-CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
-1. Return ONLY valid JSON — no markdown, no code fences (no ```json), no explanation text before or after
-2. Use EXACTLY the field names shown below — no renaming, no adding extra fields
-3. Arrays must always be arrays — never return an object where an array is expected
-4. Objects must always be objects — never return an array where an object is expected
-5. String fields must always be strings — never return null, use empty string "" instead
-6. Number fields must always be numbers — never return a string like "8" where 8 is expected
-7. Boolean fields must be true or false — never return "yes", "no", "true" as a string
-8. gcp_principles MUST always be an array of objects — never a plain object
-9. If uncertain about a value use a sensible default — never omit a required field
-
-Return EXACTLY this JSON structure:
-{
-  "overall_gcp_status": "COMPLIANT|PARTIAL|NON_COMPLIANT",
-  "gcp_score": 0.0,
-  "gcp_percentage": "string — e.g. 82%",
-  "ich_version_assessed": "ICH E6(R3)",
-  "gcp_principles": [
-    {
-      "principle": "string — GCP principle name",
-      "ich_reference": "string — e.g. ICH E6(R3) Section 2.1",
-      "status": "COMPLIANT|PARTIAL|NON_COMPLIANT|NOT_APPLICABLE",
-      "observation": "string — what was assessed",
-      "corrective_action": "string — what needs to be done if non-compliant"
-    }
-  ],
-  "critical_deviations": ["string", "string"],
-  "major_deviations": ["string", "string"],
-  "minor_deviations": ["string", "string"],
-  "quality_tolerance_limits": {
-    "defined": false,
-    "monitored": false,
-    "comment": "string"
-  },
-  "risk_based_monitoring": {
-    "implemented": false,
-    "adequacy": "string",
-    "comment": "string"
-  },
-  "essential_documents": {
-    "status": "COMPLETE|INCOMPLETE|NOT_ASSESSED",
-    "missing_documents": ["string", "string"],
-    "comment": "string"
-  },
-  "recommendations": ["string", "string"],
-  "audit_log": {
-    "timestamp": "ISO datetime string",
-    "principles_checked": 0,
-    "principles_passed": 0,
-    "status": "COMPLETED|FAILED"
-  }
-}
-"""
+# AGENT_07_SYSTEM_PROMPT, AGENT_08_SYSTEM_PROMPT: imported from app.services.agent_utils
 
 
 @router.get("/anonymise/health", summary="Agent 01 - Anonymise Health Check")

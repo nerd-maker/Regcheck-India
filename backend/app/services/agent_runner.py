@@ -21,12 +21,18 @@ import logging
 import os
 from typing import Any
 
-# Re-use the shared utilities from agents_router.  They are plain functions
-# (no FastAPI dependencies) so this import is safe.
-from agents_router import (
-    call_claude,
+# Import shared utilities from the leaf module app.services.agent_utils.
+# This breaks the circular import that would occur if we imported from
+# agents_router.py (which itself imports from app/services/).
+from app.services.claude_client import (
+    call_claude_agent as call_claude,
     structure_prompt_input,
+    AgentResponse,
+)
+from app.services.agent_utils import (
     retrieve_regulatory_context,
+    MODEL_HAIKU,
+    MODEL_SONNET,
     AGENT_01_SYSTEM_PROMPT,
     AGENT_03_SYSTEM_PROMPT,
     AGENT_03_SAE_SYSTEM_PROMPT,
@@ -34,7 +40,6 @@ from agents_router import (
     AGENT_07_SYSTEM_PROMPT,
     AGENT_08_SYSTEM_PROMPT,
 )
-from app.services.claude_client import MODEL_HAIKU, MODEL_SONNET
 
 logger = logging.getLogger(__name__)
 
