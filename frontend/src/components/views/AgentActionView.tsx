@@ -17,6 +17,7 @@ import {
   getStoredKey,
   getRawStoredKey,
   extractTextFromFile,
+  exportAgentReportAsWord,
 } from '@/services/api'
 import { GapRemediationPanel } from '@/components/GapRemediationPanel'
 import { parseGapsFromResult } from '@/utils/parseGaps'
@@ -103,6 +104,8 @@ export default function AgentActionView({ agentId }: { agentId: string }) {
   const [result, setResult] = useState<ResultState>({ kind: 'idle' })
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [extracting, setExtracting] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = async (
@@ -135,6 +138,7 @@ export default function AgentActionView({ agentId }: { agentId: string }) {
   }, [agentId, consumePrefilledInput])
 
   const run = async () => {
+    setExportError(null)
     setResult({ kind: 'loading', elapsedMs: 0 })
     const startedAt = Date.now()
     const timer = setInterval(() => {
@@ -178,6 +182,22 @@ export default function AgentActionView({ agentId }: { agentId: string }) {
       setResult({ kind: 'error', message: e?.message || 'Request failed.' })
     } finally {
       clearInterval(timer)
+    }
+  }
+
+  const handleExportReport = async () => {
+    if (result.kind !== 'ok') return
+    setExporting(true)
+    setExportError(null)
+    const agentNameClean = agent.title.toLowerCase().replace(/\s+/g, '-')
+    const dateClean = new Date().toISOString().split('T')[0]
+    const filename = `${agentNameClean}-${dateClean}.docx`
+    try {
+      await exportAgentReportAsWord(result.data, filename)
+    } catch (err: any) {
+      setExportError(err?.message || 'Failed to export report.')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -352,21 +372,22 @@ export default function AgentActionView({ agentId }: { agentId: string }) {
 
         {/* Result */}
         <div className="rc-card">
-          <div className="rc-card-header">
+          <div className="rc-card-header" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             <span>Result</span>
+            {exportError && (
+              <span style={{ fontSize: 11, color: 'var(--rc-rejected)', marginLeft: 10 }}>
+                {exportError}
+              </span>
+            )}
             {result.kind === 'ok' && (
               <button
                 className="rc-btn rc-btn-ghost rc-btn-sm"
-                onClick={() => {
-                  const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url; a.download = `${agent.id}-${Date.now()}.json`; a.click()
-                  URL.revokeObjectURL(url)
-                }}
+                onClick={handleExportReport}
+                disabled={exporting}
                 data-testid="agent-export-btn"
               >
-                <i className="ti ti-file-export"/> Export JSON
+                <i className={exporting ? "ti ti-loader-2 spin" : "ti ti-file-export"}/>{' '}
+                {exporting ? 'Generating...' : 'Export Report'}
               </button>
             )}
           </div>

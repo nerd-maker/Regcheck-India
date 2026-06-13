@@ -245,6 +245,8 @@ app.include_router(agent_runs_router, tags=["Agent Runs"])
 app.include_router(workspace_router, tags=["Workspace"])
 from app.routers.vault_documents import router as vault_documents_router
 app.include_router(vault_documents_router, prefix="/api/v1")
+from app.routers.export_router import router as export_router
+app.include_router(export_router, prefix="/api/v1")
 
 # Create upload directory
 UPLOAD_DIR = Path(settings.upload_dir)

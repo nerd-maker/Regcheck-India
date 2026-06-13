@@ -520,3 +520,34 @@ export async function fetchVaultDocumentScans(
   return data
 }
 
+
+export async function exportAgentReportAsWord(
+  agentResponse: Record<string, unknown>,
+  filename: string
+): Promise<void> {
+  const res = await fetch('/api/regcheck/export/word', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      agent_response: agentResponse,
+      filename,
+    }),
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}))
+    throw new Error(error.detail ?? `Export failed: ${res.status}`)
+  }
+
+  // Trigger browser file download
+  const blob = await res.blob()
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+

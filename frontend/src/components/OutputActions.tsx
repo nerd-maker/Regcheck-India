@@ -5,6 +5,7 @@ import PrintableReport from '@/components/PrintableReport';
 import { pinnedResultStore } from '@/store/pinnedResult';
 import SendToModule from '@/components/SendToModule';
 import CompareRuns from '@/components/CompareRuns';
+import { exportAgentReportAsWord } from '@/services/api';
 
 interface OutputActionsProps {
   result: unknown;
@@ -27,6 +28,8 @@ export default function OutputActions({
 }: OutputActionsProps) {
   const [copied, setCopied] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const handleCopy = async () => {
     try {
@@ -43,14 +46,26 @@ export default function OutputActions({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleExportJSON = () => {
-    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${moduleName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExportReport = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const dummyResponse = {
+        agent: moduleName,
+        result: result,
+        timestamp: new Date().toISOString(),
+        model: 'Unknown Model',
+        token_usage: {}
+      };
+      const agentNameClean = moduleName.toLowerCase().replace(/\s+/g, '-');
+      const dateClean = new Date().toISOString().split('T')[0];
+      const filename = `${agentNameClean}-${dateClean}.docx`;
+      await exportAgentReportAsWord(dummyResponse as any, filename);
+    } catch (err: any) {
+      setExportError(err?.message || 'Failed to export report.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleExportText = () => {
@@ -144,16 +159,26 @@ export default function OutputActions({
         TXT
       </button>
 
-      {/* Export JSON */}
+      {/* Export Report */}
       <button
-        onClick={handleExportJSON}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-slate-300 transition-colors"
+        onClick={handleExportReport}
+        disabled={exporting}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-slate-300 transition-colors disabled:opacity-50"
       >
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-        JSON
+        {exporting ? (
+          <i className="ti ti-loader-2 spin w-3 h-3 flex items-center justify-center" />
+        ) : (
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        )}
+        {exporting ? 'Generating...' : 'Export Report'}
       </button>
+      {exportError && (
+        <span className="text-[10px] text-red-400 ml-1">
+          {exportError}
+        </span>
+      )}
 
       {/* Print / PDF */}
       <PrintableReport

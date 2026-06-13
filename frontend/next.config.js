@@ -14,6 +14,8 @@ const nextConfig = {
     async rewrites() {
         return [
             // ── AI Agents (must come BEFORE workspace routes) ──────────
+            { source: '/api/regcheck/export/word',
+              destination: 'https://regcheck-india.onrender.com/api/v1/export/word' },
             { source: '/api/regcheck/anonymise',
               destination: 'https://regcheck-india.onrender.com/api/v1/agents/anonymise' },
             { source: '/api/regcheck/summarise',
