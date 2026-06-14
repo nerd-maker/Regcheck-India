@@ -50,6 +50,7 @@ from routers.workspace import router as workspace_router
 from db import init_all_tables
 from seed import seed as seed_db
 from app.services.storage_service import verify_storage_bucket_exists
+from scripts.seed_submissions import seed_demo_submissions
 
 logger = logging.getLogger(__name__)
 _APP_START_TIME = time_module.time()
@@ -125,6 +126,19 @@ async def lifespan(app: FastAPI):
     await init_all_tables()
     await init_agent_runs_table()
     await verify_storage_bucket_exists()
+
+    # Seeding demo submissions automatically on startup
+    if os.getenv("DATABASE_URL"):
+        from db import get_conn
+        try:
+            conn = await get_conn()
+            try:
+                await seed_demo_submissions(conn)
+            finally:
+                await conn.close()
+        except Exception as e:
+            logger.error(f"Failed to seed demo submissions on startup: {e}", exc_info=True)
+
     # Seed mockData equivalents on first run (ON CONFLICT DO NOTHING)
     await seed_db()
     yield
