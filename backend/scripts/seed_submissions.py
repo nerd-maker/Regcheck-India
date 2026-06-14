@@ -75,9 +75,13 @@ async def seed() -> None:
 
     conn = await get_conn()
     try:
-        count = await conn.fetchval("SELECT COUNT(*) FROM submissions")
+        # Clean up legacy submissions
+        deleted_status = await conn.execute("DELETE FROM submissions WHERE number LIKE 'RC-SUB-%'")
+        print(f"Cleaned up legacy submissions status: {deleted_status}")
+
+        count = await conn.fetchval("SELECT COUNT(*) FROM submissions WHERE number LIKE 'SUB-%'")
         if count > 0:
-            print(f"Skipping seed: submissions table already contains {count} records.")
+            print(f"Skipping seed: submissions table already contains {count} real SUB-format records.")
             return
 
         print(f"Seeding {len(DEMO_SUBMISSIONS)} demo submissions...")

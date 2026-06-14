@@ -178,28 +178,28 @@ async def seed():
     conn = await get_conn()
     seeded = 0
     try:
-        # Submissions
-        for s in SUBMISSIONS:
-            p = PEOPLE[s['owner_id']]
-            result = await conn.execute("""
-                INSERT INTO submissions (
-                    id, number, name, type, product, indication, state,
-                    state_label, ha_authority, phase, owner_id, owner_name,
-                    owner_initials, owner_role, target_submit_date,
-                    risk_level, documents, open_gaps, compliance_score,
-                    frameworks, application_id, updated_at
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-                          $15,$16,$17,$18,$19,$20,$21,$22)
-                ON CONFLICT (id) DO NOTHING
-            """, s['id'], s['number'], s['name'], s['type'], s['product'],
-                s['indication'], s['state'], s.get('state_label'),
-                s['ha_authority'], s['phase'], p['id'], p['name'],
-                p['initials'], p['role'], s.get('target_submit_date'),
-                s['risk_level'], s['documents'], s['open_gaps'],
-                s['compliance_score'], json.dumps(s['frameworks']),
-                s.get('application_id'), s['updated_at'])
-            if result == 'INSERT 0 1':
-                seeded += 1
+        # Submissions (Legacy mockup seeding commented out for Sprint 3)
+        # for s in SUBMISSIONS:
+        #     p = PEOPLE[s['owner_id']]
+        #     result = await conn.execute("""
+        #         INSERT INTO submissions (
+        #             id, number, name, type, product, indication, state,
+        #             state_label, ha_authority, phase, owner_id, owner_name,
+        #             owner_initials, owner_role, target_submit_date,
+        #             risk_level, documents, open_gaps, compliance_score,
+        #             frameworks, application_id, updated_at
+        #         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+        #                   $15,$16,$17,$18,$19,$20,$21,$22)
+        #         ON CONFLICT (id) DO NOTHING
+        #     """, s['id'], s['number'], s['name'], s['type'], s['product'],
+        #         s['indication'], s['state'], s.get('state_label'),
+        #         s['ha_authority'], s['phase'], p['id'], p['name'],
+        #         p['initials'], p['role'], s.get('target_submit_date'),
+        #         s['risk_level'], s['documents'], s['open_gaps'],
+        #         s['compliance_score'], json.dumps(s['frameworks']),
+        #         s.get('application_id'), s['updated_at'])
+        #     if result == 'INSERT 0 1':
+        #         seeded += 1
 
         # Documents
         for d in DOCUMENTS:
