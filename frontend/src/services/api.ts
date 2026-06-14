@@ -551,3 +551,67 @@ export async function exportAgentReportAsWord(
   URL.revokeObjectURL(url)
 }
 
+
+// ─── Analytics / Dashboard & Audit (Sprint 4) ───────────────────────────────
+
+export async function fetchDashboardKPIs(): Promise<any> {
+  const { data } = await axios.get(
+    `${PROXY_BASE}/analytics/dashboard-kpis`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      timeout: 10000,
+    }
+  );
+  return data;
+}
+
+export async function fetchComplianceByAgent(): Promise<any> {
+  const { data } = await axios.get(
+    `${PROXY_BASE}/analytics/compliance-by-agent`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      timeout: 10000,
+    }
+  );
+  return data;
+}
+
+export async function fetchSubmissionThroughput(): Promise<any> {
+  const { data } = await axios.get(
+    `${PROXY_BASE}/analytics/submission-throughput`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      timeout: 10000,
+    }
+  );
+  return data;
+}
+
+export async function fetchRecentActivity(limit: number = 20): Promise<any> {
+  const { data } = await axios.get(
+    `${PROXY_BASE}/analytics/recent-activity`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      params: { limit },
+      timeout: 10000,
+    }
+  );
+  return data;
+}
+
+export async function fetchVaultAuditTrail(workspaceId?: string): Promise<any> {
+  const params: Record<string, string> = {};
+  if (workspaceId) params.workspace_id = workspaceId;
+
+  const { data } = await axios.get(
+    `${PROXY_BASE}/vault/documents/audit-trail`,
+    {
+      headers: { 'x-anthropic-api-key': getStoredKey() },
+      params,
+      timeout: 10000,
+    }
+  );
+  return data;
+}
+
+

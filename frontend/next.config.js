@@ -51,9 +51,15 @@ const nextConfig = {
             { source: '/api/regcheck/agent-runs/:path*',
               destination: 'https://regcheck-india.onrender.com/api/v1/agent-runs/:path*' },
 
+            // Analytics / Dashboard (Sprint 4)
+            { source: '/api/regcheck/analytics/:path*',
+              destination: `${REGCHECK_API_BASE}/api/v1/analytics/:path*` },
+
             // Document Vault Engine (most-specific first)
             { source: '/api/regcheck/vault/documents/upload',
               destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/upload` },
+            { source: '/api/regcheck/vault/documents/audit-trail',
+              destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/audit-trail` },
             { source: '/api/regcheck/vault/documents/:documentId/download-url',
               destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/:documentId/download-url` },
             { source: '/api/regcheck/vault/documents/:documentId/state',

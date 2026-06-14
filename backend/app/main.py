@@ -265,6 +265,8 @@ from app.routers.submissions_router import router as submissions_router
 app.include_router(submissions_router, prefix="/api/v1")
 from app.routers.correspondence_router import router as correspondence_router
 app.include_router(correspondence_router, prefix="/api/v1")
+from app.routers.analytics_router import router as analytics_router
+app.include_router(analytics_router, prefix="/api/v1")
 
 
 # Create upload directory

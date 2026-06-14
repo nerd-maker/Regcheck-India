@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { COMPLIANCE_SCORES } from '@/lib/mockData'
+// SPRINT4: removed mockup
+// import { COMPLIANCE_SCORES } from '@/lib/mockData'
 import { useSubmissions } from '@/hooks/useWorkspaceData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
+import { fetchComplianceByAgent, fetchSubmissionThroughput } from '@/services/api'
 
 
 const RANGES = [
@@ -31,13 +33,75 @@ export default function ReportsView() {
 
   const { data: submissions, loading } = useSubmissions()
 
-  const factor = range === '7' ? 0.30 : range === '30' ? 1 : range === '90' ? 2.4 : range === 'ytd' ? 4.2 : 6.0
-  const throughput = {
-    Submitted: Math.round(14 * factor),
-    Approved:  Math.round(9 * factor),
-    Deficiency:Math.round(3 * factor),
-    'In Review':Math.round(6 * factor),
-  }
+  const [frameworks, setFrameworks] = useState<any[]>([])
+  const [throughputData, setThroughputData] = useState<any>(null)
+  const [reportsLoading, setReportsLoading] = useState(true)
+
+  useEffect(() => {
+    setReportsLoading(true)
+    Promise.all([
+      fetchComplianceByAgent().catch(() => ({ frameworks: [] })),
+      fetchSubmissionThroughput().catch(() => ({ monthly_data: [] }))
+    ]).then(([complianceRes, throughputRes]) => {
+      setFrameworks(complianceRes.frameworks || [])
+      
+      const monthly = throughputRes.monthly_data || []
+      let totalSubmitted = 0
+      let totalApproved = 0
+      let totalInProgress = 0
+      
+      monthly.forEach((m: any) => {
+        totalSubmitted += m.total || 0
+        totalApproved += m.approved || 0
+        totalInProgress += m.in_progress || 0
+      })
+      
+      setThroughputData({
+        submitted: totalSubmitted,
+        approved: totalApproved,
+        deficiency: 0,
+        inReview: totalInProgress
+      })
+    }).finally(() => {
+      setReportsLoading(false)
+    })
+  }, [])
+
+  const throughput = useMemo(() => {
+    if (!throughputData) {
+      return {
+        Submitted: 0,
+        Approved: 0,
+        Deficiency: 0,
+        'In Review': 0,
+      }
+    }
+    const factor = range === '7' ? 0.25 : range === '30' ? 1.0 : range === '90' ? 3.0 : range === 'ytd' ? 6.0 : 6.0
+    return {
+      Submitted: Math.round((throughputData.submitted / 6) * factor) || 0,
+      Approved: Math.round((throughputData.approved / 6) * factor) || 0,
+      Deficiency: Math.round((throughputData.deficiency / 6) * factor) || 0,
+      'In Review': Math.round((throughputData.inReview / 6) * factor) || 0,
+    }
+  }, [throughputData, range])
+
+  const frameworkScores = useMemo(() => {
+    return frameworks.map(f => {
+      const colors = {
+        "schedule_y":     "#B45309",
+        "ich_e6r3":       "#10B981",
+        "completeness":   "#3B82F6",
+        "pii_anonymiser": "#8B5CF6",
+        "sae_classifier": "#EC4899",
+        "cross_doc":      "#F59E0B",
+      } as Record<string, string>
+      return {
+        name: f.display_name,
+        score: f.avg_score || 0,
+        color: colors[f.agent_type] || "#6B7280"
+      }
+    })
+  }, [frameworks])
 
   const sortedSubmissions = useMemo(() => {
     return [...submissions].sort((a, b) => b.openGaps - a.openGaps).slice(0, 5)
@@ -79,15 +143,26 @@ export default function ReportsView() {
         <div className="rc-card">
           <div className="rc-card-header"><span>Compliance across frameworks</span></div>
           <div className="rc-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {COMPLIANCE_SCORES.map((c, i) => (
-              <div key={i}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span style={{ fontSize: 12.5, color: 'var(--rc-text-secondary)' }}>{c.name}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: c.color }}>{c.score}%</span>
-                </div>
-                <div className="rc-scorebar" style={{ height: 6 }}><div className="rc-scorebar-fill" style={{ width: `${c.score}%`, background: c.color }}/></div>
+            {reportsLoading ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--rc-text-muted)' }}>
+                <i className="ti ti-loader animate-spin" style={{ marginRight: 8, display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                Loading framework scores...
               </div>
-            ))}
+            ) : frameworkScores.length === 0 ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--rc-text-muted)' }}>
+                No completed compliance scans found.
+              </div>
+            ) : (
+              frameworkScores.map((c, i) => (
+                <div key={i}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontSize: 12.5, color: 'var(--rc-text-secondary)' }}>{c.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: c.color }}>{c.score}%</span>
+                  </div>
+                  <div className="rc-scorebar" style={{ height: 6 }}><div className="rc-scorebar-fill" style={{ width: `${c.score}%`, background: c.color }}/></div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { HOME_KPIS, COMPLIANCE_SCORES, AUDIT_EVENTS } from '@/lib/mockData'
+// SPRINT4: removed mockup
+// import { HOME_KPIS, COMPLIANCE_SCORES, AUDIT_EVENTS } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import StatusBadge from '@/components/veeva/StatusBadge'
 import PageHeader from '@/components/veeva/PageHeader'
@@ -9,12 +10,30 @@ import { exportCSV, timestampedName } from '@/lib/csv'
 import { useSubmissions } from '@/hooks/useWorkspaceData'
 import NewSubmissionModal from '@/components/NewSubmissionModal'
 import { createSubmission } from '@/services/workspaceData'
+import { fetchDashboardKPIs, fetchRecentActivity } from '@/services/api'
 
 export default function HomeView() {
   const { setActiveView, setSelectedSubmissionId, openInspector } = useWorkspace()
 
   const { data: submissions, loading, reload } = useSubmissions()
   const [showNewModal, setShowNewModal] = useState(false)
+
+  const [kpis, setKpis] = useState<any>(null)
+  const [activities, setActivities] = useState<any[]>([])
+  const [homeLoading, setHomeLoading] = useState(true)
+
+  useEffect(() => {
+    setHomeLoading(true)
+    Promise.all([
+      fetchDashboardKPIs().catch(() => null),
+      fetchRecentActivity(5).catch(() => ({ activities: [] }))
+    ]).then(([kpiData, activityData]) => {
+      if (kpiData) setKpis(kpiData)
+      setActivities(activityData.activities || [])
+    }).finally(() => {
+      setHomeLoading(false)
+    })
+  }, [])
 
   const handleCreate = async (formData: any) => {
     await createSubmission(formData)
@@ -32,28 +51,70 @@ export default function HomeView() {
     return submissions.filter(s => s.state === 'review').length
   }, [submissions])
 
+  const documentStatesBreakdown = useMemo(() => {
+    if (!kpis || !kpis.documents_by_state) return []
+    const states = kpis.documents_by_state
+    const stateColors = {
+      "draft": "var(--rc-text-secondary)",
+      "in_review": "var(--rc-review)",
+      "approved": "var(--rc-approved)",
+      "effective": "var(--rc-effective)",
+      "rejected": "var(--rc-rejected)",
+      "superseded": "var(--rc-text-muted)"
+    } as Record<string, string>
+    const stateLabels = {
+      "draft": "Draft",
+      "in_review": "In Review",
+      "approved": "Approved",
+      "effective": "Submitted",
+      "rejected": "Rejected",
+      "superseded": "Superseded"
+    } as Record<string, string>
+    
+    const order = ["draft", "in_review", "approved", "effective", "rejected", "superseded"]
+    return order.map(st => {
+      const count = states[st] || 0
+      return {
+        name: stateLabels[st] || st,
+        count: count,
+        color: stateColors[st] || "var(--rc-primary)"
+      }
+    }).filter(item => item.count > 0)
+  }, [kpis])
+
+  const dynamicKPIs = useMemo(() => {
+    return [
+      {
+        label: 'Active Submissions',
+        value: kpis ? kpis.active_submissions : submissions.length,
+        delta: '+2', trend: 'up' as const, sub: 'vs last week'
+      },
+      {
+        label: 'Open Critical Gaps',
+        value: kpis ? kpis.open_critical_gaps : submissions.reduce((acc, s) => acc + s.openGaps, 0),
+        delta: '-3', trend: 'down' as const, sub: 'this sprint'
+      },
+      {
+        label: 'Avg Compliance Score',
+        value: kpis && kpis.avg_compliance_score !== null ? `${kpis.avg_compliance_score}%` : '—',
+        delta: '+4%', trend: 'up' as const, sub: 'last 30 days'
+      },
+      {
+        label: 'HA Queries Pending',
+        value: kpis ? kpis.ha_queries_pending : 0,
+        delta: '+1', trend: 'up' as const, sub: 'requires action'
+      }
+    ]
+  }, [kpis, submissions])
+
   const handleExport = () => exportCSV(
     timestampedName('regcheck_home_kpis'),
     [
-      ...HOME_KPIS.map(k => ({ section: 'KPI', name: k.label, value: k.value, delta: k.delta, trend: k.trend })),
-      ...COMPLIANCE_SCORES.map(c => ({ section: 'Compliance', name: c.name, value: c.score, delta: '', trend: '' })),
+      ...dynamicKPIs.map(k => ({ section: 'KPI', name: k.label, value: String(k.value), delta: k.delta, trend: k.trend })),
+      ...documentStatesBreakdown.map(c => ({ section: 'Document State', name: c.name, value: String(c.count), delta: '', trend: '' })),
     ],
     ['section', 'name', 'value', 'delta', 'trend'],
   )
-
-  const dynamicKPIs = useMemo(() => {
-    // Dynamic KPI updates based on real submissions count
-    return HOME_KPIS.map(k => {
-      if (k.label === 'Active Submissions') {
-        return { ...k, value: submissions.length || k.value }
-      }
-      if (k.label === 'Open Critical Gaps') {
-        const gapSum = submissions.reduce((acc, s) => acc + s.openGaps, 0)
-        return { ...k, value: gapSum || k.value }
-      }
-      return k
-    })
-  }, [submissions])
 
   return (
     <div data-testid="view-home">
@@ -152,19 +213,36 @@ export default function HomeView() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="rc-card">
               <div className="rc-card-header">
-                <span>Vault-wide compliance</span>
-                <i className="ti ti-info-circle" style={{ fontSize: 13, color: 'var(--rc-text-muted)' }} title="Aggregate score across active submissions"/>
+                <span>Document lifecycle states</span>
+                <i className="ti ti-info-circle" style={{ fontSize: 13, color: 'var(--rc-text-muted)' }} title="Documents in the vault grouped by current lifecycle state"/>
               </div>
               <div className="rc-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {COMPLIANCE_SCORES.map((c, i) => (
-                  <div key={i}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, color: 'var(--rc-text-secondary)' }}>{c.name}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: c.color }}>{c.score}%</span>
-                    </div>
-                    <div className="rc-scorebar"><div className="rc-scorebar-fill" style={{ width: `${c.score}%`, background: c.color }}/></div>
+                {homeLoading ? (
+                  <div style={{ padding: '10px 0', textAlign: 'center', color: 'var(--rc-text-muted)' }}>
+                    <i className="ti ti-loader animate-spin" style={{ marginRight: 8, display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                    Loading breakdown...
                   </div>
-                ))}
+                ) : documentStatesBreakdown.length === 0 ? (
+                  <div style={{ padding: '10px 0', textAlign: 'center', color: 'var(--rc-text-muted)' }}>
+                    No documents in the vault.
+                  </div>
+                ) : (
+                  (() => {
+                    const total = documentStatesBreakdown.reduce((acc, curr) => acc + curr.count, 0)
+                    return documentStatesBreakdown.map((c, i) => {
+                      const percentage = total > 0 ? (c.count / total) * 100 : 0
+                      return (
+                        <div key={i}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, color: 'var(--rc-text-secondary)' }}>{c.name}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: c.color }}>{c.count} ({Math.round(percentage)}%)</span>
+                          </div>
+                          <div className="rc-scorebar" style={{ height: 6 }}><div className="rc-scorebar-fill" style={{ width: `${percentage}%`, background: c.color }}/></div>
+                        </div>
+                      )
+                    })
+                  })()
+                )}
               </div>
             </div>
 
@@ -174,19 +252,39 @@ export default function HomeView() {
                 <button className="rc-btn rc-btn-ghost rc-btn-sm" onClick={() => setActiveView('audit-trail')}>Audit trail</button>
               </div>
               <div>
-                {AUDIT_EVENTS.slice(0, 5).map(e => (
-                  <div key={e.id} style={{
-                    display: 'flex', gap: 10, padding: '10px 14px',
-                    borderBottom: '1px solid var(--rc-divider)',
-                  }}>
-                    <div className="rc-avatar" style={{ width: 22, height: 22, fontSize: 9.5, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)', flexShrink: 0 }}>{e.initials}</div>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.action}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--rc-text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.target}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 2 }}>{e.user} · {e.ts}</div>
+                {activities.slice(0, 5).map(e => {
+                  const tsFormatted = e.timestamp ? new Date(e.timestamp).toLocaleString('en-IN') : ''
+                  return (
+                    <div key={e.id} style={{
+                      display: 'flex', gap: 10, padding: '10px 14px',
+                      borderBottom: '1px solid var(--rc-divider)',
+                    }}>
+                      <div className="rc-avatar" style={{ width: 22, height: 22, fontSize: 9.5, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)', flexShrink: 0 }}>
+                        {e.user_initials}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.label}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--rc-text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.sublabel}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 2 }}>{e.user_name} · {tsFormatted}</div>
+                      </div>
                     </div>
+                  )
+                })}
+                {activities.length === 0 && (
+                  <div className="rc-empty" style={{ padding: 20 }}>
+                    {homeLoading ? (
+                      <>
+                        <i className="ti ti-loader animate-spin" style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                        <div>Loading recent activity...</div>
+                      </>
+                    ) : (
+                      <>
+                        <i className="ti ti-bell-off" />
+                        <div>No recent activity.</div>
+                      </>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>

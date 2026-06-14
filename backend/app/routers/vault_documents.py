@@ -283,6 +283,54 @@ async def list_vault_documents(
     return {"documents": documents, "total": len(documents)}
 
 
+@router.get("/audit-trail")
+async def get_vault_audit_trail(
+    workspace_id: str | None = Query(None),
+    limit: int = Query(100),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Retrieve all document audit trail events, joined with document titles/numbers."""
+    stmt = (
+        select(VaultDocumentAudit)
+        .options(selectinload(VaultDocumentAudit.document))
+        .join(VaultDocument, VaultDocumentAudit.document_id == VaultDocument.id)
+    )
+    if workspace_id:
+        stmt = stmt.where(VaultDocument.workspace_id == workspace_id)
+
+    stmt = stmt.order_by(VaultDocumentAudit.created_at.desc()).limit(limit)
+
+    result = await db.execute(stmt)
+    entries = result.scalars().all()
+
+    audit_data = []
+    for entry in entries:
+        title = entry.document.title if entry.document else "Unknown"
+        doc_number = entry.document.doc_number if entry.document else ""
+
+        # Derive user initials defensively
+        initials = entry.user_initials
+        if not initials and entry.user_name:
+            words = entry.user_name.split()
+            initials = "".join([w[0].upper() for w in words if w])[:2]
+
+        audit_data.append({
+            "id": entry.id,
+            "document_id": entry.document_id,
+            "action": entry.action,
+            "from_state": entry.from_state,
+            "to_state": entry.to_state,
+            "user_name": entry.user_name,
+            "user_initials": initials or "SYS",
+            "note": entry.note,
+            "created_at": _iso(entry.created_at),
+            "document_title": title,
+            "doc_number": doc_number,
+        })
+
+    return {"audit_trail": audit_data, "total": len(audit_data)}
+
+
 @router.get("/{document_id}")
 async def get_vault_document(
     document_id: str,

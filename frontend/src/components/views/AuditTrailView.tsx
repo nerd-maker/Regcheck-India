@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { AUDIT_EVENTS } from '@/lib/mockData'
+// SPRINT4: removed mockup
+// import { AUDIT_EVENTS } from '@/lib/mockData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
 import { getHistoryFromServer } from '@/services/history'
+import { fetchVaultAuditTrail } from '@/services/api'
 
 export default function AuditTrailView() {
   const { setActiveView } = useWorkspace()
@@ -14,6 +16,8 @@ export default function AuditTrailView() {
   const [search, setSearch] = useState('')
   const [showESign, setShowESign] = useState(false)
   const [agentEvents, setAgentEvents] = useState<any[]>([])
+  const [vaultEvents, setVaultEvents] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   // ── Meta parser: turns raw agent result JSON into readable text ──────────
   const parseAgentMeta = (result: unknown, score?: number): string => {
@@ -76,32 +80,49 @@ export default function AuditTrailView() {
     return stripped || (score ? `Score: ${score}%` : 'Analysis complete')
   }
 
-  // Fetch real agent run history and merge with mock events
+  // Fetch real agent run history and merge with real vault audit events
   useEffect(() => {
-    getHistoryFromServer(undefined, undefined, 50)
-      .then(history => {
-        const events = history.map(h => ({
-          id: h.id,
-          ts: new Date(h.timestamp).toLocaleString('en-IN'),
-          user: 'Anika Sharma',
-          initials: 'AS',
-          action: `AI Compliance Action: ${h.module}`,
-          target: h.filename ?? 'Document',
-          meta: parseAgentMeta(h.result, h.complianceScore ?? undefined),
-        }))
-        setAgentEvents(events)
-      })
-      .catch(() => {})
+    setLoading(true)
+    Promise.all([
+      getHistoryFromServer(undefined, undefined, 50).catch(() => []),
+      fetchVaultAuditTrail().catch(() => ({ audit_trail: [] }))
+    ]).then(([history, vaultRes]) => {
+      const aEvents = history.map(h => ({
+        id: `agent-${h.id}`,
+        tsRaw: new Date(h.timestamp).getTime(),
+        ts: new Date(h.timestamp).toLocaleString('en-IN'),
+        user: 'Anika Sharma',
+        initials: 'AS',
+        action: `AI Compliance Action: ${h.module}`,
+        target: h.filename ?? 'Document',
+        meta: parseAgentMeta(h.result, h.complianceScore ?? undefined),
+      }))
+      setAgentEvents(aEvents)
+
+      const vEvents = (vaultRes.audit_trail || []).map((e: any) => ({
+        id: `vault-${e.id}`,
+        tsRaw: new Date(e.created_at).getTime(),
+        ts: new Date(e.created_at).toLocaleString('en-IN'),
+        user: e.user_name || 'System',
+        initials: e.user_initials || 'SYS',
+        action: e.action === 'state_transition'
+          ? `Document state change: ${e.from_state || 'None'} → ${e.to_state}`
+          : e.action === 'uploaded'
+            ? 'Document uploaded'
+            : e.action.replace('_', ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        target: `${e.doc_number || ''} ${e.document_title || ''}`.trim() || 'Document',
+        meta: e.note || '',
+      }))
+      setVaultEvents(vEvents)
+    }).finally(() => {
+      setLoading(false)
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const allEvents = useMemo(() => {
-    return [...agentEvents, ...AUDIT_EVENTS].sort((a, b) => {
-      const ta = new Date(b.ts).getTime()
-      const tb = new Date(a.ts).getTime()
-      return isNaN(ta) || isNaN(tb) ? 0 : ta - tb
-    })
-  }, [agentEvents])
+    return [...agentEvents, ...vaultEvents].sort((a, b) => b.tsRaw - a.tsRaw)
+  }, [agentEvents, vaultEvents])
 
   const actors = useMemo(() => Array.from(new Set(allEvents.map(e => e.user))), [allEvents])
   const categories = useMemo(() => {
@@ -197,7 +218,23 @@ export default function AuditTrailView() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={5}><div className="rc-empty"><i className="ti ti-clock-off"/><div>No audit events match the filters.</div></div></td></tr>
+                <tr>
+                  <td colSpan={5}>
+                    <div className="rc-empty">
+                      {loading ? (
+                        <>
+                          <i className="ti ti-loader animate-spin" style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                          <div>Loading audit trail...</div>
+                        </>
+                      ) : (
+                        <>
+                          <i className="ti ti-clock-off"/>
+                          <div>No audit events match the filters.</div>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
