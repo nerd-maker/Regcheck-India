@@ -55,12 +55,18 @@ def _generate_correspondence_number(count: int) -> str:
 
 
 @router.get("")
-async def list_correspondence() -> dict[str, Any]:
+async def list_correspondence(submission_id: Optional[str] = None) -> dict[str, Any]:
     conn = await get_conn()
     try:
-        rows = await conn.fetch(
-            "SELECT * FROM ha_correspondence ORDER BY created_at DESC"
-        )
+        if submission_id:
+            rows = await conn.fetch(
+                "SELECT * FROM ha_correspondence WHERE submission_id = $1 ORDER BY created_at DESC",
+                submission_id
+            )
+        else:
+            rows = await conn.fetch(
+                "SELECT * FROM ha_correspondence ORDER BY created_at DESC"
+            )
         records = [row_to_dict(r) for r in rows]
         return {
             "correspondence": records,

@@ -18,7 +18,7 @@ const RANGES = [
 ]
 
 export default function ReportsView() {
-  const { setActiveView } = useWorkspace()
+  const { setActiveView, setSelectedSubmissionId } = useWorkspace()
   const [range, setRange] = useState('30')
   const [showRange, setShowRange] = useState(false)
   const rangeLabel = RANGES.find(r => r.id === range)?.label ?? 'Last 30 days'
@@ -192,7 +192,19 @@ export default function ReportsView() {
               <tbody>
                 {sortedSubmissions.map(s => (
                   <tr key={s.id}>
-                    <td><span className="rc-table-link">{s.name}</span><div style={{ fontSize: 11, color: 'var(--rc-text-muted)', fontFamily: 'var(--rc-font-mono)' }}>{s.number}</div></td>
+                    <td>
+                      <button
+                        className="rc-table-link"
+                        onClick={() => {
+                          setSelectedSubmissionId(s.id)
+                          setActiveView('submission-detail')
+                        }}
+                        style={{ background: 'none', border: 0, padding: 0, fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        {s.name}
+                      </button>
+                      <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', fontFamily: 'var(--rc-font-mono)' }}>{s.number}</div>
+                    </td>
                     <td>{s.product}</td>
                     <td>{s.phase}</td>
                     <td style={{ textAlign: 'right', fontWeight: 600, color: s.openGaps > 0 ? 'var(--rc-rejected)' : 'var(--rc-approved)' }}>{s.openGaps}</td>

@@ -1,21 +1,35 @@
 'use client'
 
-import { SUBMISSION_LIFECYCLE, LifecycleState } from '@/lib/mockData'
-
 interface LifecycleBarProps {
-  current: LifecycleState
+  current: string
 }
 
-const STATE_ORDER: LifecycleState[] = ['draft', 'review', 'approved', 'effective']
+const LIFECYCLE_STAGES = [
+  { id: 'draft',        label: 'Draft' },
+  { id: 'in_review',    label: 'In Review' },
+  { id: 'submitted',    label: 'Submitted' },
+  { id: 'under_review', label: 'Under Review' },
+  { id: 'approved',     label: 'Approved' },
+]
+
+const STATE_MAPPING: Record<string, number> = {
+  'draft': 0,
+  'review': 1,
+  'in_review': 1,
+  'submitted': 2,
+  'effective': 2,
+  'under_review': 3,
+  'approved': 4,
+  'rejected': 3,
+  'superseded': 4,
+}
 
 export default function LifecycleBar({ current }: LifecycleBarProps) {
-  // For rejected/superseded — show "stuck" at review
-  const effective = current === 'rejected' ? 'review' : (current === 'superseded' ? 'effective' : current)
-  const currentIdx = STATE_ORDER.indexOf(effective)
+  const currentIdx = STATE_MAPPING[current] ?? 0
 
   return (
     <div className="rc-lifecycle" data-testid="lifecycle-bar">
-      {SUBMISSION_LIFECYCLE.map((step, i) => {
+      {LIFECYCLE_STAGES.map((step, i) => {
         const cls = i < currentIdx ? 'is-done' : i === currentIdx ? 'is-current' : ''
         return (
           <div key={step.id} className={`rc-lifecycle-step ${cls}`}>

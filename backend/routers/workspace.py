@@ -258,6 +258,38 @@ async def upload_document(
 # ── APPLICATIONS ──────────────────────────────────────────────────
 
 
+class ApplicationCreate(BaseModel):
+    product: str
+    sponsor: str
+    type: str
+    owner_name: str
+    owner_initials: str
+
+
+@router.post("/applications")
+async def create_application(body: ApplicationCreate):
+    conn = await get_conn()
+    try:
+        aid = f"a-{uuid.uuid4().hex[:8]}"
+        year = datetime.now().year
+        count = await conn.fetchval("SELECT COUNT(*) FROM applications")
+        number = f"APP-{year}-{str(int(count) + 1).zfill(3)}"
+        opened_at = datetime.now().strftime("%d %b %Y")
+        
+        await conn.execute("""
+            INSERT INTO applications (
+                id, number, product, sponsor, type, status,
+                submissions, registrations, owner_id, owner_name,
+                owner_initials, owner_role, opened_at
+            ) VALUES ($1, $2, $3, $4, $5, 'Active', 0, 0, $1, $6, $7, 'Regulatory Lead', $8)
+        """, aid, number, body.product, body.sponsor, body.type, body.owner_name, body.owner_initials, opened_at)
+        
+        row = await conn.fetchrow("SELECT * FROM applications WHERE id=$1", aid)
+        return row_to_dict(row)
+    finally:
+        await conn.close()
+
+
 @router.get("/applications")
 async def list_applications(
     status: Optional[str] = Query(None),
@@ -283,6 +315,56 @@ async def list_applications(
 
 
 # ── REGISTRATIONS ─────────────────────────────────────────────────
+
+
+class RegistrationCreate(BaseModel):
+    product: str
+    certificate: str
+    market: str = "India"
+    application_id: Optional[str] = None
+    approved_date: str
+    expiry_date: str
+
+
+@router.post("/registrations")
+async def create_registration(body: RegistrationCreate):
+    conn = await get_conn()
+    try:
+        rid = f"r-{uuid.uuid4().hex[:8]}"
+        year = datetime.now().year
+        count = await conn.fetchval("SELECT COUNT(*) FROM registrations")
+        number = f"REG-{year}-{str(int(count) + 1).zfill(3)}"
+        
+        def format_date(d_str: str) -> str:
+            try:
+                dt = datetime.strptime(d_str, "%Y-%m-%d")
+                return dt.strftime("%d %b %Y")
+            except Exception:
+                return d_str
+
+        app_date = format_date(body.approved_date)
+        exp_date = format_date(body.expiry_date)
+        
+        app_id = body.application_id.strip() if body.application_id else None
+        if app_id == "":
+            app_id = None
+        
+        await conn.execute("""
+            INSERT INTO registrations (
+                id, number, product, certificate, market, state,
+                approved_date, expiry_date, application_id
+            ) VALUES ($1, $2, $3, $4, $5, 'Effective', $6, $7, $8)
+        """, rid, number, body.product, body.certificate, body.market, app_date, exp_date, app_id)
+        
+        if app_id:
+            await conn.execute("""
+                UPDATE applications SET registrations = registrations + 1 WHERE id = $1
+            """, app_id)
+            
+        row = await conn.fetchrow("SELECT * FROM registrations WHERE id=$1", rid)
+        return row_to_dict(row)
+    finally:
+        await conn.close()
 
 
 @router.get("/registrations")

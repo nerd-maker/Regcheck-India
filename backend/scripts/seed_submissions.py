@@ -107,6 +107,113 @@ async def seed_demo_submissions(conn) -> None:
         )
     print("Demo submissions seeded successfully.")
 
+    # Seeding applications
+    DEMO_APPLICATIONS = [
+        {
+            "product": "Zalpifylline 400mg Tablets",
+            "sponsor": "ZP Pharma Pvt Ltd",
+            "type": "IND",
+            "status": "active",
+            "owner_name": "Anika Sharma",
+            "owner_initials": "AS",
+            "owner_role": "Regulatory Lead",
+            "submissions": 1,
+            "registrations": 0,
+        },
+        {
+            "product": "BX-400 Injection",
+            "sponsor": "BioXcel India Ltd",
+            "type": "NDA",
+            "status": "under_review",
+            "owner_name": "Karan Bhatt",
+            "owner_initials": "KB",
+            "owner_role": "RA Manager",
+            "submissions": 2,
+            "registrations": 1,
+        },
+    ]
+
+    DEMO_REGISTRATIONS = [
+        {
+            "product": "BX-400 Injection",
+            "certificate": "Marketing Authorization",
+            "market": "India",
+            "state": "approved",
+            "approved_date": "2024-03-15",
+            "expiry_date": "2029-03-14",
+        },
+    ]
+
+    # Seed Applications
+    app_count = await conn.fetchval("SELECT COUNT(*) FROM applications WHERE number LIKE 'APP-%'")
+    app_id_map = {}
+    if app_count > 0:
+        print(f"Skipping seed: applications table already contains {app_count} real APP-format records.")
+        rows = await conn.fetch("SELECT id, product FROM applications")
+        for r in rows:
+            app_id_map[r["product"]] = r["id"]
+    else:
+        print(f"Seeding {len(DEMO_APPLICATIONS)} demo applications...")
+        for i, app in enumerate(DEMO_APPLICATIONS):
+            app_id = f"a-seed-{uuid.uuid4().hex[:6]}"
+            app_id_map[app["product"]] = app_id
+            number = f"APP-{datetime.now().year}-{str(i + 1).zfill(3)}"
+            opened_at = datetime.now().strftime("%d %b %Y")
+            
+            status = "Active"
+            if app["status"] == "under_review":
+                status = "Pending CDSCO"
+            
+            await conn.execute("""
+                INSERT INTO applications (
+                    id, number, product, sponsor, type, status,
+                    submissions, registrations, owner_id, owner_name,
+                    owner_initials, owner_role, opened_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $1, $9, $10, $11, $12)
+            """,
+                app_id, number, app["product"], app["sponsor"], app["type"], status,
+                app["submissions"], app["registrations"], app["owner_name"],
+                app["owner_initials"], app["owner_role"], opened_at
+            )
+        print("Demo applications seeded successfully.")
+
+    # Seed Registrations
+    reg_count = await conn.fetchval("SELECT COUNT(*) FROM registrations WHERE number LIKE 'REG-%'")
+    if reg_count > 0:
+        print(f"Skipping seed: registrations table already contains {reg_count} real REG-format records.")
+    else:
+        print(f"Seeding {len(DEMO_REGISTRATIONS)} demo registrations...")
+        for i, reg in enumerate(DEMO_REGISTRATIONS):
+            reg_id = f"r-seed-{uuid.uuid4().hex[:6]}"
+            number = f"REG-{datetime.now().year}-{str(i + 1).zfill(3)}"
+            
+            state = "Effective"
+            if reg["state"] == "approved":
+                state = "Effective"
+                
+            app_id = app_id_map.get(reg["product"])
+            
+            def format_seed_date(d_str: str) -> str:
+                try:
+                    dt = datetime.strptime(d_str, "%Y-%m-%d")
+                    return dt.strftime("%d %b %Y")
+                except Exception:
+                    return d_str
+
+            app_date = format_seed_date(reg["approved_date"])
+            exp_date = format_seed_date(reg["expiry_date"])
+            
+            await conn.execute("""
+                INSERT INTO registrations (
+                    id, number, product, certificate, market, state,
+                    approved_date, expiry_date, application_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            """,
+                reg_id, number, reg["product"], reg["certificate"],
+                reg["market"], state, app_date, exp_date, app_id
+            )
+        print("Demo registrations seeded successfully.")
+
 
 async def seed() -> None:
     if not os.getenv("DATABASE_URL"):

@@ -614,4 +614,101 @@ export async function fetchVaultAuditTrail(workspaceId?: string): Promise<any> {
   return data;
 }
 
+export async function fetchSubmissionActivity(submissionId: string): Promise<{
+  activities: Array<{
+    id: string;
+    type: string;
+    label: string;
+    sublabel: string;
+    timestamp: string;
+    user_name: string;
+    user_initials: string;
+  }>;
+}> {
+  const corrRes = await fetch(
+    `/api/regcheck/correspondence?submission_id=${submissionId}`,
+    { cache: 'no-store' }
+  );
+  if (!corrRes.ok) return { activities: [] };
+  const corrData = await corrRes.json();
+  const corrItems = (corrData.correspondence ?? []) as Record<string, any>[];
+
+  const activities = corrItems.map((c) => ({
+    id: `corr-${c.id}`,
+    type: 'correspondence',
+    label: `HA Correspondence: ${c.subject}`,
+    sublabel: `${c.authority} — ${c.number} — ${c.state}`,
+    timestamp: c.created_at as string,
+    user_name: 'System',
+    user_initials: 'HA',
+  }));
+
+  try {
+    const subRes = await fetch(`/api/regcheck/submissions/${submissionId}`, { cache: 'no-store' });
+    if (subRes.ok) {
+      const sub = await subRes.json();
+      if (sub && sub.updated_at) {
+        activities.push({
+          id: `sub-update-${submissionId}`,
+          type: 'submission',
+          label: `Submission Updated: ${sub.name}`,
+          sublabel: `State: ${sub.state_label || sub.state}`,
+          timestamp: sub.updated_at,
+          user_name: sub.owner_name || 'System',
+          user_initials: sub.owner_initials || 'AS',
+        });
+      }
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  // Sort by timestamp desc
+  activities.sort((a, b) =>
+    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+  return { activities };
+}
+
+export async function createApplication(payload: {
+  product: string;
+  sponsor: string;
+  type: string;
+  owner_name: string;
+  owner_initials: string;
+}): Promise<Record<string, unknown>> {
+  const res = await fetch('/api/regcheck/applications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as Record<string, string>).detail ?? `Create application failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function createRegistration(payload: {
+  product: string;
+  certificate: string;
+  market: string;
+  application_id?: string;
+  approved_date: string;
+  expiry_date: string;
+}): Promise<Record<string, unknown>> {
+  const res = await fetch('/api/regcheck/registrations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as Record<string, string>).detail ?? `Create registration failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 

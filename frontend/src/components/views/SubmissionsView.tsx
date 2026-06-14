@@ -43,6 +43,7 @@ export default function SubmissionsView() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<{ k: keyof SubmissionRecord; dir: 'asc' | 'desc' }>({ k: 'updatedAt', dir: 'asc' })
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
 
   const { data: submissions, loading, reload } = useSubmissions()
   const [isNewModalOpen, setIsNewModalOpen] = useState(false)
@@ -225,7 +226,20 @@ export default function SubmissionsView() {
             <table className="rc-table" data-testid="submissions-table">
               <thead>
                 <tr>
-                  <th style={{ width: 26 }}><input type="checkbox" aria-label="Select all"/></th>
+                  <th style={{ width: 26 }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all"
+                      checked={filtered.length > 0 && selectedRowIds.size === filtered.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedRowIds(new Set(filtered.map(s => s.id)))
+                        } else {
+                          setSelectedRowIds(new Set())
+                        }
+                      }}
+                    />
+                  </th>
                   <th>Submission</th>
                   <th>Type</th>
                   <th>Phase</th>
@@ -250,7 +264,21 @@ export default function SubmissionsView() {
                     }}
                     data-testid={`subrow-${s.id}`}
                   >
-                    <td onClick={e => e.stopPropagation()}><input type="checkbox"/></td>
+                    <td onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedRowIds.has(s.id)}
+                        onChange={(e) => {
+                          const ns = new Set(selectedRowIds)
+                          if (e.target.checked) {
+                            ns.add(s.id)
+                          } else {
+                            ns.delete(s.id)
+                          }
+                          setSelectedRowIds(ns)
+                        }}
+                      />
+                    </td>
                     <td>
                       <button className="rc-table-link" onClick={(e) => { e.stopPropagation(); open(s); }} style={{ background: 'none', border: 0, padding: 0, fontFamily: 'inherit', fontSize: 'inherit', cursor: 'pointer' }}>
                         {s.name}

@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useWorkspace } from '@/lib/workspaceStore'
-import { AUDIT_EVENTS } from '@/lib/mockData'
+// SPRINT5: removed mockup AUDIT_EVENTS
 import { fetchCorrespondence, createSubmission } from '@/services/workspaceData'
+import { fetchRecentActivity } from '@/services/api'
 import type { HACorrespondenceRecord } from '@/lib/mockData'
 import NewSubmissionModal from '@/components/NewSubmissionModal'
 
@@ -21,10 +22,19 @@ export default function TopBar() {
   const notifRef = useRef<HTMLDivElement | null>(null)
 
   const [correspondence, setCorrespondence] = useState<HACorrespondenceRecord[]>([])
+  const [notifications, setNotifications] = useState<any[]>([])
 
   useEffect(() => {
     fetchCorrespondence().then(setCorrespondence)
   }, [])
+
+  useEffect(() => {
+    if (showNotif) {
+      fetchRecentActivity(5)
+        .then(data => setNotifications(data.activities || []))
+        .catch(() => setNotifications([]))
+    }
+  }, [showNotif])
 
   // Close popovers on outside click
   useEffect(() => {
@@ -56,19 +66,30 @@ export default function TopBar() {
     }
   }
 
-  // Generate notifications from recent events + open HA correspondence
-  const notifs = [
-    ...correspondence.filter(c => c.state === 'open').slice(0, 2).map(c => ({
-      id: `ha-${c.id}`, icon: 'ti-mail', title: c.subject,
-      meta: `${c.authority} · ${c.priority === 'critical' ? '⚠ Critical' : 'Awaiting response'}`,
-      onClick: () => { setActiveView('correspondence'); setShowNotif(false) },
-    })),
-    ...AUDIT_EVENTS.slice(0, 3).map(e => ({
-      id: `ev-${e.id}`, icon: 'ti-history', title: e.action,
-      meta: `${e.target} · ${e.ts}`,
-      onClick: () => { setActiveView('audit-trail'); setShowNotif(false) },
-    })),
-  ]
+  // Generate notifications from real recent activities
+  const notifs = notifications.map(e => {
+    let icon = 'ti-history'
+    if (e.type === 'correspondence') {
+      icon = 'ti-mail'
+    } else if (e.type === 'agent_run') {
+      icon = 'ti-sparkles'
+    }
+    
+    let onClick = () => { setActiveView('audit-trail'); setShowNotif(false) }
+    if (e.type === 'correspondence') {
+      onClick = () => { setActiveView('correspondence'); setShowNotif(false) }
+    }
+    
+    const tsFormatted = e.timestamp ? new Date(e.timestamp).toLocaleString('en-IN') : ''
+
+    return {
+      id: e.id,
+      icon,
+      title: e.label,
+      meta: `${e.sublabel} · ${tsFormatted}`,
+      onClick,
+    }
+  })
 
   return (
     <>

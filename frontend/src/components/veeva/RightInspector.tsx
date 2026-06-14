@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
-import { DOCUMENTS, SUBMISSIONS, AUDIT_EVENTS } from '@/lib/mockData'
+import { DOCUMENTS, SUBMISSIONS } from '@/lib/mockData' // SPRINT5: removed mockup AUDIT_EVENTS
 import StatusBadge from './StatusBadge'
 import { fetchSubmissions, fetchDocuments } from '@/services/workspaceData'
-import { fetchVaultDocumentDetail } from '@/services/api'
+import { fetchVaultDocumentDetail, fetchSubmissionActivity } from '@/services/api'
 import type { SubmissionRecord, DocumentRecord } from '@/lib/mockData'
 import type { DocumentDetail, LifecycleState } from '@/types/vault'
 import { LifecycleTransitionButton } from '@/components/vault/LifecycleTransitionButton'
@@ -39,6 +39,9 @@ export default function RightInspector() {
   const [vaultDetail, setVaultDetail] = useState<DocumentDetail | null>(null)
   const [scanRefreshTrigger, setScanRefreshTrigger] = useState(0)
 
+  const [subActivities, setSubActivities] = useState<any[]>([])
+  const [subActLoading, setSubActLoading] = useState(false)
+
   useEffect(() => {
     if (!inspectorOpen) return
     fetchSubmissions().then(setSubmissions)
@@ -69,8 +72,6 @@ export default function RightInspector() {
     // Re-fetch documents list to update state badge in the table
     fetchDocuments().then(setDocuments)
   }, [])
-
-  if (!inspectorOpen) return null
 
   // Synthesize a DocumentRecord from vault detail when available.
   // The legacy fetchDocuments() / DOCUMENTS mockData use different IDs and
@@ -123,6 +124,23 @@ export default function RightInspector() {
     undefined
 
   const sub = submissions.find(s => s.id === selectedSubmissionId) ?? SUBMISSIONS.find(s => s.id === selectedSubmissionId)
+
+  // Fetch submission activities when active and inspectorTab is activity
+  useEffect(() => {
+    if (!inspectorOpen || !!selectedDocumentId || !sub?.id || inspectorTab !== 'activity') {
+      setSubActivities([])
+      return
+    }
+    let cancelled = false
+    setSubActLoading(true)
+    fetchSubmissionActivity(sub.id)
+      .then(res => { if (!cancelled) setSubActivities(res.activities) })
+      .catch(() => { if (!cancelled) setSubActivities([]) })
+      .finally(() => { if (!cancelled) setSubActLoading(false) })
+    return () => { cancelled = true }
+  }, [inspectorOpen, selectedDocumentId, sub?.id, inspectorTab])
+
+  if (!inspectorOpen) return null
 
   // If a vault doc is selected but vaultDetail hasn't loaded yet, show a
   // loading placeholder instead of "Nothing selected".
@@ -342,36 +360,48 @@ export default function RightInspector() {
 
         {inspectorTab === 'activity' && (
           <div>
-            {/* Show real audit entries from vault if available */}
-            {vaultDetail && vaultDetail.audit.length > 0 ? (
-              vaultDetail.audit.slice(0, 10).map(e => (
+            {isDoc ? (
+              vaultDetail && vaultDetail.audit.length > 0 ? (
+                vaultDetail.audit.slice(0, 10).map(e => (
+                  <div key={e.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--rc-divider)' }}>
+                    <div className="rc-avatar" style={{ width: 24, height: 24, fontSize: 10, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)', flexShrink: 0 }}>{e.user_initials}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.action.replace('_', ' ')}</div>
+                      {e.from_state && e.to_state && (
+                        <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>
+                          {e.from_state.replace('_', ' ')} → {e.to_state.replace('_', ' ')}
+                        </div>
+                      )}
+                      {e.note && <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', marginTop: 2, fontStyle: 'italic' }}>{e.note}</div>}
+                      <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>
+                        {e.user_name} · {new Date(e.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rc-empty" style={{ padding: 20 }}><i className="ti ti-clock-off"/><div style={{ fontSize: 12 }}>No activity yet for this document.</div></div>
+              )
+            ) : subActLoading ? (
+              <div className="rc-empty" style={{ padding: 20 }}>
+                <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }}/>
+                <div style={{ fontSize: 12 }}>Loading activities...</div>
+              </div>
+            ) : subActivities.length > 0 ? (
+              subActivities.map(e => (
                 <div key={e.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--rc-divider)' }}>
                   <div className="rc-avatar" style={{ width: 24, height: 24, fontSize: 10, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)', flexShrink: 0 }}>{e.user_initials}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.action.replace('_', ' ')}</div>
-                    {e.from_state && e.to_state && (
-                      <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>
-                        {e.from_state.replace('_', ' ')} → {e.to_state.replace('_', ' ')}
-                      </div>
-                    )}
-                    {e.note && <div style={{ fontSize: 11, color: 'var(--rc-text-muted)', marginTop: 2, fontStyle: 'italic' }}>{e.note}</div>}
+                    <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.label}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>{e.sublabel}</div>
                     <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>
-                      {e.user_name} · {new Date(e.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                      {e.user_name} · {new Date(e.timestamp).toLocaleString('en-IN')}
                     </div>
                   </div>
                 </div>
               ))
             ) : (
-              AUDIT_EVENTS.slice(0, 6).map(e => (
-                <div key={e.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: '1px solid var(--rc-divider)' }}>
-                  <div className="rc-avatar" style={{ width: 24, height: 24, fontSize: 10, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)' }}>{e.initials}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, color: 'var(--rc-text-primary)', fontWeight: 500 }}>{e.action}</div>
-                    {e.meta && <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>{e.meta}</div>}
-                    <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>{e.user} · {e.ts}</div>
-                  </div>
-                </div>
-              ))
+              <div className="rc-empty" style={{ padding: 20 }}><i className="ti ti-clock-off"/><div style={{ fontSize: 12 }}>No activity yet for this submission.</div></div>
             )}
           </div>
         )}

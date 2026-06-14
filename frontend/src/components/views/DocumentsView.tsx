@@ -125,7 +125,14 @@ export default function DocumentsView() {
               <i className={uploading ? "ti ti-loader-2" : "ti ti-upload"} style={uploading ? { animation: 'spin 1s linear infinite', marginRight: 4, display: 'inline-block' } : {}}/>
               {uploading ? 'Uploading...' : 'Upload'}
             </button>
-            <button className="rc-btn rc-btn-primary"><i className="ti ti-plus"/> New document</button>
+            <button
+              className="rc-btn rc-btn-primary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              data-testid="docs-new-btn"
+            >
+              <i className="ti ti-plus"/> New document
+            </button>
           </>
         }
       />

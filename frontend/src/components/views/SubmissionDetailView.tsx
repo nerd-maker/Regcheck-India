@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { SUBMISSIONS, AUDIT_EVENTS } from '@/lib/mockData'
+import { SUBMISSIONS } from '@/lib/mockData' // SPRINT5: removed mockup AUDIT_EVENTS
+import { fetchSubmissionActivity } from '@/services/api'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import StatusBadge from '@/components/veeva/StatusBadge'
@@ -15,6 +16,8 @@ import type { SubmissionRecord, DocumentRecord, HACorrespondenceRecord } from '@
 export default function SubmissionDetailView() {
   const { selectedSubmissionId, setActiveView, setSelectedDocumentId, openInspector, setPrefilledInput } = useWorkspace()
   const [tab, setTab] = useState('overview')
+  const [activities, setActivities] = useState<any[]>([])
+  const [actLoading, setActLoading] = useState(false)
 
   const { data: submissions, loading: subsLoading, reload: reloadSubs } = useSubmissions()
   const { data: documents, loading: docsLoading, reload: reloadDocs } = useDocuments(selectedSubmissionId || undefined)
@@ -56,10 +59,15 @@ export default function SubmissionDetailView() {
     return correspondence
   }, [correspondence])
 
-  const activity = useMemo(() => {
-    if (!sub) return []
-    return AUDIT_EVENTS.filter(e => e.target.includes(sub.number) || e.target.includes(sub.product))
-  }, [sub])
+  useEffect(() => {
+    if (tab === 'activity' && sub?.id) {
+      setActLoading(true)
+      fetchSubmissionActivity(sub.id)
+        .then(res => setActivities(res.activities))
+        .catch(() => setActivities([]))
+        .finally(() => setActLoading(false))
+    }
+  }, [tab, sub?.id])
 
   const tabs = useMemo(() => {
     if (!sub) return []
@@ -308,14 +316,18 @@ export default function SubmissionDetailView() {
           <div className="rc-card">
             <div className="rc-card-header"><span>Activity timeline</span></div>
             <div>
-              {activity.length ? activity.map(e => (
+              {actLoading ? (
+                <div className="rc-empty">
+                  <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }}/>
+                  <div>Loading activity...</div>
+                </div>
+              ) : activities.length ? activities.map(e => (
                 <div key={e.id} style={{ padding: '12px 18px', borderBottom: '1px solid var(--rc-divider)', display: 'flex', gap: 12 }}>
-                  <div className="rc-avatar" style={{ width: 26, height: 26, fontSize: 11, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)' }}>{e.initials}</div>
+                  <div className="rc-avatar" style={{ width: 26, height: 26, fontSize: 11, background: 'linear-gradient(135deg,#93C5FD,#1A56DB)' }}>{e.user_initials}</div>
                   <div>
-                    <div style={{ fontSize: 12.5, fontWeight: 500 }}>{e.action}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>{e.target}</div>
-                    {e.meta && <div style={{ fontSize: 11.5, color: 'var(--rc-text-muted)', marginTop: 2 }}>{e.meta}</div>}
-                    <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>{e.user} · {e.ts}</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 500 }}>{e.label}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--rc-text-secondary)', marginTop: 2 }}>{e.sublabel}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--rc-text-muted)', marginTop: 3 }}>{e.user_name} · {new Date(e.timestamp).toLocaleString('en-IN')}</div>
                   </div>
                 </div>
               )) : <div className="rc-empty"><i className="ti ti-clock-off"/><div>No activity yet for this submission.</div></div>}
