@@ -223,45 +223,45 @@ async def seed():
                 d.get('compliance_score'), json.dumps(d.get('flags', [])),
                 d.get('excerpt'))
 
-        # Applications
-        for a in APPLICATIONS:
-            p = PEOPLE[a['owner_id']]
-            await conn.execute("""
-                INSERT INTO applications (
-                    id, number, product, sponsor, type, status,
-                    submissions, registrations, owner_id, owner_name,
-                    owner_initials, owner_role, opened_at
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-                ON CONFLICT (id) DO NOTHING
-            """, a['id'], a['number'], a['product'], a['sponsor'],
-                a['type'], a['status'], a['submissions'],
-                a['registrations'], p['id'], p['name'],
-                p['initials'], p['role'], a['opened_at'])
+        # Applications (SPRINT5: disabled)
+        # for a in APPLICATIONS:
+        #     p = PEOPLE[a['owner_id']]
+        #     await conn.execute("""
+        #         INSERT INTO applications (
+        #             id, number, product, sponsor, type, status,
+        #             submissions, registrations, owner_id, owner_name,
+        #             owner_initials, owner_role, opened_at
+        #         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        #         ON CONFLICT (id) DO NOTHING
+        #     """, a['id'], a['number'], a['product'], a['sponsor'],
+        #         a['type'], a['status'], a['submissions'],
+        #         a['registrations'], p['id'], p['name'],
+        #         p['initials'], p['role'], a['opened_at'])
 
-        # Registrations
-        for r in REGISTRATIONS:
-            await conn.execute("""
-                INSERT INTO registrations (
-                    id, number, product, certificate, market, state,
-                    approved_date, expiry_date, application_id
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-                ON CONFLICT (id) DO NOTHING
-            """, r['id'], r['number'], r['product'], r['certificate'],
-                r['market'], r['state'], r['approved_date'],
-                r['expiry_date'], r.get('application_id'))
+        # Registrations (SPRINT5: disabled)
+        # for r in REGISTRATIONS:
+        #     await conn.execute("""
+        #         INSERT INTO registrations (
+        #             id, number, product, certificate, market, state,
+        #             approved_date, expiry_date, application_id
+        #         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        #         ON CONFLICT (id) DO NOTHING
+        #     """, r['id'], r['number'], r['product'], r['certificate'],
+        #         r['market'], r['state'], r['approved_date'],
+        #         r['expiry_date'], r.get('application_id'))
 
-        # HA Correspondence
-        for h in HA_CORRESPONDENCE:
-            await conn.execute("""
-                INSERT INTO ha_correspondence (
-                    id, number, subject, direction, authority, category,
-                    submission_id, received_at, due_at, state, priority, preview
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-                ON CONFLICT (id) DO NOTHING
-            """, h['id'], h['number'], h['subject'], h['direction'],
-                h['authority'], h['category'], h.get('submission_id'),
-                h['received_at'], h.get('due_at'), h['state'],
-                h['priority'], h['preview'])
+        # HA Correspondence (SPRINT5: disabled)
+        # for h in HA_CORRESPONDENCE:
+        #     await conn.execute("""
+        #         INSERT INTO ha_correspondence (
+        #             id, number, subject, direction, authority, category,
+        #             submission_id, received_at, due_at, state, priority, preview
+        #         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        #         ON CONFLICT (id) DO NOTHING
+        #     """, h['id'], h['number'], h['subject'], h['direction'],
+        #         h['authority'], h['category'], h.get('submission_id'),
+        #         h['received_at'], h.get('due_at'), h['state'],
+        #         h['priority'], h['preview'])
 
         print(f"Seed complete. ({seeded} new submissions inserted)")
     finally:

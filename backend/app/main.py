@@ -50,7 +50,12 @@ from routers.workspace import router as workspace_router
 from db import init_all_tables
 from seed import seed as seed_db
 from app.services.storage_service import verify_storage_bucket_exists
-from scripts.seed_submissions import seed_demo_submissions
+from scripts.seed_submissions import (
+    seed_demo_submissions,
+    seed_demo_applications,
+    seed_demo_registrations,
+    seed_demo_correspondence,
+)
 
 logger = logging.getLogger(__name__)
 _APP_START_TIME = time_module.time()
@@ -133,7 +138,10 @@ async def lifespan(app: FastAPI):
         try:
             conn = await get_conn()
             try:
+                await seed_demo_applications(conn)
                 await seed_demo_submissions(conn)
+                await seed_demo_registrations(conn)
+                await seed_demo_correspondence(conn)
             finally:
                 await conn.close()
         except Exception as e:
