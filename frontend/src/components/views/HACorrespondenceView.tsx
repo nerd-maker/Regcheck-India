@@ -5,9 +5,8 @@ import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
-import { transitionCorrespondenceState } from '@/services/workspaceData'
-import { useCorrespondence } from '@/hooks/useWorkspaceData'
-import axios from 'axios'
+import { transitionCorrespondenceState, createCorrespondence } from '@/services/workspaceData'
+import { useCorrespondence, useSubmissions } from '@/hooks/useWorkspaceData'
 import { getStoredKey } from '@/services/api'
 
 const STATE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
@@ -23,39 +22,51 @@ export default function HACorrespondenceView() {
   const [search, setSearch] = useState('')
 
   const { data: correspondence, loading, reload: loadCorrespondence } = useCorrespondence()
+  const { data: submissions } = useSubmissions()
 
   // ── New correspondence form state ─────────────────────────────────────
   const [showNewForm, setShowNewForm] = useState(false)
   const [newSubject, setNewSubject] = useState('')
+  const [newDirection, setNewDirection] = useState('inbound')
   const [newAuthority, setNewAuthority] = useState('CDSCO')
   const [newCategory, setNewCategory] = useState('Query')
+  const [newSubmissionId, setNewSubmissionId] = useState('')
+  const [newReceivedAt, setNewReceivedAt] = useState(() => new Date().toISOString().split('T')[0])
+  const [newDueAt, setNewDueAt] = useState('')
   const [newPriority, setNewPriority] = useState('standard')
+  const [newPreview, setNewPreview] = useState('')
   const [newSubmitting, setNewSubmitting] = useState(false)
 
   const handleNewResponse = async () => {
-    if (!newSubject.trim()) return
+    if (!newSubject.trim() || !newReceivedAt) return
     setNewSubmitting(true)
     try {
-      await axios.post('/api/regcheck/correspondence', {
-        subject: newSubject,
+      await createCorrespondence({
+        subject: newSubject.trim(),
+        direction: newDirection,
         authority: newAuthority,
         category: newCategory,
+        submission_id: newSubmissionId || undefined,
+        received_at: newReceivedAt,
+        due_at: newDueAt || undefined,
         priority: newPriority,
-        direction: 'outbound',
-        preview: newSubject,
-      }, {
-        headers: { 'x-anthropic-api-key': getStoredKey() },
-        timeout: 8000,
+        preview: newPreview.trim(),
       })
       await loadCorrespondence()
       setShowNewForm(false)
+      // Reset state
       setNewSubject('')
+      setNewDirection('inbound')
+      setNewAuthority('CDSCO')
+      setNewCategory('Query')
+      setNewSubmissionId('')
+      setNewReceivedAt(new Date().toISOString().split('T')[0])
+      setNewDueAt('')
+      setNewPriority('standard')
+      setNewPreview('')
     } catch (err) {
       console.error('Failed to create correspondence:', err)
-      // Optimistically reload anyway — backend may have saved despite error
-      await loadCorrespondence()
-      setShowNewForm(false)
-      setNewSubject('')
+      alert('Failed to create correspondence.')
     } finally {
       setNewSubmitting(false)
     }
@@ -266,8 +277,11 @@ export default function HACorrespondenceView() {
             background: 'var(--rc-surface)',
             border: '1px solid var(--rc-border)',
             borderRadius: 'var(--rc-radius-lg)',
-            padding: 28, minWidth: 440,
+            padding: 28, minWidth: 460,
+            maxWidth: 500,
             boxShadow: 'var(--rc-shadow-xl)',
+            maxHeight: '90vh',
+            overflowY: 'auto'
           }}>
             <div style={{
               display: 'flex',
@@ -297,12 +311,25 @@ export default function HACorrespondenceView() {
                   placeholder="e.g. Response to CDSCO deficiency letter"
                   value={newSubject}
                   onChange={e => setNewSubject(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleNewResponse()}
-                  autoFocus
                 />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                    Direction
+                  </label>
+                  <select
+                    className="rc-input"
+                    style={{ width: '100%' }}
+                    value={newDirection}
+                    onChange={e => setNewDirection(e.target.value)}
+                  >
+                    <option value="inbound">Inbound</option>
+                    <option value="outbound">Outbound</option>
+                  </select>
+                </div>
+
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
                     Authority
@@ -318,6 +345,9 @@ export default function HACorrespondenceView() {
                     <option>State FDA</option>
                   </select>
                 </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
                     Category
@@ -330,27 +360,86 @@ export default function HACorrespondenceView() {
                   >
                     <option>Query</option>
                     <option>Deficiency Letter</option>
-                    <option>CAPA Request</option>
-                    <option>Acknowledgement</option>
                     <option>Approval</option>
+                    <option>Acknowledgement</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                    Priority
+                  </label>
+                  <select
+                    className="rc-input"
+                    style={{ width: '100%' }}
+                    value={newPriority}
+                    onChange={e => setNewPriority(e.target.value)}
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
                   </select>
                 </div>
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
-                  Priority
+                  Linked Submission
                 </label>
                 <select
                   className="rc-input"
                   style={{ width: '100%' }}
-                  value={newPriority}
-                  onChange={e => setNewPriority(e.target.value)}
+                  value={newSubmissionId}
+                  onChange={e => setNewSubmissionId(e.target.value)}
                 >
-                  <option value="standard">Standard</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
+                  <option value="">-- Select Submission (Optional) --</option>
+                  {submissions.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.number})</option>
+                  ))}
                 </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                    Received Date *
+                  </label>
+                  <input
+                    type="date"
+                    className="rc-input"
+                    style={{ width: '100%' }}
+                    value={newReceivedAt}
+                    onChange={e => setNewReceivedAt(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    className="rc-input"
+                    style={{ width: '100%' }}
+                    value={newDueAt}
+                    onChange={e => setNewDueAt(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+                  Preview / Summary
+                </label>
+                <textarea
+                  className="rc-input"
+                  style={{ width: '100%', minHeight: 60 }}
+                  maxLength={500}
+                  placeholder="Summarize the correspondence..."
+                  value={newPreview}
+                  onChange={e => setNewPreview(e.target.value)}
+                />
               </div>
             </div>
 
@@ -361,7 +450,7 @@ export default function HACorrespondenceView() {
               <button
                 className="rc-btn rc-btn-primary"
                 onClick={handleNewResponse}
-                disabled={!newSubject.trim() || newSubmitting}
+                disabled={!newSubject.trim() || !newReceivedAt || newSubmitting}
               >
                 {newSubmitting ? (
                   <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }}/> Creating...</>

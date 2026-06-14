@@ -43,34 +43,35 @@ def rows_to_list(rows) -> List[dict]:
 # ── SUBMISSIONS ───────────────────────────────────────────────────
 
 
-@router.get("/submissions")
-async def list_submissions(
-    state: Optional[str] = Query(None),
-    type: Optional[str] = Query(None),
-    phase: Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
-):
-    conn = await get_conn()
-    try:
-        rows = await conn.fetch(
-            "SELECT * FROM submissions ORDER BY created_at DESC"
-        )
-        results = rows_to_list(rows)
-        if state:
-            results = [r for r in results if r.get('state') == state]
-        if type:
-            results = [r for r in results if r.get('type') == type]
-        if phase:
-            results = [r for r in results if r.get('phase') == phase]
-        if search:
-            q = search.lower()
-            results = [r for r in results if
-                       q in r.get('name', '').lower() or
-                       q in r.get('number', '').lower() or
-                       q in r.get('product', '').lower()]
-        return results
-    finally:
-        await conn.close()
+# @router.get("/submissions")
+# async def list_submissions(
+#     state: Optional[str] = Query(None),
+#     type: Optional[str] = Query(None),
+#     phase: Optional[str] = Query(None),
+#     search: Optional[str] = Query(None),
+# ):
+#     conn = await get_conn()
+#     try:
+#         rows = await conn.fetch(
+#             "SELECT * FROM submissions ORDER BY created_at DESC"
+#         )
+#         results = rows_to_list(rows)
+#         if state:
+#             results = [r for r in results if r.get('state') == state]
+#         if type:
+#             results = [r for r in results if r.get('type') == type]
+#         if phase:
+#             results = [r for r in results if r.get('phase') == phase]
+#         if search:
+#             q = search.lower()
+#             results = [r for r in results if
+#                        q in r.get('name', '').lower() or
+#                        q in r.get('number', '').lower() or
+#                        q in r.get('product', '').lower()]
+#         return results
+#     finally:
+#         await conn.close()
+
 
 
 class SubmissionCreate(BaseModel):
@@ -86,75 +87,78 @@ class SubmissionCreate(BaseModel):
     application_id: Optional[str] = None
 
 
-@router.post("/submissions")
-async def create_submission(body: SubmissionCreate):
-    conn = await get_conn()
-    try:
-        sid = f"s-{uuid.uuid4().hex[:8]}"
-        count = await conn.fetchval("SELECT COUNT(*) FROM submissions")
-        number = f"RC-SUB-{datetime.now().year}-{str(int(count) + 1).zfill(4)}"
-        now_str = datetime.now().strftime("%-d %b %Y, %H:%M") if os.name != 'nt' \
-            else datetime.now().strftime("%d %b %Y, %H:%M")
-
-        await conn.execute("""
-            INSERT INTO submissions (
-                id, number, name, type, product, indication, state,
-                ha_authority, phase, owner_id, owner_name, owner_initials,
-                owner_role, target_submit_date, risk_level, documents,
-                open_gaps, compliance_score, frameworks, application_id,
-                updated_at
-            ) VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,
-                      'p1','Anika Sharma','AS','Regulatory Lead',
-                      $9,$10,0,0,0,$11,$12,$13)
-        """, sid, number, body.name, body.type, body.product,
-            body.indication, body.ha_authority, body.phase,
-            body.target_submit_date, body.risk_level,
-            json.dumps(body.frameworks), body.application_id, now_str)
-
-        row = await conn.fetchrow(
-            "SELECT * FROM submissions WHERE id=$1", sid
-        )
-        return row_to_dict(row)
-    finally:
-        await conn.close()
-
-
-@router.get("/submissions/{submission_id}")
-async def get_submission(submission_id: str):
-    conn = await get_conn()
-    try:
-        row = await conn.fetchrow(
-            "SELECT * FROM submissions WHERE id=$1", submission_id
-        )
-        if not row:
-            raise HTTPException(status_code=404, detail="Submission not found")
-        return row_to_dict(row)
-    finally:
-        await conn.close()
+# @router.post("/submissions")
+# async def create_submission(body: SubmissionCreate):
+#     conn = await get_conn()
+#     try:
+#         sid = f"s-{uuid.uuid4().hex[:8]}"
+#         count = await conn.fetchval("SELECT COUNT(*) FROM submissions")
+#         number = f"RC-SUB-{datetime.now().year}-{str(int(count) + 1).zfill(4)}"
+#         now_str = datetime.now().strftime("%-d %b %Y, %H:%M") if os.name != 'nt' \
+#             else datetime.now().strftime("%d %b %Y, %H:%M")
+# 
+#         await conn.execute("""
+#             INSERT INTO submissions (
+#                 id, number, name, type, product, indication, state,
+#                 ha_authority, phase, owner_id, owner_name, owner_initials,
+#                 owner_role, target_submit_date, risk_level, documents,
+#                 open_gaps, compliance_score, frameworks, application_id,
+#                 updated_at
+#             ) VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,
+#                       'p1','Anika Sharma','AS','Regulatory Lead',
+#                       $9,$10,0,0,0,$11,$12,$13)
+#         """, sid, number, body.name, body.type, body.product,
+#             body.indication, body.ha_authority, body.phase,
+#             body.target_submit_date, body.risk_level,
+#             json.dumps(body.frameworks), body.application_id, now_str)
+# 
+#         row = await conn.fetchrow(
+#             "SELECT * FROM submissions WHERE id=$1", sid
+#         )
+#         return row_to_dict(row)
+#     finally:
+#         await conn.close()
 
 
-@router.patch("/submissions/{submission_id}")
-async def update_submission(submission_id: str, body: dict):
-    conn = await get_conn()
-    try:
-        allowed = ['state', 'state_label', 'compliance_score',
-                   'open_gaps', 'documents', 'risk_level', 'updated_at',
-                   'target_submit_date']
-        updates = {k: v for k, v in body.items() if k in allowed}
-        if not updates:
-            raise HTTPException(status_code=400, detail="No valid fields to update")
-        for k, v in updates.items():
-            await conn.execute(
-                f"UPDATE submissions SET {k}=$1 WHERE id=$2", v, submission_id
-            )
-        row = await conn.fetchrow(
-            "SELECT * FROM submissions WHERE id=$1", submission_id
-        )
-        if not row:
-            raise HTTPException(status_code=404, detail="Submission not found")
-        return row_to_dict(row)
-    finally:
-        await conn.close()
+
+# @router.get("/submissions/{submission_id}")
+# async def get_submission(submission_id: str):
+#     conn = await get_conn()
+#     try:
+#         row = await conn.fetchrow(
+#             "SELECT * FROM submissions WHERE id=$1", submission_id
+#         )
+#         if not row:
+#             raise HTTPException(status_code=404, detail="Submission not found")
+#         return row_to_dict(row)
+#     finally:
+#         await conn.close()
+
+
+
+# @router.patch("/submissions/{submission_id}")
+# async def update_submission(submission_id: str, body: dict):
+#     conn = await get_conn()
+#     try:
+#         allowed = ['state', 'state_label', 'compliance_score',
+#                    'open_gaps', 'documents', 'risk_level', 'updated_at',
+#                    'target_submit_date']
+#         updates = {k: v for k, v in body.items() if k in allowed}
+#         if not updates:
+#             raise HTTPException(status_code=400, detail="No valid fields to update")
+#         for k, v in updates.items():
+#             await conn.execute(
+#                 f"UPDATE submissions SET {k}=$1 WHERE id=$2", v, submission_id
+#             )
+#         row = await conn.fetchrow(
+#             "SELECT * FROM submissions WHERE id=$1", submission_id
+#         )
+#         if not row:
+#             raise HTTPException(status_code=404, detail="Submission not found")
+#         return row_to_dict(row)
+#     finally:
+#         await conn.close()
+
 
 
 # ── DOCUMENTS ─────────────────────────────────────────────────────
@@ -305,28 +309,29 @@ async def list_registrations(
 # ── HA CORRESPONDENCE ─────────────────────────────────────────────
 
 
-@router.get("/correspondence")
-async def list_correspondence(
-    state: Optional[str] = Query(None),
-    submission_id: Optional[str] = Query(None),
-    priority: Optional[str] = Query(None),
-):
-    conn = await get_conn()
-    try:
-        rows = await conn.fetch(
-            "SELECT * FROM ha_correspondence ORDER BY created_at DESC"
-        )
-        results = rows_to_list(rows)
-        if state:
-            results = [r for r in results if r.get('state') == state]
-        if submission_id:
-            results = [r for r in results
-                       if r.get('submission_id') == submission_id]
-        if priority:
-            results = [r for r in results if r.get('priority') == priority]
-        return results
-    finally:
-        await conn.close()
+# @router.get("/correspondence")
+# async def list_correspondence(
+#     state: Optional[str] = Query(None),
+#     submission_id: Optional[str] = Query(None),
+#     priority: Optional[str] = Query(None),
+# ):
+#     conn = await get_conn()
+#     try:
+#         rows = await conn.fetch(
+#             "SELECT * FROM ha_correspondence ORDER BY created_at DESC"
+#         )
+#         results = rows_to_list(rows)
+#         if state:
+#             results = [r for r in results if r.get('state') == state]
+#         if submission_id:
+#             results = [r for r in results
+#                        if r.get('submission_id') == submission_id]
+#         if priority:
+#             results = [r for r in results if r.get('priority') == priority]
+#         return results
+#     finally:
+#         await conn.close()
+
 
 
 @router.patch("/correspondence/{corr_id}")
@@ -361,82 +366,84 @@ VALID_CORR_TRANSITIONS = {
 }
 
 
-@router.post("/correspondence")
-async def create_correspondence(body: dict):
-    """Create a new HA correspondence item."""
-    conn = await get_conn()
-    try:
-        cid = f"h-{uuid.uuid4().hex[:8]}"
-        count = await conn.fetchval(
-            "SELECT COUNT(*) FROM ha_correspondence"
-        )
-        number = (
-            f"CDSCO-Q-{datetime.now().year}-"
-            f"{str(count + 1).zfill(4)}"
-        )
-        await conn.execute("""
-            INSERT INTO ha_correspondence (
-                id, number, subject, direction, authority,
-                category, submission_id, received_at, due_at,
-                state, priority, preview
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'open',$10,$11)
-        """,
-            cid, number,
-            body.get('subject', 'New correspondence'),
-            body.get('direction', 'inbound'),
-            body.get('authority', 'CDSCO'),
-            body.get('category', 'Query'),
-            body.get('submission_id'),
-            body.get('received_at', datetime.now().strftime('%Y-%m-%d')),
-            body.get('due_at'),
-            body.get('priority', 'standard'),
-            body.get('preview', ''),
-        )
-        row = await conn.fetchrow(
-            "SELECT * FROM ha_correspondence WHERE id=$1", cid
-        )
-        return row_to_dict(row)
-    finally:
-        await conn.close()
+# @router.post("/correspondence")
+# async def create_correspondence(body: dict):
+#     """Create a new HA correspondence item."""
+#     conn = await get_conn()
+#     try:
+#         cid = f"h-{uuid.uuid4().hex[:8]}"
+#         count = await conn.fetchval(
+#             "SELECT COUNT(*) FROM ha_correspondence"
+#         )
+#         number = (
+#             f"CDSCO-Q-{datetime.now().year}-"
+#             f"{str(count + 1).zfill(4)}"
+#         )
+#         await conn.execute("""
+#             INSERT INTO ha_correspondence (
+#                 id, number, subject, direction, authority,
+#                 category, submission_id, received_at, due_at,
+#                 state, priority, preview
+#             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'open',$10,$11)
+#         """,
+#             cid, number,
+#             body.get('subject', 'New correspondence'),
+#             body.get('direction', 'inbound'),
+#             body.get('authority', 'CDSCO'),
+#             body.get('category', 'Query'),
+#             body.get('submission_id'),
+#             body.get('received_at', datetime.now().strftime('%Y-%m-%d')),
+#             body.get('due_at'),
+#             body.get('priority', 'standard'),
+#             body.get('preview', ''),
+#         )
+#         row = await conn.fetchrow(
+#             "SELECT * FROM ha_correspondence WHERE id=$1", cid
+#         )
+#         return row_to_dict(row)
+#     finally:
+#         await conn.close()
 
 
-@router.patch("/correspondence/{corr_id}/state")
-async def transition_correspondence_state(corr_id: str, body: dict):
-    """
-    State machine transition for correspondence.
-    Valid transitions: open → response-drafted → closed
-    """
-    conn = await get_conn()
-    try:
-        row = await conn.fetchrow(
-            "SELECT * FROM ha_correspondence WHERE id=$1", corr_id
-        )
-        if not row:
-            raise HTTPException(status_code=404, detail="Not found")
 
-        current = row['state']
-        new_state = body.get('state')
-        allowed = VALID_CORR_TRANSITIONS.get(current, [])
+# @router.patch("/correspondence/{corr_id}/state")
+# async def transition_correspondence_state(corr_id: str, body: dict):
+#     """
+#     State machine transition for correspondence.
+#     Valid transitions: open → response-drafted → closed
+#     """
+#     conn = await get_conn()
+#     try:
+#         row = await conn.fetchrow(
+#             "SELECT * FROM ha_correspondence WHERE id=$1", corr_id
+#         )
+#         if not row:
+#             raise HTTPException(status_code=404, detail="Not found")
+# 
+#         current = row['state']
+#         new_state = body.get('state')
+#         allowed = VALID_CORR_TRANSITIONS.get(current, [])
+# 
+#         if new_state not in allowed:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=(
+#                     f"Cannot transition from '{current}' to '{new_state}'. "
+#                     f"Allowed: {allowed}"
+#                 )
+#             )
+# 
+#         await conn.execute(
+#             "UPDATE ha_correspondence SET state=$1 WHERE id=$2",
+#             new_state, corr_id
+#         )
+#         updated = await conn.fetchrow(
+#             "SELECT * FROM ha_correspondence WHERE id=$1", corr_id
+#         )
+#         return row_to_dict(updated)
+#     finally:
+#         await conn.close()
 
-        if new_state not in allowed:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Cannot transition from '{current}' to '{new_state}'. "
-                    f"Allowed: {allowed}"
-                )
-            )
-
-        await conn.execute(
-            "UPDATE ha_correspondence SET state=$1 WHERE id=$2",
-            new_state, corr_id
-        )
-        updated = await conn.fetchrow(
-            "SELECT * FROM ha_correspondence WHERE id=$1", corr_id
-        )
-        return row_to_dict(updated)
-    finally:
-        await conn.close()
 
 
 # ── GAP REMEDIATIONS ─────────────────────────────────────────────────────────

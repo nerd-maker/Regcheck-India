@@ -148,7 +148,8 @@ export async function fetchSubmissions(): Promise<SubmissionRecord[]> {
       headers: headers(),
       timeout: 8000,
     })
-    return (data as any[]).map(toSubmission)
+    const list = Array.isArray(data) ? data : (data?.submissions || [])
+    return list.map(toSubmission)
   } catch {
     return SUBMISSIONS // instant fallback — no visible loading failure
   }
@@ -206,7 +207,8 @@ export async function fetchCorrespondence(
       params,
       timeout: 8000,
     })
-    return (data as any[]).map(toCorrespondence)
+    const list = Array.isArray(data) ? data : (data?.correspondence || [])
+    return list.map(toCorrespondence)
   } catch {
     return submissionId
       ? HA_CORRESPONDENCE.filter((h) => h.submissionId === submissionId)
@@ -226,12 +228,34 @@ export async function createSubmission(body: {
   target_submit_date?: string
   risk_level?: string
   frameworks?: string[]
+  application_id?: string
+  owner_name?: string
+  owner_initials?: string
+  owner_role?: string
 }): Promise<SubmissionRecord> {
   const { data } = await axios.post(`${PROXY}/submissions`, body, {
     headers: headers(),
     timeout: 10000,
   })
   return toSubmission(data)
+}
+
+export async function createCorrespondence(body: {
+  subject: string
+  direction: string
+  authority: string
+  category: string
+  submission_id?: string
+  received_at: string
+  due_at?: string
+  priority: string
+  preview?: string
+}): Promise<HACorrespondenceRecord> {
+  const { data } = await axios.post(`${PROXY}/correspondence`, body, {
+    headers: headers(),
+    timeout: 10000,
+  })
+  return toCorrespondence(data)
 }
 
 export async function uploadDocument(

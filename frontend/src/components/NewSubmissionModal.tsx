@@ -14,16 +14,23 @@ interface Props {
     phase: string
     ha_authority: string
     target_submit_date: string
+    owner_name: string
+    owner_initials: string
   }) => Promise<void>
 }
 
 export default function NewSubmissionModal({ isOpen, onClose, onCreate }: Props) {
-  const _workspace = useWorkspace()
+  const [name, setName] = useState('')
   const [product, setProduct] = useState('')
   const [type, setType] = useState('IND')
   const [phase, setPhase] = useState('Phase II')
   const [indication, setIndication] = useState('')
-  const [sponsor, setSponsor] = useState('')
+  const [haAuthority, setHaAuthority] = useState('CDSCO')
+  const [targetSubmitDate, setTargetSubmitDate] = useState(() => {
+    return new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  })
+  const [ownerName, setOwnerName] = useState('')
+  const [ownerInitials, setOwnerInitials] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -31,33 +38,39 @@ export default function NewSubmissionModal({ isOpen, onClose, onCreate }: Props)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!product.trim() || !indication.trim() || !sponsor.trim()) {
-      setError('All fields are required.')
+    if (!name.trim() || !product.trim() || !indication.trim() || !ownerName.trim() || !ownerInitials.trim()) {
+      setError('Name, Product, Indication, Owner Name, and Owner Initials are required.')
+      return
+    }
+    if (ownerInitials.length > 5) {
+      setError('Owner Initials must be 5 characters or less.')
       return
     }
     setError('')
     setSubmitting(true)
     try {
       if (onCreate) {
-        const name = `${product} – ${type}`
-        const target_submit_date = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         await onCreate({
-          name,
+          name: name.trim(),
           type,
-          product,
-          indication,
+          product: product.trim(),
+          indication: indication.trim(),
           phase,
-          ha_authority: 'CDSCO',
-          target_submit_date,
+          ha_authority: haAuthority,
+          target_submit_date: targetSubmitDate,
+          owner_name: ownerName.trim(),
+          owner_initials: ownerInitials.trim().toUpperCase(),
         })
       } else {
-        alert(`Submission created (pending backend): ${product} — ${type} — ${indication}\n\nThis will persist to the database in Phase B-1.`)
+        alert(`Submission created: ${name} — ${product} — ${type}`)
       }
       onClose()
       // Reset state
+      setName('')
       setProduct('')
       setIndication('')
-      setSponsor('')
+      setOwnerName('')
+      setOwnerInitials('')
     } catch (err: any) {
       setError(err.message || 'Failed to create submission.')
     } finally {
@@ -67,14 +80,14 @@ export default function NewSubmissionModal({ isOpen, onClose, onCreate }: Props)
 
   return (
     <div
-      className="fixed inset-0 z-[999] flex items-start justify-center px-4 pt-16"
+      className="fixed inset-0 z-[999] flex items-start justify-center px-4 pt-16 overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       aria-modal="true"
       role="dialog"
       aria-label="New Submission"
     >
-      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl p-8" onClick={e => e.stopPropagation()}>
+      <div className="relative w-full max-w-md rounded-2xl bg-white shadow-2xl p-8 my-8" onClick={e => e.stopPropagation()}>
         <button
           onClick={onClose}
           aria-label="Close"
@@ -92,54 +105,88 @@ export default function NewSubmissionModal({ isOpen, onClose, onCreate }: Props)
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-product">
-              Drug / Product Name *
+            <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-name">
+              Submission Name *
             </label>
             <input
-              id="sub-product"
+              id="sub-name"
               type="text"
-              placeholder="e.g. ZP-101"
-              value={product}
-              onChange={e => setProduct(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              placeholder="e.g. ZP-101 Phase II CT Permission"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-type">
-              Submission Type *
-            </label>
-            <select
-              id="sub-type"
-              value={type}
-              onChange={e => setType(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-            >
-              <option value="IND">IND (Investigational New Drug)</option>
-              <option value="NDA">NDA (New Drug Application)</option>
-              <option value="CT-04">CT-04 (Clinical Trial Application)</option>
-              <option value="Schedule M">Schedule M (GMP Compliance)</option>
-              <option value="Pre-IND Meeting">Pre-IND Meeting Briefing</option>
-              <option value="Annual Update">Annual Update</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-type">
+                Type *
+              </label>
+              <select
+                id="sub-type"
+                value={type}
+                onChange={e => setType(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="IND">IND</option>
+                <option value="NDA">NDA</option>
+                <option value="CT-04">CT-04</option>
+                <option value="Schedule M">Schedule M</option>
+                <option value="ANDA">ANDA</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-phase">
+                Phase *
+              </label>
+              <select
+                id="sub-phase"
+                value={phase}
+                onChange={e => setPhase(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="Pre-IND">Pre-IND</option>
+                <option value="Phase I">Phase I</option>
+                <option value="Phase II">Phase II</option>
+                <option value="Phase III">Phase III</option>
+                <option value="Post-approval">Post-approval</option>
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-phase">
-              Development Phase *
-            </label>
-            <select
-              id="sub-phase"
-              value={phase}
-              onChange={e => setPhase(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
-            >
-              <option value="Pre-IND">Pre-IND</option>
-              <option value="Phase I">Phase I</option>
-              <option value="Phase II">Phase II</option>
-              <option value="Phase III">Phase III</option>
-              <option value="Post-Marketing">Post-Marketing</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-product">
+                Drug / Product Name *
+              </label>
+              <input
+                id="sub-product"
+                type="text"
+                placeholder="e.g. ZP-101"
+                value={product}
+                onChange={e => setProduct(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-ha-authority">
+                HA Authority *
+              </label>
+              <select
+                id="sub-ha-authority"
+                value={haAuthority}
+                onChange={e => setHaAuthority(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="CDSCO">CDSCO</option>
+                <option value="DCGI">DCGI</option>
+                <option value="SLA">SLA</option>
+                <option value="CPCB">CPCB</option>
+              </select>
+            </div>
           </div>
 
           <div>
@@ -152,22 +199,51 @@ export default function NewSubmissionModal({ isOpen, onClose, onCreate }: Props)
               placeholder="e.g. Type 2 Diabetes Mellitus"
               value={indication}
               onChange={e => setIndication(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-sponsor">
-              Sponsor Name *
+            <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-target-date">
+              Target Submit Date
             </label>
             <input
-              id="sub-sponsor"
-              type="text"
-              placeholder="e.g. Zephyr Pharma Pvt Ltd"
-              value={sponsor}
-              onChange={e => setSponsor(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              id="sub-target-date"
+              type="date"
+              value={targetSubmitDate}
+              onChange={e => setTargetSubmitDate(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-owner-name">
+                Owner Name *
+              </label>
+              <input
+                id="sub-owner-name"
+                type="text"
+                placeholder="e.g. Anika Sharma"
+                value={ownerName}
+                onChange={e => setOwnerName(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1" htmlFor="sub-owner-initials">
+                Initials *
+              </label>
+              <input
+                id="sub-owner-initials"
+                type="text"
+                placeholder="AS"
+                maxLength={5}
+                value={ownerInitials}
+                onChange={e => setOwnerInitials(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
           </div>
 
           {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
@@ -194,3 +270,4 @@ export default function NewSubmissionModal({ isOpen, onClose, onCreate }: Props)
     </div>
   )
 }
+

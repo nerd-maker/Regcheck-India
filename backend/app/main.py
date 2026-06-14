@@ -247,6 +247,11 @@ from app.routers.vault_documents import router as vault_documents_router
 app.include_router(vault_documents_router, prefix="/api/v1")
 from app.routers.export_router import router as export_router
 app.include_router(export_router, prefix="/api/v1")
+from app.routers.submissions_router import router as submissions_router
+app.include_router(submissions_router, prefix="/api/v1")
+from app.routers.correspondence_router import router as correspondence_router
+app.include_router(correspondence_router, prefix="/api/v1")
+
 
 # Create upload directory
 UPLOAD_DIR = Path(settings.upload_dir)
