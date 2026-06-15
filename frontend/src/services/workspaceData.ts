@@ -148,9 +148,11 @@ export async function fetchSubmissions(): Promise<SubmissionRecord[]> {
       headers: headers(),
       timeout: 8000,
     })
+    console.log('[workspaceData] fetchSubmissions raw response:', data)
     const list = Array.isArray(data) ? data : (data?.submissions || [])
     return list.map(toSubmission)
-  } catch {
+  } catch (err) {
+    console.error('[workspaceData] fetchSubmissions error:', err)
     return SUBMISSIONS // instant fallback — no visible loading failure
   }
 }
@@ -207,9 +209,11 @@ export async function fetchCorrespondence(
       params,
       timeout: 8000,
     })
+    console.log('[workspaceData] fetchCorrespondence raw response:', data)
     const list = Array.isArray(data) ? data : (data?.correspondence || [])
     return list.map(toCorrespondence)
-  } catch {
+  } catch (err) {
+    console.error('[workspaceData] fetchCorrespondence error:', err)
     return submissionId
       ? HA_CORRESPONDENCE.filter((h) => h.submissionId === submissionId)
       : HA_CORRESPONDENCE

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSubmissions, useCorrespondence } from '@/hooks/useWorkspaceData'
@@ -76,8 +77,14 @@ export default function LeftNav() {
   const pathname = usePathname()
 
   // Dynamic badge counts from live data
-  const { data: submissions } = useSubmissions()
-  const { data: correspondence } = useCorrespondence()
+  const { data: submissions, reload: reloadSubmissions } = useSubmissions()
+  const { data: correspondence, reload: reloadCorrespondence } = useCorrespondence()
+
+  useEffect(() => {
+    reloadSubmissions()
+    reloadCorrespondence()
+  }, [pathname, reloadSubmissions, reloadCorrespondence])
+
   const submissionCount = submissions.length
   const openCorrCount = correspondence.filter(
     c => c.state === 'open' || c.state === 'response-drafted'
