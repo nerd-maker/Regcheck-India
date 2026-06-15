@@ -19,6 +19,7 @@ export default function TopBar() {
   const [showHelp, setShowHelp] = useState(false)
   const [showNewSubmission, setShowNewSubmission] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [activeHelpModal, setActiveHelpModal] = useState<'guide' | 'frameworks' | 'agents' | 'shortcuts' | 'support' | null>(null)
   const notifRef = useRef<HTMLDivElement | null>(null)
 
   const [correspondence, setCorrespondence] = useState<HACorrespondenceRecord[]>([])
@@ -45,6 +46,27 @@ export default function TopBar() {
     }
     document.addEventListener('click', onClick)
     return () => document.removeEventListener('click', onClick)
+  }, [])
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        setShowNewSubmission(true)
+      }
+      if (e.key === 'Escape') {
+        setShowNotif(false)
+        setShowVault(false)
+        setShowUser(false)
+        setShowQuick(false)
+        setShowHelp(false)
+        setShowNewSubmission(false)
+        setActiveHelpModal(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
   const onSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -211,26 +233,26 @@ export default function TopBar() {
                     icon: 'ti-book',
                     label: 'Getting started guide',
                     sub: 'Learn how to use RegCheck-India',
-                    action: () => window.open(
-                      'https://github.com/nerd-maker/Regcheck-India/blob/main/README.md',
-                      '_blank'
-                    ),
+                    action: () => {
+                      setActiveHelpModal('guide')
+                      setShowHelp(false)
+                    },
                   },
                   {
                     icon: 'ti-file-description',
                     label: 'Regulatory frameworks',
                     sub: 'Schedule Y, NDCTR 2019, ICH E6(R3)',
-                    action: () => window.open(
-                      'https://cdsco.gov.in/opencms/opencms/en/Regulations/Acts-Rules/',
-                      '_blank'
-                    ),
+                    action: () => {
+                      setActiveHelpModal('frameworks')
+                      setShowHelp(false)
+                    },
                   },
                   {
                     icon: 'ti-robot',
                     label: 'AI agents overview',
                     sub: '9 compliance agents and how to use them',
                     action: () => {
-                      setActiveView('home')
+                      setActiveHelpModal('agents')
                       setShowHelp(false)
                     },
                   },
@@ -238,13 +260,19 @@ export default function TopBar() {
                     icon: 'ti-keyboard',
                     label: 'Keyboard shortcuts',
                     sub: 'Enter: global search · Ctrl+N: new submission',
-                    action: () => {},
+                    action: () => {
+                      setActiveHelpModal('shortcuts')
+                      setShowHelp(false)
+                    },
                   },
                   {
                     icon: 'ti-mail',
                     label: 'Contact support',
                     sub: 'contact@regcheck.in',
-                    action: () => window.open('mailto:contact@regcheck.in'),
+                    action: () => {
+                      setActiveHelpModal('support')
+                      setShowHelp(false)
+                    },
                   },
                 ].map(item => (
                   <button
@@ -292,18 +320,14 @@ export default function TopBar() {
                   color: 'var(--rc-text-muted)',
                   textAlign: 'center',
                 }}>
-                  RegCheck-India v1.0 Beta · 
                   <a
-                    href="https://github.com/nerd-maker/Regcheck-India"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href="https://regcheck-india-three.vercel.app"
                     style={{
-                      color: 'var(--rc-primary)',
+                      color: 'var(--rc-text-muted)',
                       textDecoration: 'none',
-                      marginLeft: 4,
                     }}
                   >
-                    GitHub ↗
+                    RegCheck-India v1.0 Beta
                   </a>
                 </div>
               </div>
@@ -365,7 +389,276 @@ export default function TopBar() {
         onClose={() => setShowNewSubmission(false)}
         onCreate={handleCreateSubmission}
       />
+
+      {/* Help & Support Modals */}
+      <HelpModal
+        isOpen={activeHelpModal === 'guide'}
+        onClose={() => setActiveHelpModal(null)}
+        title="Getting Started Guide"
+      >
+        <div className="space-y-4">
+          {[
+            { step: 1, title: 'Upload a document', desc: 'Upload your clinical protocols or investigator brochures in the Documents vault.' },
+            { step: 2, title: 'Trigger auto-compliance scan', desc: 'Transition the document state to "In Review" to kick off the background AI check.' },
+            { step: 3, title: 'View compliance results', desc: 'Open the "Compliance Actions" tab in the right inspector to view flagged gaps and scores.' },
+            { step: 4, title: 'Create a Submission', desc: 'Set up a dossier and link your documents to track overall compliance.' },
+            { step: 5, title: 'Track HA Correspondence', desc: 'Log Health Authority queries and deficiency letters to keep track of due dates.' }
+          ].map(item => (
+            <div key={item.step} className="flex gap-4">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-sm">
+                {item.step}
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm">{item.title}</h3>
+                <p className="text-gray-500 text-xs mt-1">{item.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </HelpModal>
+
+      <HelpModal
+        isOpen={activeHelpModal === 'frameworks'}
+        onClose={() => setActiveHelpModal(null)}
+        title="Covered Regulatory Frameworks"
+      >
+        <div className="space-y-4">
+          {[
+            { name: 'Schedule Y (NDCTR 2019)', detail: 'Appendices I–VII detailing clinical trials and animal studies specifications.' },
+            { name: 'ICH E6(R3) GCP', detail: 'Good Clinical Practice international standards for designing and conducting trials.' },
+            { name: 'ICH E2A', detail: 'Clinical safety data management: definitions and standards for expedited reporting.' },
+            { name: 'DPDP Act 2023', detail: 'Digital Personal Data Protection Act compliance requirements for PII handling.' },
+            { name: 'CTRI Guidelines', detail: 'Clinical Trial Registry - India requirements for trial registration.' },
+            { name: 'NDCTR 2019 Rule 87', detail: 'DCGI Serious Adverse Event (SAE) reporting timelines (24h to CDSCO/sponsor).' }
+          ].map(item => (
+            <div key={item.name} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+              <h3 className="font-semibold text-gray-900 text-sm">{item.name}</h3>
+              <p className="text-gray-500 text-xs mt-0.5">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+      </HelpModal>
+
+      <HelpModal
+        isOpen={activeHelpModal === 'agents'}
+        onClose={() => setActiveHelpModal(null)}
+        title="AI Compliance Agents Overview"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-3">
+          {[
+            { name: 'PII Anonymiser', desc: 'DPDP Act 2023 + Schedule Y compliant redaction of personal data.' },
+            { name: 'Document Summariser', desc: 'Precis with regulatory citations from CDSCO/international guidelines.' },
+            { name: 'Completeness Check', desc: 'Identify CRITICAL / MAJOR / MINOR compliance gaps in dossiers.' },
+            { name: 'Case Classifier', desc: 'ICH E2A · WHO-UMC · NDCTR timelines for SAE narrative assessment.' },
+            { name: 'Inspection Report', desc: 'Generate GCP inspection reports in CDSCO-approved formats.' },
+            { name: 'Regulatory Q&A', desc: 'RAG-grounded answers to queries using Indian regulations.' },
+            { name: 'Schedule Y Check', desc: 'Evaluation against Appendices I–XI + NDCTR 2019 Rules 1–105.' },
+            { name: 'ICH E6(R3) GCP', desc: 'Full GCP evaluation including R3 QMS + RBM specifications.' },
+            { name: 'Cross-doc Check', desc: 'Detect contradictions and discrepancies across all documents.' }
+          ].map(item => (
+            <div key={item.name} className="flex justify-between items-start gap-4 py-1 border-b border-gray-50 last:border-0">
+              <span className="font-semibold text-gray-900 text-xs min-w-[120px]">{item.name}</span>
+              <span className="text-gray-500 text-xs text-right">{item.desc}</span>
+            </div>
+          ))}
+        </div>
+      </HelpModal>
+
+      <HelpModal
+        isOpen={activeHelpModal === 'shortcuts'}
+        onClose={() => setActiveHelpModal(null)}
+        title="Keyboard Shortcuts"
+      >
+        <table className="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="py-2 font-semibold text-gray-900">Shortcut Key</th>
+              <th className="py-2 font-semibold text-gray-900">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-150">
+            <tr>
+              <td className="py-3 pr-4"><span className="font-mono text-teal-600 bg-gray-50 px-2 py-1 rounded font-bold border border-gray-100">Enter</span></td>
+              <td className="py-3 text-gray-600">Global search (trigger search from top bar)</td>
+            </tr>
+            <tr>
+              <td className="py-3 pr-4"><span className="font-mono text-teal-600 bg-gray-50 px-2 py-1 rounded font-bold border border-gray-100">Ctrl + N</span></td>
+              <td className="py-3 text-gray-600">Open new submission creation dialog</td>
+            </tr>
+            <tr>
+              <td className="py-3 pr-4"><span className="font-mono text-teal-600 bg-gray-50 px-2 py-1 rounded font-bold border border-gray-100">Ctrl + U</span></td>
+              <td className="py-3 text-gray-600">Trigger document upload dialog</td>
+            </tr>
+            <tr>
+              <td className="py-3 pr-4"><span className="font-mono text-teal-600 bg-gray-50 px-2 py-1 rounded font-bold border border-gray-100">Escape</span></td>
+              <td className="py-3 text-gray-600">Close current drawer panel or modal dialog</td>
+            </tr>
+          </tbody>
+        </table>
+      </HelpModal>
+
+      <HelpModal
+        isOpen={activeHelpModal === 'support'}
+        onClose={() => setActiveHelpModal(null)}
+        title="Contact Support"
+      >
+        <SupportForm onClose={() => setActiveHelpModal(null)} />
+      </HelpModal>
     </>
+  )
+}
+
+interface HelpModalProps {
+  isOpen: boolean
+  onClose: () => void
+  title: string
+  children: React.ReactNode
+  maxWidth?: string
+}
+
+function HelpModal({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }: HelpModalProps) {
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-[1000] flex items-start justify-center px-4 pt-16 overflow-y-auto"
+      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      aria-modal="true"
+      role="dialog"
+      aria-label={title}
+    >
+      <div className={`relative w-full ${maxWidth} rounded-2xl bg-white shadow-2xl p-8 my-8`} onClick={e => e.stopPropagation()}>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition-colors text-xl leading-none"
+        >
+          ✕
+        </button>
+
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+        </div>
+
+        <div className="text-sm text-gray-600 leading-relaxed">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SupportForm({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [message, setMessage] = useState('')
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      return
+    }
+    setStatus('submitting')
+    try {
+      const res = await fetch('https://formspree.io/f/REPLACE_WITH_FORMSPREE_ID', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ name, email, message, source: 'RegCheck-India Help Panel' }),
+      })
+      if (res.ok) {
+        setStatus('success')
+      } else {
+        setStatus('error')
+      }
+    } catch {
+      setStatus('error')
+    }
+  }
+
+  if (status === 'success') {
+    return (
+      <div className="text-center py-4">
+        <div className="text-3xl mb-2">✅</div>
+        <p className="text-sm font-semibold text-gray-900 mb-1">Message sent!</p>
+        <p className="text-xs text-gray-500">Message sent — we&apos;ll respond within 24 hours.</p>
+        <button
+          onClick={onClose}
+          className="mt-6 w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold transition-colors"
+        >
+          Close
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
+        <input
+          type="text"
+          required
+          value={name}
+          onChange={e => setName(e.target.value)}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-colors"
+          placeholder="Anika Sharma"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-colors"
+          placeholder="anika@zephyrpharma.in"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Message</label>
+        <textarea
+          required
+          rows={4}
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-colors"
+          placeholder="How can we help you?"
+        />
+      </div>
+      {status === 'error' && (
+        <p className="text-xs text-red-500">Failed to send message. Please try again or email us at contact@regcheck.in</p>
+      )}
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 border border-gray-200 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50 transition-colors"
+          disabled={status === 'submitting'}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={status === 'submitting'}
+          className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+        >
+          {status === 'submitting' ? 'Sending...' : 'Submit'}
+        </button>
+      </div>
+    </form>
   )
 }
 
