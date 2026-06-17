@@ -196,7 +196,7 @@ class TestSummarisers:
     async def test_sugam_summarise_parses_json(self):
         summariser = SUGAMApplicationSummariser()
         with patch("app.services.document_summariser.call_claude") as m_call:
-            m_call.return_value = {"content": '{"sponsor_details": {}}', "model": "claude-haiku-4-20250414", "usage": {"input_tokens": 10, "output_tokens": 20}}
+            m_call.return_value = {"content": '{"sponsor_details": {}}', "model": "claude-haiku-4-5-20251001", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise("doc text", "ct04")
         assert "sponsor_details" in out or "raw" in out
 
@@ -204,7 +204,7 @@ class TestSummarisers:
     async def test_sae_summariser(self):
         summariser = SAECaseNarrationSummariser()
         with patch("app.services.document_summariser.call_claude") as m_call:
-            m_call.return_value = {"content": '{"case_id": "C1"}', "model": "claude-haiku-4-20250414", "usage": {"input_tokens": 10, "output_tokens": 20}}
+            m_call.return_value = {"content": '{"case_id": "C1"}', "model": "claude-haiku-4-5-20251001", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise("SAE narrative")
         assert out.get("case_id") == "C1" or "raw" in out
 
@@ -212,7 +212,7 @@ class TestSummarisers:
     async def test_meeting_transcript(self):
         summariser = MeetingTranscriptSummariser()
         with patch("app.services.document_summariser.call_claude") as m_call:
-            m_call.return_value = {"content": '{"meeting_overview": "x"}', "model": "claude-haiku-4-20250414", "usage": {"input_tokens": 10, "output_tokens": 20}}
+            m_call.return_value = {"content": '{"meeting_overview": "x"}', "model": "claude-haiku-4-5-20251001", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise_transcript("transcript")
         assert "meeting_overview" in out or "raw" in out
 
@@ -228,6 +228,6 @@ class TestInspectionSchema:
     async def test_inspection_converter_parses_json(self):
         conv = InspectionObservationConverter()
         with patch("app.services.claude_client.call_claude") as m_call:
-            m_call.return_value = {"content": '{"observations": []}', "model": "claude-sonnet-4-20250514", "usage": {"input_tokens": 10, "output_tokens": 20}}
+            m_call.return_value = {"content": '{"observations": []}', "model": "claude-sonnet-4-6", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await conv.convert("raw note", {"site": "S1"})
         assert "observations" in out or "raw" in out

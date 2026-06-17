@@ -796,7 +796,7 @@ Summarise this pharmaceutical regulatory meeting transcript."""
 
         client = anthropic.Anthropic(api_key=anthropic_key)
         response = client.messages.create(
-            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
             max_tokens=4096,
             system=AGENT_02_MEETING_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}]
@@ -816,7 +816,7 @@ Summarise this pharmaceutical regulatory meeting transcript."""
 
         return AgentResponse(
             agent="Meeting_Audio_Summarisation",
-            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
             result=parsed,
             timestamp=datetime.utcnow().isoformat(),
             token_usage={
@@ -914,11 +914,8 @@ async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: 
     if not retrieved_context or len(retrieved_context.strip()) < 50:
         try:
 
-            chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
-            client = chromadb.PersistentClient(
-                path=chromadb_path,
-                settings=chromadb.Settings(anonymized_telemetry=False),
-            )
+            from app.services.chroma_client import get_chroma_client
+            client = get_chroma_client()
             embedding_fn = embedding_functions.DefaultEmbeddingFunction()
             
             collection = client.get_collection(name="regulatory_documents", embedding_function=embedding_fn)

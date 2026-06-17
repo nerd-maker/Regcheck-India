@@ -44,7 +44,7 @@ async def classify_sae(request: SAEClassifyRequest, x_session_id: str = Header(d
 @router.post("/sae-batch")
 async def classify_sae_batch(request: SAEBatchClassifyRequest, x_session_id: str = Header(default="default_session")):
     _ = x_session_id
-    return _with_attr({"results": [await sae_classifier.classify(t) for t in request.sae_texts]}, "claude-haiku-4-20250414")
+    return _with_attr({"results": [await sae_classifier.classify(t) for t in request.sae_texts]}, "claude-haiku-4-5-20251001")
 
 
 @router.post("/duplicate-check")

@@ -15,7 +15,7 @@ def test_export_word_endpoint():
     payload = {
         "agent_response": {
             "agent": "Document_Summarisation",
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-sonnet-4-6",
             "result": {
                 "summary": "This is a summary.",
                 "risk_level": "LOW",

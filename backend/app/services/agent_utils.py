@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Model constants (re-exported so importers don't also need claude_client)
 # ---------------------------------------------------------------------------
-MODEL_SONNET = os.getenv("ANTHROPIC_MODEL",      "claude-sonnet-4-20250514")
-MODEL_HAIKU  = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-20250414")
+MODEL_SONNET = os.getenv("ANTHROPIC_MODEL",      "claude-sonnet-4-6")
+MODEL_HAIKU  = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-5-20251001")
 
 
 # ---------------------------------------------------------------------------
@@ -33,11 +33,8 @@ def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
         import chromadb
         from chromadb.utils import embedding_functions
 
-        chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
-        client = chromadb.PersistentClient(
-            path=chromadb_path,
-            settings=chromadb.Settings(anonymized_telemetry=False),
-        )
+        from app.services.chroma_client import get_chroma_client
+        client = get_chroma_client()
         embedding_fn = embedding_functions.DefaultEmbeddingFunction()
         collection = client.get_collection(
             name="regulatory_documents",

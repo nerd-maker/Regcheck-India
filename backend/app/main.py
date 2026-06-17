@@ -89,7 +89,7 @@ else:
     logger.info("Sentry DSN not configured - error tracking disabled")
 
 
-def with_model_attribution(payload: dict, primary_model: str = "claude-sonnet-4-20250514", validator_model: str = None, ner_model: str = None):
+def with_model_attribution(payload: dict, primary_model: str = "claude-sonnet-4-6", validator_model: str = None, ner_model: str = None):
     payload["model_attribution"] = {
         "primary_model": primary_model,
         "validator_model": validator_model,
@@ -357,22 +357,8 @@ async def detailed_health():
     chromadb_chunks = 0
 
     try:
-        chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
-        try:
-            from chromadb.config import Settings
-
-            client = chromadb.Client(
-                Settings(
-                    chroma_db_impl="duckdb+parquet",
-                    persist_directory=chromadb_path,
-                    anonymized_telemetry=False,
-                )
-            )
-        except ImportError:
-            client = chromadb.PersistentClient(
-                path=chromadb_path,
-                settings=chromadb.Settings(anonymized_telemetry=False),
-            )
+        from app.services.chroma_client import get_chroma_client
+        client = get_chroma_client()
 
         try:
             collection = client.get_collection("regulatory_documents")
@@ -496,14 +482,14 @@ async def model_status():
         "claude-sonnet": {
             "active": has_key,
             "provider": "Anthropic",
-            "model_id": "claude-sonnet-4-20250514",
+            "model_id": "claude-sonnet-4-6",
             "used_for": ["M1 Compliance", "M2 Generation", "M3 Response", "M4 Intelligence", "M6 Comparison"],
             **claude_probe,
         },
         "claude-haiku": {
             "active": has_key,
             "provider": "Anthropic",
-            "model_id": "claude-haiku-4-20250414",
+            "model_id": "claude-haiku-4-5-20251001",
             "used_for": ["M3 Classification", "M5 Summarisation", "M7 SAE Classification", "PII Detection"],
             **claude_probe,
         },
@@ -535,7 +521,7 @@ async def get_kb_stats():
     """Get knowledge base statistics."""
     try:
         stats = knowledge_base.get_collection_stats()
-        return JSONResponse(content=with_model_attribution(stats, "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution(stats, "claude-sonnet-4-6"))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -594,7 +580,7 @@ async def upload_document(file: UploadFile = File(...)):
             file_id=file_id,
             filename=file.filename,
             file_size=file_size,
-            model_attribution=with_model_attribution({}, "claude-sonnet-4-20250514")["model_attribution"],
+            model_attribution=with_model_attribution({}, "claude-sonnet-4-6")["model_attribution"],
         )
     
     except Exception as e:
@@ -636,7 +622,7 @@ async def evaluate_document(
             parsed_document=parsed_document,
             metadata=doc_metadata
         )
-        evaluation.model_attribution = with_model_attribution({}, "claude-sonnet-4-20250514")["model_attribution"]
+        evaluation.model_attribution = with_model_attribution({}, "claude-sonnet-4-6")["model_attribution"]
         return evaluation
     
     except Exception as e:
@@ -657,7 +643,7 @@ async def populate_sample_kb():
         return JSONResponse(content={
             "message": "Sample regulatory data added successfully",
             "stats": stats
-        } | {"model_attribution": with_model_attribution({}, "claude-sonnet-4-20250514")["model_attribution"]})
+        } | {"model_attribution": with_model_attribution({}, "claude-sonnet-4-6")["model_attribution"]})
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to populate KB: {str(e)}")
@@ -692,7 +678,7 @@ async def generate_document(request: DocumentGenerationRequest):
             study_data=request.study_data,
             validate_inline=True
         )
-        return JSONResponse(content=with_model_attribution(result, "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution(result, "claude-sonnet-4-6"))
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -714,7 +700,7 @@ async def generate_section(request: SectionGenerationRequest):
             study_data=request.study_data,
             previous_sections=request.previous_sections
         )
-        return JSONResponse(content=with_model_attribution(section.model_dump(), "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution(section.model_dump(), "claude-sonnet-4-6"))
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -731,7 +717,7 @@ async def get_document_schema(document_type: str):
     """
     try:
         schema = schema_engine.get_schema(document_type)
-        return JSONResponse(content=with_model_attribution(schema.model_dump(), "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution(schema.model_dump(), "claude-sonnet-4-6"))
     
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -746,7 +732,7 @@ async def list_available_schemas():
         document_types = schema_engine.get_available_document_types()
         return JSONResponse(content=with_model_attribution({
             "available_document_types": document_types
-        }, "claude-sonnet-4-20250514"))
+        }, "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -781,7 +767,7 @@ async def classify_query(request: QueryClassificationRequest):
             query_reference=request.query_reference,
             response_deadline=request.response_deadline
         )
-        return JSONResponse(content=with_model_attribution(classification.model_dump(), "claude-haiku-4-20250414"))
+        return JSONResponse(content=with_model_attribution(classification.model_dump(), "claude-haiku-4-5-20251001"))
     
     except Exception as e:
         logger.error(f"Classification failed: {str(e)}", exc_info=True)
@@ -801,7 +787,7 @@ async def generate_query_response(request: QueryResponseRequest):
             query=request.query,
             classification=request.classification
         )
-        return JSONResponse(content=with_model_attribution(response.model_dump(), "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution(response.model_dump(), "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Response generation failed: {str(e)}")
@@ -812,7 +798,7 @@ async def get_query_categories():
     """List all available query categories with descriptions."""
     try:
         categories = query_classifier.get_all_categories()
-        return JSONResponse(content=with_model_attribution({"categories": categories}, "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution({"categories": categories}, "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -825,7 +811,7 @@ async def get_category_info(category_id: str):
         category_info = query_classifier.get_category_info(category_id)
         if not category_info:
             raise HTTPException(status_code=404, detail=f"Category {category_id} not found")
-        return JSONResponse(content=with_model_attribution(category_info, "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution(category_info, "claude-sonnet-4-6"))
     
     except HTTPException:
         raise
@@ -906,7 +892,7 @@ async def ingest_regulatory_document(request: NewDocumentRequest):
             "changes_extracted": len(changes),
             "changes": [c.model_dump() for c in changes],
             "critical_high_count": len(critical_high_changes)
-        }, "claude-sonnet-4-20250514"))
+        }, "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Document ingestion failed: {str(e)}")
@@ -953,7 +939,7 @@ async def assess_regulatory_impact(request: ImpactAssessmentRequest):
             "status": "success",
             "assessment": assessment.model_dump(),
             "alert": alert
-        }, "claude-sonnet-4-20250514"))
+        }, "claude-sonnet-4-6"))
     
     except HTTPException:
         raise
@@ -1001,7 +987,7 @@ async def generate_weekly_digest(request: DigestGenerationRequest):
                 "text": text_export,
                 "markdown": markdown_export
             }
-        }, "claude-sonnet-4-20250514"))
+        }, "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Digest generation failed: {str(e)}")
@@ -1045,7 +1031,7 @@ async def list_regulatory_changes(
             }
         )
         
-        return JSONResponse(content=with_model_attribution(response.model_dump(), "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution(response.model_dump(), "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1065,7 +1051,7 @@ async def get_regulatory_change(change_id: str):
         return JSONResponse(content=with_model_attribution({
             "change": change.model_dump(),
             "impact_assessments": [ia.model_dump() for ia in impacted_submissions]
-        }, "claude-sonnet-4-20250514"))
+        }, "claude-sonnet-4-6"))
     
     except HTTPException:
         raise
@@ -1081,7 +1067,7 @@ async def create_active_submission(submission: ActiveSubmission):
         return JSONResponse(content=with_model_attribution({
             "status": "success",
             "submission_id": submission.submission_id
-        }, "claude-sonnet-4-20250514"))
+        }, "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1104,7 +1090,7 @@ async def list_active_submissions(
         return JSONResponse(content=with_model_attribution({
             "total_submissions": len(submissions),
             "submissions": [s.model_dump() for s in submissions]
-        }, "claude-sonnet-4-20250514"))
+        }, "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1115,7 +1101,7 @@ async def get_regulatory_stats():
     """Get regulatory intelligence statistics."""
     try:
         stats = regulatory_change_store.get_stats()
-        return JSONResponse(content=with_model_attribution(stats, "claude-sonnet-4-20250514"))
+        return JSONResponse(content=with_model_attribution(stats, "claude-sonnet-4-6"))
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -46,8 +46,8 @@ class LLMConfig:
     }
 
     # LLM model (Anthropic Claude)
-    LLM_MODEL      = os.getenv("ANTHROPIC_MODEL",      "claude-sonnet-4-20250514")
-    LLM_MODEL_FAST = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-20250414")
+    LLM_MODEL      = os.getenv("ANTHROPIC_MODEL",      "claude-sonnet-4-6")
+    LLM_MODEL_FAST = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-5-20251001")
 
     # --- Gap 11: M3 Classification Confidence ---
     CLASSIFICATION_CONFIDENCE_THRESHOLD: float = 0.75

@@ -229,7 +229,7 @@ def _run_claude_vision(image_bytes: bytes, api_key: str) -> str:
 
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model=os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"), # Updated to a valid vision model
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), # Updated to a valid vision model
             max_tokens=4096,
             messages=[
                 {
@@ -273,7 +273,7 @@ def _run_claude_vision_pdf(pdf_bytes: bytes, api_key: str) -> str:
 
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model=os.getenv("ANTHROPIC_MODEL", "claude-3-sonnet-20240229"), # Updated to a valid vision model
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), # Updated to a valid vision model
             max_tokens=4096,
             messages=[
                 {

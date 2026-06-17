@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 _client: Optional[anthropic.Anthropic] = None
 
 # Model constants — read ANTHROPIC_MODEL env vars with hardcoded Claude defaults
-MODEL_SONNET = os.getenv("ANTHROPIC_MODEL",      "claude-sonnet-4-20250514")
-MODEL_HAIKU  = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-20250414")
+MODEL_SONNET = os.getenv("ANTHROPIC_MODEL",      "claude-sonnet-4-6")
+MODEL_HAIKU  = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-5-20251001")
 
 
 def get_claude_client() -> anthropic.Anthropic:
@@ -169,7 +169,7 @@ def _attach_response_metadata(parsed: Any, model: str, has_rag_context: bool) ->
             ),
             "reviewed_by": "AI — requires qualified RA professional review",
             "generated_at": datetime.utcnow().isoformat(),
-            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
         }
     except Exception as meta_err:
         logger.warning("Could not set metadata: %s", meta_err)
@@ -178,7 +178,7 @@ def _attach_response_metadata(parsed: Any, model: str, has_rag_context: bool) ->
             "confidence_reason": "Based on Claude's training knowledge of regulations",
             "reviewed_by": "AI — requires qualified RA professional review",
             "generated_at": datetime.utcnow().isoformat(),
-            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            "model_used": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
         }
     return parsed
 

@@ -77,10 +77,8 @@ class KnowledgeBase:
         return self._embedding_fn
 
     def _create_client(self):
-        return chromadb.PersistentClient(
-            path=str(self._storage_path),
-            settings=Settings(anonymized_telemetry=False, allow_reset=True),
-        )
+        from app.services.chroma_client import get_chroma_client
+        return get_chroma_client()
 
     def _create_ephemeral_client(self):
         return chromadb.EphemeralClient(

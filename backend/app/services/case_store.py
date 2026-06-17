@@ -16,11 +16,8 @@ def get_case_collection():
         import chromadb
         from chromadb.utils import embedding_functions
         
-        chromadb_path = os.getenv("CHROMADB_PATH", "./data/chromadb")
-        client = chromadb.PersistentClient(
-            path=chromadb_path,
-            settings=chromadb.Settings(anonymized_telemetry=False)
-        )
+        from app.services.chroma_client import get_chroma_client
+        client = get_chroma_client()
         embedding_fn = embedding_functions.DefaultEmbeddingFunction()
         
         collection = client.get_or_create_collection(

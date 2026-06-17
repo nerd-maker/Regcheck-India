@@ -75,7 +75,7 @@ async def summarise_meeting_audio(file: UploadFile = File(...), x_session_id: st
 @router.get("/schema/{type}")
 async def get_summary_schema(type: str, x_session_id: str = Header(default="default_session")):
     _ = x_session_id
-    _attr = {"primary_model": "claude-haiku-4-20250414", "provider": "Anthropic Claude", "sovereign": False}
+    _attr = {"primary_model": "claude-haiku-4-5-20251001", "provider": "Anthropic Claude", "sovereign": False}
     if type == "sugam-application":
         return {
             "sections": SUGAMApplicationSummariser.SUGAM_CHECKLIST_SECTIONS,

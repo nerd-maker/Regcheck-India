@@ -1,9 +1,13 @@
 import os
 import sys
+from pathlib import Path
+
+# Add backend directory to sys.path
+sys.path.append(str(Path(__file__).parent.parent))
+
 import chromadb
 from chromadb.utils import embedding_functions
 import PyPDF2
-from pathlib import Path
 
 # Config
 DOCUMENTS_DIR = Path(__file__).parent / "documents"
@@ -89,7 +93,8 @@ def load_documents():
     print(f"Documents dir: {DOCUMENTS_DIR}\n")
 
     # Initialize ChromaDB
-    client = chromadb.PersistentClient(path=CHROMADB_PATH)
+    from app.services.chroma_client import get_chroma_client
+    client = get_chroma_client()
     
     # Use default embedding function
     embedding_fn = embedding_functions.DefaultEmbeddingFunction()
