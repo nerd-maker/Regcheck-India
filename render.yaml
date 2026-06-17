@@ -17,9 +17,9 @@ services:
       - key: SARVAM_API_KEY
         sync: false  # Set manually in Render dashboard
       - key: ANTHROPIC_MODEL
-        value: claude-sonnet-4-20250514
+        value: claude-sonnet-4-6
       - key: ANTHROPIC_MODEL_FAST
-        value: claude-haiku-4-20250414
+        value: claude-haiku-4-5-20251001
       - key: CHROMADB_PATH
         value: /app/data/chromadb
       - key: REGCHECK_RUNTIME_STATE_DB

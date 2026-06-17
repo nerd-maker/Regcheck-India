@@ -129,6 +129,28 @@ async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle handler."""
     # Create all workspace + agent_runs tables (idempotent)
     await init_all_tables()
+
+    # Auto-load ChromaDB collection if missing or empty
+    try:
+        from app.services.chroma_client import get_chroma_client
+        client = get_chroma_client()
+        should_load = False
+        try:
+            collection = client.get_collection("regulatory_documents")
+            if collection.count() == 0:
+                should_load = True
+        except Exception:
+            should_load = True
+
+        if should_load:
+            logger.info("ChromaDB 'regulatory_documents' collection is missing or empty. Auto-loading...")
+            from knowledge_base.load_documents import load_documents
+            load_documents()
+        else:
+            logger.info("ChromaDB 'regulatory_documents' collection already exists and is not empty.")
+    except Exception as e:
+        logger.warning(f"ChromaDB auto-load check failed (non-fatal): {e}", exc_info=True)
+
     await init_agent_runs_table()
     await verify_storage_bucket_exists()
 
@@ -158,7 +180,8 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Pharmaceutical regulatory compliance evaluation for Indian regulations",
-    lifespan=lifespan
+    lifespan=lifespan,
+    redirect_slashes=False
 )
 
 # Attach rate limiter
