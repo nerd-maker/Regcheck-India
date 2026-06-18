@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_service_key: str = ""
     supabase_storage_bucket: str = "regcheck-documents"
+    supabase_db_url: str = ""
 
     # PostgreSQL URL (for SQLAlchemy async engine used by vault router)
     database_url: str = os.getenv("DATABASE_URL", "")

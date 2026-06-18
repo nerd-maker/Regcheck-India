@@ -21,13 +21,11 @@ from typing import Any, Optional, List
 from contextlib import asynccontextmanager
 
 import anthropic
-import chromadb
 import docx
 import pypdf
 import pytesseract
 import pdf2image
 import pydub
-from chromadb.utils import embedding_functions
 from fastapi import APIRouter, Header, HTTPException, UploadFile, File, Request
 
 from pydantic import BaseModel, Field
@@ -913,14 +911,9 @@ async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: 
     sources_used = []
     if not retrieved_context or len(retrieved_context.strip()) < 50:
         try:
-
-            from app.services.chroma_client import get_chroma_client
-            client = get_chroma_client()
-            embedding_fn = embedding_functions.DefaultEmbeddingFunction()
-            
-            collection = client.get_collection(name="regulatory_documents", embedding_function=embedding_fn)
-            results = collection.query(
-                query_texts=[sanitized_text],
+            from app.services.knowledge_base import knowledge_base
+            results = knowledge_base.query(
+                query_text=sanitized_text,
                 n_results=5
             )
             
@@ -941,7 +934,7 @@ async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: 
                         "snippet": doc[:200] + "..." if len(doc) > 200 else doc
                     })
         except Exception as e:
-            logger.warning(f"ChromaDB retrieval failed: {e}")
+            logger.warning(f"pgvector retrieval via knowledge_base failed: {e}")
 
     if not retrieved_context or len(retrieved_context.strip()) < 50:
         context_section = """[CONTEXT]

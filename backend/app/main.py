@@ -130,26 +130,36 @@ async def lifespan(app: FastAPI):
     # Create all workspace + agent_runs tables (idempotent)
     await init_all_tables()
 
-    # Auto-load ChromaDB collection if missing or empty
+    # Auto-load pgvector regulatory_embeddings if empty
     try:
-        from app.services.chroma_client import get_chroma_client
-        client = get_chroma_client()
+        from app.core.config import get_settings
+        import asyncpg
+        settings = get_settings()
+        db_url = settings.supabase_db_url or settings.database_url
         should_load = False
-        try:
-            collection = client.get_collection("regulatory_documents")
-            if collection.count() == 0:
+        if db_url:
+            try:
+                conn = await asyncpg.connect(db_url)
+                try:
+                    count = await conn.fetchval("SELECT COUNT(*) FROM regulatory_embeddings")
+                    if not count or count == 0:
+                        should_load = True
+                finally:
+                    await conn.close()
+            except Exception as e:
+                logger.warning(f"Could not connect to database to check embeddings: {e}")
                 should_load = True
-        except Exception:
+        else:
             should_load = True
 
         if should_load:
-            logger.info("ChromaDB 'regulatory_documents' collection is missing or empty. Auto-loading...")
-            from knowledge_base.load_documents import load_documents
-            load_documents()
+            logger.info("pgvector 'regulatory_embeddings' table is empty or connection failed. Auto-loading...")
+            from scripts.ingest_regulatory_docs import ingest_all_documents
+            await ingest_all_documents()
         else:
-            logger.info("ChromaDB 'regulatory_documents' collection already exists and is not empty.")
+            logger.info("pgvector 'regulatory_embeddings' table already has records.")
     except Exception as e:
-        logger.warning(f"ChromaDB auto-load check failed (non-fatal): {e}", exc_info=True)
+        logger.warning(f"pgvector auto-load check failed (non-fatal): {e}", exc_info=True)
 
     await init_agent_runs_table()
     await verify_storage_bucket_exists()
@@ -374,20 +384,12 @@ def _check_tesseract() -> str:
 @app.get("/health/detailed")
 async def detailed_health():
     """Detailed health check for monitoring dashboards and debugging."""
-    import chromadb
-
     chromadb_status = "ok"
     chromadb_chunks = 0
 
     try:
-        from app.services.chroma_client import get_chroma_client
-        client = get_chroma_client()
-
-        try:
-            collection = client.get_collection("regulatory_documents")
-            chromadb_chunks = collection.count()
-        except Exception:
-            chromadb_status = "collection_not_found"
+        stats = knowledge_base.get_collection_stats()
+        chromadb_chunks = stats.get("total_documents", 0)
     except Exception as exc:
         chromadb_status = f"error: {str(exc)[:50]}"
 

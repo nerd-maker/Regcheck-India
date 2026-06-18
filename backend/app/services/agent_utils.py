@@ -24,42 +24,41 @@ MODEL_HAIKU  = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-5-20251001")
 # retrieve_regulatory_context — ChromaDB RAG retrieval
 # ---------------------------------------------------------------------------
 def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
-    """Query ChromaDB regulatory_documents collection for relevant chunks.
+    """Query pgvector regulatory_documents collection for relevant chunks synchronously.
 
     Returns formatted context string or empty string if retrieval fails.
     Used by completeness, schedule_y, and ich_gcp agents.
     """
     try:
-        import chromadb
-        from chromadb.utils import embedding_functions
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+        from app.services.pgvector_service import retrieve_regulatory_context as _pgvector_retrieve
 
-        from app.services.chroma_client import get_chroma_client
-        client = get_chroma_client()
-        embedding_fn = embedding_functions.DefaultEmbeddingFunction()
-        collection = client.get_collection(
-            name="regulatory_documents",
-            embedding_function=embedding_fn,
-        )
+        async def _async_call():
+            return await _pgvector_retrieve(query, n_results=n_results)
 
-        count = collection.count()
-        if count == 0:
-            logger.warning("RAG: regulatory_documents collection is empty")
-            return ""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-        actual_n = min(n_results, count)
-        results = collection.query(query_texts=[query], n_results=actual_n)
+        if loop.is_running():
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                results = executor.submit(lambda: asyncio.run(_async_call())).result()
+        else:
+            results = asyncio.run(_async_call())
 
-        if not results or not results["documents"] or not results["documents"][0]:
+        if not results:
             return ""
 
         chunks = []
-        for i, doc in enumerate(results["documents"][0]):
-            metadata = results["metadatas"][0][i] if results.get("metadatas") else {}
-            source = metadata.get("short_name", metadata.get("title", "Regulatory Document"))
-            chunks.append(f"[Source: {source}]\n{doc}")
+        for r in results:
+            source = r.get("short_name") or r.get("doc_name") or "Regulatory Document"
+            chunks.append(f"[Source: {source}]\n{r['content']}")
 
         context = "\n\n---\n\n".join(chunks)
-        logger.info("RAG: retrieved %d chunks for query: %s...", len(chunks), query[:60])
+        logger.info("RAG: retrieved %d chunks from pgvector for query: %s...", len(chunks), query[:60])
         return context
 
     except Exception as exc:

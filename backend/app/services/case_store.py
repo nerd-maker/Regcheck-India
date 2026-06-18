@@ -13,19 +13,8 @@ SIMILARITY_THRESHOLD = 0.85  # cases above this cosine similarity are flagged as
 def get_case_collection():
     """Get or create the SAE cases ChromaDB collection."""
     try:
-        import chromadb
-        from chromadb.utils import embedding_functions
-        
-        from app.services.chroma_client import get_chroma_client
-        client = get_chroma_client()
-        embedding_fn = embedding_functions.DefaultEmbeddingFunction()
-        
-        collection = client.get_or_create_collection(
-            name=CASE_COLLECTION_NAME,
-            embedding_function=embedding_fn,
-            metadata={"hnsw:space": "cosine"}
-        )
-        return collection
+        from app.services.knowledge_base import knowledge_base
+        return knowledge_base.client.get_or_create_collection(CASE_COLLECTION_NAME)
     except Exception as e:
         logger.error(f"Failed to get case collection: {e}")
         return None
