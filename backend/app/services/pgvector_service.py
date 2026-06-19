@@ -69,7 +69,7 @@ async def retrieve_regulatory_context(
         # Format as pgvector literal
         embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
         
-        conn = await asyncpg.connect(db_url)
+        conn = await asyncpg.connect(db_url, timeout=10.0)
         try:
             if framework_filter:
                 rows = await conn.fetch("""

@@ -13,7 +13,7 @@ async def get_conn():
             "DATABASE_URL is not set. "
             "Add it to your Render environment variables."
         )
-    return await asyncpg.connect(DATABASE_URL)
+    return await asyncpg.connect(DATABASE_URL, timeout=10.0)
 
 
 async def init_all_tables():

@@ -15,8 +15,6 @@ from datetime import date
 from typing import Optional
 
 import asyncpg
-import httpx
-from bs4 import BeautifulSoup
 
 from app.core.config import get_settings
 
@@ -106,8 +104,9 @@ async def scrape_all_sources() -> dict:
         "queued": [],
     }
 
-    conn = await asyncpg.connect(db_url)
+    conn = await asyncpg.connect(db_url, timeout=10.0)
     try:
+        import httpx
         async with httpx.AsyncClient(
             headers=HEADERS,
             timeout=30.0,
@@ -145,7 +144,7 @@ async def scrape_all_sources() -> dict:
 
 
 async def _scrape_single_source(
-    client: httpx.AsyncClient,
+    client: "httpx.AsyncClient",
     conn: asyncpg.Connection,
     source: dict,
 ) -> dict:
@@ -155,12 +154,13 @@ async def _scrape_single_source(
     try:
         response = await client.get(source["url"])
         response.raise_for_status()
-    except httpx.HTTPError as exc:
+    except Exception as exc:
         logger.warning(
             "source_fetch_failed: url=%s error=%s", source["url"], exc
         )
         return result
 
+    from bs4 import BeautifulSoup
     soup = BeautifulSoup(response.text, "lxml")
     links = soup.select(source["link_selector"])
 
@@ -246,7 +246,7 @@ async def _scrape_single_source(
 
 
 async def _extract_text_from_url(
-    client: httpx.AsyncClient, url: str
+    client: "httpx.AsyncClient", url: str
 ) -> Optional[str]:
     """
     Fetch URL and extract text. Handles both HTML pages and PDFs.
@@ -271,6 +271,7 @@ async def _extract_text_from_url(
             return "\n\n".join(text_parts) if text_parts else None
 
         if "html" in content_type:
+            from bs4 import BeautifulSoup
             soup = BeautifulSoup(response.text, "lxml")
             # Strip boilerplate tags before extracting text
             for tag in soup(["script", "style", "nav", "footer", "header"]):

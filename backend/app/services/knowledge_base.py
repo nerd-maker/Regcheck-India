@@ -203,7 +203,7 @@ class KnowledgeBase:
                 logger.error("No database connection string configured for pgvector")
                 return
                 
-            conn = await asyncpg.connect(db_url)
+            conn = await asyncpg.connect(db_url, timeout=10.0)
             try:
                 for idx, doc in enumerate(documents):
                     text = doc["text"]
@@ -301,7 +301,7 @@ class KnowledgeBase:
             db_url = settings.supabase_db_url or settings.database_url
             if not db_url:
                 return 0
-            conn = await asyncpg.connect(db_url)
+            conn = await asyncpg.connect(db_url, timeout=10.0)
             try:
                 count = await conn.fetchval("SELECT COUNT(*) FROM regulatory_embeddings")
                 return count or 0
@@ -330,7 +330,7 @@ class KnowledgeBase:
             db_url = settings.supabase_db_url or settings.database_url
             if not db_url:
                 return
-            conn = await asyncpg.connect(db_url)
+            conn = await asyncpg.connect(db_url, timeout=10.0)
             try:
                 await conn.execute("TRUNCATE TABLE regulatory_embeddings")
             finally:

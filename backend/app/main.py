@@ -130,36 +130,30 @@ async def lifespan(app: FastAPI):
     # Create all workspace + agent_runs tables (idempotent)
     await init_all_tables()
 
-    # Auto-load pgvector regulatory_embeddings if empty
+    # pgvector health check — non-blocking, 5 s timeout, never raises
     try:
-        from app.core.config import get_settings
-        import asyncpg
-        settings = get_settings()
-        db_url = settings.supabase_db_url or settings.database_url
-        should_load = False
-        if db_url:
+        from app.core.config import get_settings as _get_settings
+        import asyncpg as _asyncpg
+        _settings = _get_settings()
+        _db_url = _settings.supabase_db_url or _settings.database_url
+        if _db_url:
+            _conn = await _asyncpg.connect(_db_url, timeout=5.0)
             try:
-                conn = await asyncpg.connect(db_url)
-                try:
-                    count = await conn.fetchval("SELECT COUNT(*) FROM regulatory_embeddings")
-                    if not count or count == 0:
-                        should_load = True
-                finally:
-                    await conn.close()
-            except Exception as e:
-                logger.warning(f"Could not connect to database to check embeddings: {e}")
-                should_load = True
+                _count = await _conn.fetchval(
+                    "SELECT COUNT(*) FROM regulatory_embeddings"
+                )
+                logger.info(
+                    "pgvector ready: %d regulatory chunks available", _count or 0
+                )
+            finally:
+                await _conn.close()
         else:
-            should_load = True
-
-        if should_load:
-            logger.info("pgvector 'regulatory_embeddings' table is empty or connection failed. Auto-loading...")
-            from scripts.ingest_regulatory_docs import ingest_all_documents
-            await ingest_all_documents()
-        else:
-            logger.info("pgvector 'regulatory_embeddings' table already has records.")
+            logger.warning("pgvector: no DB URL configured — agents will work without RAG context")
     except Exception as e:
-        logger.warning(f"pgvector auto-load check failed (non-fatal): {e}", exc_info=True)
+        logger.warning(
+            "pgvector not ready at startup: %s — agents will work without RAG context", e
+        )
+        # Never raise — app starts regardless
 
     await init_agent_runs_table()
     await verify_storage_bucket_exists()
