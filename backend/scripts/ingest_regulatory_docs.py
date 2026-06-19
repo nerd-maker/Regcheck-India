@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 import PyPDF2
 import asyncpg
 
@@ -209,3 +210,61 @@ async def ingest_all_documents():
 
 if __name__ == "__main__":
     asyncio.run(ingest_all_documents())
+
+
+async def ingest_single_document(
+    conn: asyncpg.Connection,
+    doc_name: str,
+    framework: str,
+    extracted_text: str,
+    source_url: Optional[str] = None,
+    publication_date: Optional[str] = None,
+    metadata: Optional[dict] = None,
+) -> int:
+    """
+    Ingest a single document into regulatory_embeddings.
+    Used when a human approves a queued scraped document.
+
+    NEVER deletes existing embeddings — additive only.
+    Returns the number of chunks inserted.
+    """
+    from sentence_transformers import SentenceTransformer
+
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+    chunks = chunk_text(extracted_text)
+    if not chunks:
+        return 0
+
+    batch_size = 32
+    total_inserted = 0
+
+    for batch_start in range(0, len(chunks), batch_size):
+        batch = chunks[batch_start : batch_start + batch_size]
+        embeddings = model.encode(batch, normalize_embeddings=True)
+
+        for i, (chunk, embedding) in enumerate(zip(batch, embeddings)):
+            embedding_str = "[" + ",".join(str(x) for x in embedding.tolist()) + "]"
+            await conn.execute(
+                """
+                INSERT INTO regulatory_embeddings
+                    (doc_name, framework, section, page_number, chunk_index,
+                     content, embedding, source_url, publication_date,
+                     is_scraped, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::vector,
+                        $8, $9::date, $10, $11::jsonb)
+                """,
+                doc_name,
+                framework,
+                "",  # section — not available for scraped docs
+                0,   # page_number — not tracked for scraped docs
+                batch_start + i,
+                chunk,
+                embedding_str,
+                source_url,
+                publication_date,
+                source_url is not None,  # is_scraped = True when from scraper
+                json.dumps(metadata or {}),
+            )
+            total_inserted += 1
+
+    return total_inserted

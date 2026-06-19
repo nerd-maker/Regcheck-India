@@ -54,8 +54,12 @@ def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
 
         chunks = []
         for r in results:
-            source = r.get("short_name") or r.get("doc_name") or "Regulatory Document"
-            chunks.append(f"[Source: {source}]\n{r['content']}")
+            source_label = r.get("short_name") or r.get("doc_name") or "Regulatory Document"
+            if r.get("source_url"):
+                source_label += f" | {r['source_url']}"
+            if r.get("publication_date"):
+                source_label += f" | {r['publication_date']}"
+            chunks.append(f"[Source: {source_label}]\n{r['content']}")
 
         context = "\n\n---\n\n".join(chunks)
         logger.info("RAG: retrieved %d chunks from pgvector for query: %s...", len(chunks), query[:60])

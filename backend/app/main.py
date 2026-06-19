@@ -180,9 +180,33 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to seed demo submissions on startup: {e}", exc_info=True)
 
     # Seed mockData equivalents on first run (ON CONFLICT DO NOTHING)
+    # ── Start regulatory document scraper (daily at 02:00 IST) ───────────────
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from app.services.regulatory_scraper import scrape_all_sources
+
+        scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
+        scheduler.add_job(
+            scrape_all_sources,
+            trigger="cron",
+            hour=2,
+            minute=0,
+            id="regulatory_scraper",
+            replace_existing=True,
+            misfire_grace_time=3600,  # run within 1 h if missed
+        )
+        scheduler.start()
+        app.state.scheduler = scheduler
+        logger.info("Regulatory scraper scheduled: daily at 02:00 IST")
+    except Exception as exc:
+        logger.warning("Failed to start regulatory scraper scheduler: %s", exc)
+
     await seed_db()
     yield
-    # Shutdown — nothing to clean up currently
+    # Shutdown
+    if hasattr(app.state, "scheduler"):
+        app.state.scheduler.shutdown(wait=False)
+        logger.info("Regulatory scraper scheduler stopped")
 
 
 # Initialize FastAPI app
@@ -308,6 +332,8 @@ from app.routers.correspondence_router import router as correspondence_router
 app.include_router(correspondence_router, prefix="/api/v1")
 from app.routers.analytics_router import router as analytics_router
 app.include_router(analytics_router, prefix="/api/v1")
+from app.routers.regulatory_updates_router import router as regulatory_updates_router
+app.include_router(regulatory_updates_router, prefix="/api/v1")
 
 
 # Create upload directory

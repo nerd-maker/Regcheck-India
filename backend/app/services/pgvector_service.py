@@ -80,6 +80,9 @@ async def retrieve_regulatory_context(
                         section,
                         page_number,
                         metadata,
+                        source_url,
+                        publication_date::text AS publication_date,
+                        is_scraped,
                         1 - (embedding <=> $1::vector) AS similarity
                     FROM regulatory_embeddings
                     WHERE framework = $2
@@ -95,6 +98,9 @@ async def retrieve_regulatory_context(
                         section,
                         page_number,
                         metadata,
+                        source_url,
+                        publication_date::text AS publication_date,
+                        is_scraped,
                         1 - (embedding <=> $1::vector) AS similarity
                     FROM regulatory_embeddings
                     ORDER BY embedding <=> $1::vector
@@ -127,6 +133,9 @@ async def retrieve_regulatory_context(
                 "authority": meta.get("authority", ""),
                 "citation": meta.get("citation", ""),
                 "metadata": meta,
+                "source_url": r["source_url"],
+                "publication_date": r["publication_date"],
+                "is_scraped": r["is_scraped"] or False,
             })
             
         logger.info(

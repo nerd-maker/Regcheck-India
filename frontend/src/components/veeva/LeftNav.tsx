@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useSubmissions, useCorrespondence } from '@/hooks/useWorkspaceData'
+import { fetchRegulatoryUpdateCounts } from '@/services/api'
 
 interface NavItem {
   id: string
@@ -22,6 +23,7 @@ const PRIMARY: NavItem[] = [
   { id: 'correspondence', label: 'HA Correspondence',   icon: 'ti-mail' },
   { id: 'audit-trail',    label: 'Audit Trail',         icon: 'ti-history' },
   { id: 'reports',        label: 'Reports',             icon: 'ti-chart-line' },
+  { id: 'regulatory-updates', label: 'Regulatory Updates', icon: 'ti-satellite' },
 ]
 
 const AGENTS: NavItem[] = [
@@ -79,10 +81,18 @@ export default function LeftNav() {
   // Dynamic badge counts from live data
   const { data: submissions, reload: reloadSubmissions } = useSubmissions()
   const { data: correspondence, reload: reloadCorrespondence } = useCorrespondence()
+  const [pendingUpdateCount, setPendingUpdateCount] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     reloadSubmissions()
     reloadCorrespondence()
+    // Fetch pending regulatory update count
+    fetchRegulatoryUpdateCounts()
+      .then((counts) => {
+        const pending = counts['pending_review'] ?? 0
+        setPendingUpdateCount(pending > 0 ? pending : undefined)
+      })
+      .catch(() => setPendingUpdateCount(undefined))
   }, [pathname, reloadSubmissions, reloadCorrespondence])
 
   const submissionCount = submissions.length
@@ -106,8 +116,9 @@ export default function LeftNav() {
         </div>
         {PRIMARY.map(item => {
           const badge =
-            item.id === 'submissions'    ? (submissionCount || undefined) :
-            item.id === 'correspondence' ? (openCorrCount   || undefined) :
+            item.id === 'submissions'       ? (submissionCount || undefined) :
+            item.id === 'correspondence'    ? (openCorrCount   || undefined) :
+            item.id === 'regulatory-updates' ? pendingUpdateCount :
             undefined
           return (
             <Item key={item.id} item={{ ...item, badge }}

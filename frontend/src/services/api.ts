@@ -712,3 +712,54 @@ export async function createRegistration(payload: {
 }
 
 
+// ─── Regulatory Intelligence Feed (Sprint 6) ─────────────────────────────────
+
+export async function fetchRegulatoryUpdates(status = 'pending_review'): Promise<any> {
+  const res = await fetch(
+    `/api/regcheck/regulatory-updates?status=${status}`,
+    { cache: 'no-store' }
+  )
+  if (!res.ok) throw new Error(`Failed: ${res.status}`)
+  return res.json()
+}
+
+export async function reviewRegulatoryUpdate(
+  id: number,
+  status: 'approved' | 'rejected',
+  reviewedBy: string,
+  rejectionReason?: string
+): Promise<any> {
+  const res = await fetch(`/api/regcheck/regulatory-updates/${id}/review`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      status,
+      reviewed_by: reviewedBy,
+      rejection_reason: rejectionReason,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(
+      (err as Record<string, string>).detail ?? `Review failed: ${res.status}`
+    )
+  }
+  return res.json()
+}
+
+export async function fetchRegulatoryUpdateCounts(): Promise<Record<string, number>> {
+  const res = await fetch('/api/regcheck/regulatory-updates/counts', {
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`Failed: ${res.status}`)
+  return res.json()
+}
+
+export async function triggerRegulatoryScape(): Promise<any> {
+  const res = await fetch('/api/regcheck/regulatory-updates/trigger-scrape', {
+    method: 'POST',
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`Trigger failed: ${res.status}`)
+  return res.json()
+}

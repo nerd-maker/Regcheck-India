@@ -104,6 +104,18 @@ const nextConfig = {
               destination: `${REGCHECK_API_BASE}/api/v1/remediations/:path*` },
             { source: '/api/regcheck/remediations',
               destination: `${REGCHECK_API_BASE}/api/v1/remediations` },
+
+            // ── Regulatory Intelligence Feed (Sprint 6) ────────────────
+            { source: '/api/regcheck/regulatory-updates/counts',
+              destination: `${REGCHECK_API_BASE}/api/v1/regulatory-updates/counts` },
+            { source: '/api/regcheck/regulatory-updates/trigger-scrape',
+              destination: `${REGCHECK_API_BASE}/api/v1/regulatory-updates/trigger-scrape` },
+            { source: '/api/regcheck/regulatory-updates/:id/review',
+              destination: `${REGCHECK_API_BASE}/api/v1/regulatory-updates/:id/review` },
+            { source: '/api/regcheck/regulatory-updates/:id',
+              destination: `${REGCHECK_API_BASE}/api/v1/regulatory-updates/:id` },
+            { source: '/api/regcheck/regulatory-updates',
+              destination: `${REGCHECK_API_BASE}/api/v1/regulatory-updates` },
         ]
     },
     async headers() {
