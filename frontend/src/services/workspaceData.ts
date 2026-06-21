@@ -5,20 +5,13 @@
 
 import axios from 'axios'
 import { getStoredKey } from './api'
-import {
-  SUBMISSIONS,
-  DOCUMENTS,
-  APPLICATIONS,
-  REGISTRATIONS,
-  HA_CORRESPONDENCE,
-} from '@/lib/mockData'
 import type {
   SubmissionRecord,
   DocumentRecord,
   ApplicationRecord,
   RegistrationRecord,
   HACorrespondenceRecord,
-} from '@/lib/mockData'
+} from '@/types/workspace'
 
 const PROXY = '/api/regcheck'
 
@@ -153,7 +146,7 @@ export async function fetchSubmissions(): Promise<SubmissionRecord[]> {
     return list.map(toSubmission)
   } catch (err) {
     console.error('[workspaceData] fetchSubmissions error:', err)
-    return SUBMISSIONS // instant fallback — no visible loading failure
+    return []
   }
 }
 
@@ -169,9 +162,7 @@ export async function fetchDocuments(
     })
     return (data as any[]).map(toDocument)
   } catch {
-    return submissionId
-      ? DOCUMENTS.filter((d) => d.submissionId === submissionId)
-      : DOCUMENTS
+    return []
   }
 }
 
@@ -183,7 +174,7 @@ export async function fetchApplications(): Promise<ApplicationRecord[]> {
     })
     return (data as any[]).map(toApplication)
   } catch {
-    return APPLICATIONS
+    return []
   }
 }
 
@@ -195,7 +186,7 @@ export async function fetchRegistrations(): Promise<RegistrationRecord[]> {
     })
     return (data as any[]).map(toRegistration)
   } catch {
-    return REGISTRATIONS
+    return []
   }
 }
 
@@ -214,9 +205,7 @@ export async function fetchCorrespondence(
     return list.map(toCorrespondence)
   } catch (err) {
     console.error('[workspaceData] fetchCorrespondence error:', err)
-    return submissionId
-      ? HA_CORRESPONDENCE.filter((h) => h.submissionId === submissionId)
-      : HA_CORRESPONDENCE
+    return []
   }
 }
 

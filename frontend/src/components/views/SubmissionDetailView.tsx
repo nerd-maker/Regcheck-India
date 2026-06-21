@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { SUBMISSIONS } from '@/lib/mockData' // SPRINT5: removed mockup AUDIT_EVENTS
+
 import { fetchSubmissionActivity } from '@/services/api'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
@@ -11,7 +11,7 @@ import { ComplianceTrendChart } from '@/components/ComplianceTrendChart'
 import { uploadDocument } from '@/services/workspaceData'
 import { GapRemediationPanel } from '@/components/GapRemediationPanel'
 import { useSubmissions, useDocuments, useCorrespondence } from '@/hooks/useWorkspaceData'
-import type { SubmissionRecord, DocumentRecord, HACorrespondenceRecord } from '@/lib/mockData'
+import type { SubmissionRecord, DocumentRecord, HACorrespondenceRecord } from '@/types/workspace'
 
 export default function SubmissionDetailView() {
   const { selectedSubmissionId, setActiveView, setSelectedDocumentId, openInspector, setPrefilledInput } = useWorkspace()
@@ -48,7 +48,7 @@ export default function SubmissionDetailView() {
   }
 
   const sub = useMemo(() => {
-    return submissions.find(s => s.id === selectedSubmissionId) ?? SUBMISSIONS.find(s => s.id === selectedSubmissionId) ?? null
+    return submissions.find(s => s.id === selectedSubmissionId) ?? null
   }, [submissions, selectedSubmissionId])
 
   const docs = useMemo(() => {

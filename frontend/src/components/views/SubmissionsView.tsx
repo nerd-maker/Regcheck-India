@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { LifecycleState, SubmissionRecord } from '@/lib/mockData'
+import { LifecycleState, SubmissionRecord } from '@/types/workspace'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'
 import StatusBadge from '@/components/veeva/StatusBadge'

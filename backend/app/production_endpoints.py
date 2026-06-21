@@ -1,4 +1,3 @@
-
 """
 Production Safety API Endpoints
 Session management, review queue, and KB version management
@@ -145,7 +144,7 @@ async def update_kb_version(
     
     Triggers re-evaluation of all pending submissions
     """
-    new_kb_version = kb_version_manager.update_version(
+    new_kb_version = await kb_version_manager.update_version(
         new_version=new_version,
         change_summary=change_summary,
         source_documents=source_documents

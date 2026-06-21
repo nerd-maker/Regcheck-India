@@ -1,8 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-// SPRINT4: removed mockup
-// import { COMPLIANCE_SCORES } from '@/lib/mockData'
 import { useSubmissions } from '@/hooks/useWorkspaceData'
 import { useWorkspace } from '@/lib/workspaceStore'
 import PageHeader from '@/components/veeva/PageHeader'

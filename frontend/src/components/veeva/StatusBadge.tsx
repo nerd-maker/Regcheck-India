@@ -1,6 +1,6 @@
 'use client'
 
-import { LifecycleState, LIFECYCLE_LABEL } from '@/lib/mockData'
+import { LifecycleState, LIFECYCLE_LABEL } from '@/types/workspace'
 
 interface StatusBadgeProps {
   state: LifecycleState

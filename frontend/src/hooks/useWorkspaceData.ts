@@ -9,9 +9,7 @@ import {
 import {
   SubmissionRecord, DocumentRecord, ApplicationRecord,
   RegistrationRecord, HACorrespondenceRecord,
-  SUBMISSIONS, DOCUMENTS, APPLICATIONS,
-  REGISTRATIONS, HA_CORRESPONDENCE,
-} from '@/lib/mockData'
+} from '@/types/workspace'
 
 // Generic data hook
 // - Starts with mockData immediately (no blank loading state)
@@ -24,7 +22,7 @@ function useData<T>(
   fallback: T[]
 ) {
   const [data, setData] = useState<T[]>(fallback)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Ref keeps latest fetcher without causing effect re-runs
@@ -54,7 +52,7 @@ function useData<T>(
 }
 
 export function useSubmissions() {
-  return useData<SubmissionRecord>(fetchSubmissions, SUBMISSIONS)
+  return useData<SubmissionRecord>(fetchSubmissions, [])
 }
 
 export function useDocuments(submissionId?: string) {
@@ -62,20 +60,15 @@ export function useDocuments(submissionId?: string) {
     () => fetchDocuments(submissionId),
     [submissionId]
   )
-  return useData<DocumentRecord>(
-    fetcher,
-    submissionId
-      ? DOCUMENTS.filter(d => d.submissionId === submissionId)
-      : DOCUMENTS
-  )
+  return useData<DocumentRecord>(fetcher, [])
 }
 
 export function useApplications() {
-  return useData<ApplicationRecord>(fetchApplications, APPLICATIONS)
+  return useData<ApplicationRecord>(fetchApplications, [])
 }
 
 export function useRegistrations() {
-  return useData<RegistrationRecord>(fetchRegistrations, REGISTRATIONS)
+  return useData<RegistrationRecord>(fetchRegistrations, [])
 }
 
 export function useCorrespondence(submissionId?: string) {
@@ -83,10 +76,5 @@ export function useCorrespondence(submissionId?: string) {
     () => fetchCorrespondence(submissionId),
     [submissionId]
   )
-  return useData<HACorrespondenceRecord>(
-    fetcher,
-    submissionId
-      ? HA_CORRESPONDENCE.filter(h => h.submissionId === submissionId)
-      : HA_CORRESPONDENCE
-  )
+  return useData<HACorrespondenceRecord>(fetcher, [])
 }

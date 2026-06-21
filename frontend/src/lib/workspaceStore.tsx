@@ -4,7 +4,7 @@
 // the inspector panel state. Plain React context to avoid extra deps.
 
 import { createContext, useContext, useState, useMemo, ReactNode, useCallback, useEffect } from 'react'
-import { SubmissionRecord, DocumentRecord } from './mockData'
+import { SubmissionRecord, DocumentRecord } from '@/types/workspace'
 
 type InspectorTab = 'details' | 'actions' | 'activity'
 

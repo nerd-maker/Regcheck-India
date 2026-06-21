@@ -7,7 +7,7 @@ import FilterBar from '@/components/veeva/FilterBar'
 import { exportCSV, timestampedName } from '@/lib/csv'
 import { useRegistrations, useApplications, useSubmissions } from '@/hooks/useWorkspaceData'
 import { createRegistration } from '@/services/api'
-import type { RegistrationRecord } from '@/lib/mockData'
+import type { RegistrationRecord } from '@/types/workspace'
 
 const STATE_COLOR: Record<string, { bg: string; color: string }> = {
   'Effective':       { bg: 'var(--rc-approved-bg)',   color: 'var(--rc-approved)' },

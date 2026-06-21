@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useWorkspace } from '@/lib/workspaceStore'
-import { DOCUMENTS, SUBMISSIONS } from '@/lib/mockData' // SPRINT5: removed mockup AUDIT_EVENTS
-import StatusBadge from './StatusBadge'
 import { fetchSubmissions, fetchDocuments } from '@/services/workspaceData'
 import { fetchVaultDocumentDetail, fetchSubmissionActivity } from '@/services/api'
-import type { SubmissionRecord, DocumentRecord } from '@/lib/mockData'
+import type { SubmissionRecord, DocumentRecord } from '@/types/workspace'
+import StatusBadge from './StatusBadge'
 import type { DocumentDetail, LifecycleState } from '@/types/vault'
 import { LifecycleTransitionButton } from '@/components/vault/LifecycleTransitionButton'
 import { ComplianceScansPanel } from '@/components/vault/ComplianceScansPanel'
@@ -34,6 +33,8 @@ export default function RightInspector() {
 
   const [submissions, setSubmissions] = useState<SubmissionRecord[]>([])
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
+  const [listLoading, setListLoading] = useState(false)
+  const [vaultLoading, setVaultLoading] = useState(false)
 
   // Vault document detail — fetched when a vault document is selected
   const [vaultDetail, setVaultDetail] = useState<DocumentDetail | null>(null)
@@ -44,20 +45,28 @@ export default function RightInspector() {
 
   useEffect(() => {
     if (!inspectorOpen) return
-    fetchSubmissions().then(setSubmissions)
-    fetchDocuments().then(setDocuments)
+    setListLoading(true)
+    Promise.all([
+      fetchSubmissions().then(setSubmissions),
+      fetchDocuments().then(setDocuments)
+    ])
+      .catch((err) => console.error(err))
+      .finally(() => setListLoading(false))
   }, [inspectorOpen, selectedSubmissionId, selectedDocumentId])
 
   // Fetch vault document detail when a document is selected
   useEffect(() => {
     if (!inspectorOpen || !selectedDocumentId) {
       setVaultDetail(null)
+      setVaultLoading(false)
       return
     }
     let cancelled = false
+    setVaultLoading(true)
     fetchVaultDocumentDetail(selectedDocumentId)
       .then(detail => { if (!cancelled) setVaultDetail(detail) })
       .catch(() => { if (!cancelled) setVaultDetail(null) })
+      .finally(() => { if (!cancelled) setVaultLoading(false) })
     return () => { cancelled = true }
   }, [inspectorOpen, selectedDocumentId])
 
@@ -120,10 +129,9 @@ export default function RightInspector() {
   const doc: DocumentRecord | undefined =
     (selectedDocumentId && vaultDocRecord) ||
     documents.find(d => d.id === selectedDocumentId) ||
-    DOCUMENTS.find(d => d.id === selectedDocumentId) ||
     undefined
 
-  const sub = submissions.find(s => s.id === selectedSubmissionId) ?? SUBMISSIONS.find(s => s.id === selectedSubmissionId)
+  const sub = submissions.find(s => s.id === selectedSubmissionId)
 
   // Fetch submission activities when active and inspectorTab is activity
   useEffect(() => {
@@ -142,9 +150,12 @@ export default function RightInspector() {
 
   if (!inspectorOpen) return null
 
-  // If a vault doc is selected but vaultDetail hasn't loaded yet, show a
-  // loading placeholder instead of "Nothing selected".
-  if (selectedDocumentId && !doc && !sub) {
+  // If a document or submission is selected but dynamic data hasn't loaded yet, show a loading placeholder.
+  const isSelectedLoading =
+    (selectedDocumentId && (!doc || vaultLoading)) ||
+    (selectedSubmissionId && !sub && listLoading)
+
+  if (isSelectedLoading) {
     return (
       <div className="rc-inspector" style={{ width: 'var(--rc-inspector-width)' }} data-testid="right-inspector">
         <div className="rc-inspector-header">
@@ -157,8 +168,8 @@ export default function RightInspector() {
           </button>
         </div>
         <div className="rc-empty">
-          <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }}/>
-          <div style={{ fontSize: 12 }}>Loading document details…</div>
+          <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}/>
+          <div style={{ fontSize: 12 }}>Loading details…</div>
         </div>
       </div>
     )

@@ -64,7 +64,7 @@ class KBVersionManager:
                 return v
         return None
     
-    def update_version(
+    async def update_version(
         self,
         new_version: str,
         change_summary: str,
@@ -107,24 +107,17 @@ class KBVersionManager:
         )
         
         # Trigger re-evaluation of pending submissions
-        self.trigger_revalidation(old_version, new_version)
+        await self.trigger_revalidation(old_version, new_version)
         
         return new_kb_version
     
-    def trigger_revalidation(self, old_version: str, new_version: str):
+    async def trigger_revalidation(self, old_version: str, new_version: str):
         """
         Queue pending submissions for re-evaluation
         
         Production: Query database for all pending submissions
         """
-        # Mock: Get pending submissions
-        # In production, query from database:
-        # pending_submissions = db.query(Submission).filter(
-        #     Submission.status.in_(["PENDING", "IN_REVIEW"]),
-        #     Submission.kb_version == old_version
-        # ).all()
-        
-        pending_submissions = self._get_pending_submissions(old_version)
+        pending_submissions = await self._get_pending_submissions(old_version)
         
         for submission_id in pending_submissions:
             task = RevalidationTask(
@@ -149,14 +142,21 @@ class KBVersionManager:
             f"Queued {len(pending_submissions)} submissions for revalidation"
         )
     
-    def _get_pending_submissions(self, kb_version: str) -> List[str]:
+    async def _get_pending_submissions(self, kb_version: str) -> List[str]:
         """
         Get pending submissions using old KB version
         
-        Production: Replace with database query
+        Query from database submissions table.
         """
-        # Mock implementation
-        return []
+        from app.core.database import get_pgvector_conn
+        try:
+            conn = await get_pgvector_conn()
+            rows = await conn.fetch("SELECT id FROM submissions WHERE state IN ('review', 'rejected')")
+            await conn.close()
+            return [r["id"] for r in rows]
+        except Exception as e:
+            logger.error("Failed to query pending submissions: %s", e)
+            return []
     
     def get_revalidation_queue(self) -> List[RevalidationTask]:
         """Get all pending revalidation tasks"""

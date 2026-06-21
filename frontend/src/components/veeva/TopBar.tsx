@@ -6,7 +6,7 @@ import { useWorkspace } from '@/lib/workspaceStore'
 // SPRINT5: removed mockup AUDIT_EVENTS
 import { fetchCorrespondence, createSubmission } from '@/services/workspaceData'
 import { fetchRecentActivity } from '@/services/api'
-import type { HACorrespondenceRecord } from '@/lib/mockData'
+import type { HACorrespondenceRecord } from '@/types/workspace'
 import NewSubmissionModal from '@/components/NewSubmissionModal'
 
 export default function TopBar() {

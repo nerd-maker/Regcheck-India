@@ -194,12 +194,13 @@ class TestRule4_VersionLocking:
         assert isinstance(current_version, str)
         assert len(current_version) > 0
     
-    def test_new_kb_version_triggers_revalidation(self):
+    @pytest.mark.asyncio
+    async def test_new_kb_version_triggers_revalidation(self):
         """Verify new KB version triggers re-evaluation of pending submissions"""
         old_version = kb_version_manager.get_current_version()
         
         # Update KB version
-        new_kb = kb_version_manager.update_version(
+        new_kb = await kb_version_manager.update_version(
             new_version="v1.1.0-test",
             change_summary="Test guidance update",
             source_documents=["Test Document"]
@@ -209,7 +210,7 @@ class TestRule4_VersionLocking:
         assert kb_version_manager.get_current_version() == "v1.1.0-test"
         
         # Reset back to original
-        kb_version_manager.update_version(
+        await kb_version_manager.update_version(
             new_version=old_version,
             change_summary="Reset to original",
             source_documents=[]
