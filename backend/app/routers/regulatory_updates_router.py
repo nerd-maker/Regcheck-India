@@ -46,7 +46,11 @@ async def list_queued_updates(
     limit: int = Query(default=50, le=100),
 ) -> dict:
     """List regulatory updates filtered by status."""
-    conn = await asyncpg.connect(_get_db_url(), timeout=10.0)
+    try:
+        conn = await asyncpg.connect(_get_db_url(), timeout=10.0)
+    except Exception as e:
+        logger.error("db_connect_failed: %s", e)
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
     try:
         rows = await conn.fetch(
             """
@@ -74,7 +78,11 @@ async def list_queued_updates(
 @router.get("/counts")
 async def get_update_counts() -> dict:
     """Return item counts grouped by status — used for the nav badge."""
-    conn = await asyncpg.connect(_get_db_url(), timeout=10.0)
+    try:
+        conn = await asyncpg.connect(_get_db_url(), timeout=10.0)
+    except Exception as e:
+        logger.error("db_connect_failed: %s", e)
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
     try:
         rows = await conn.fetch(
             """
@@ -109,7 +117,11 @@ async def trigger_manual_scrape() -> dict:
 @router.get("/{update_id}")
 async def get_update_detail(update_id: int) -> dict:
     """Return full detail of a queued update, including extracted text."""
-    conn = await asyncpg.connect(_get_db_url(), timeout=10.0)
+    try:
+        conn = await asyncpg.connect(_get_db_url(), timeout=10.0)
+    except Exception as e:
+        logger.error("db_connect_failed: %s", e)
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
     try:
         row = await conn.fetchrow(
             "SELECT * FROM regulatory_updates_queue WHERE id = $1", update_id
@@ -136,7 +148,11 @@ async def review_update(update_id: int, decision: ReviewDecision) -> dict:
             status_code=422, detail="status must be 'approved' or 'rejected'."
         )
 
-    conn = await asyncpg.connect(_get_db_url(), timeout=10.0)
+    try:
+        conn = await asyncpg.connect(_get_db_url(), timeout=10.0)
+    except Exception as e:
+        logger.error("db_connect_failed: %s", e)
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
     try:
         row = await conn.fetchrow(
             "SELECT * FROM regulatory_updates_queue WHERE id = $1", update_id

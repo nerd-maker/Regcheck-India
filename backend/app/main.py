@@ -159,13 +159,15 @@ async def lifespan(app: FastAPI):
     await verify_storage_bucket_exists()
 
     # Seeding demo submissions automatically on startup
-    if os.getenv("DATABASE_URL"):
+    # Runs when either DATABASE_URL or SUPABASE_DB_URL is present
+    _has_db = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL")
+    if _has_db:
         from db import get_conn
         try:
             conn = await get_conn()
             try:
                 await seed_demo_applications(conn)
-                await seed_demo_submissions(conn)
+                await seed_demo_submissions(conn)   # also deletes RC-SUB-* legacy rows
                 await seed_demo_registrations(conn)
                 await seed_demo_correspondence(conn)
             finally:
