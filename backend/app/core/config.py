@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_storage_bucket: str = "regcheck-documents"
     supabase_db_url: str = ""
+    supabase_db_host: str = "aws-0-ap-southeast-2.pooler.supabase.com"
+    supabase_db_port: int = 6543
+    supabase_db_user: str = "postgres"
+    supabase_db_password: str = ""
+    supabase_db_name: str = "postgres"
 
     @property
     def safe_supabase_db_url(self) -> str:

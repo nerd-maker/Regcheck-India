@@ -11,6 +11,7 @@ connection pools.
 from __future__ import annotations
 
 import logging
+import asyncpg
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -108,4 +109,35 @@ async def get_async_session() -> AsyncIterator[AsyncSession]:
         raise
     finally:
         await session.close()
+
+
+async def get_pgvector_conn() -> asyncpg.Connection:
+    """
+    Establish a connection to the Supabase pgvector database using individual
+    parameters, avoiding all URL parsing issues. Supports fallback to URL
+    parameters if individual credentials are not fully populated.
+    """
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    # Use individual parameters if password is set or if host is overridden
+    if settings.supabase_db_password or settings.supabase_db_host != "aws-0-ap-southeast-2.pooler.supabase.com":
+        ssl_val = "require" if settings.environment == "production" or "supabase" in settings.supabase_db_host else None
+        return await asyncpg.connect(
+            host=settings.supabase_db_host,
+            port=settings.supabase_db_port,
+            user=settings.supabase_db_user,
+            password=settings.supabase_db_password,
+            database=settings.supabase_db_name,
+            ssl=ssl_val,
+            statement_cache_size=0,
+            timeout=10.0,
+        )
+
+    # Fallback to URL parsing if password not provided
+    db_url = settings.safe_supabase_db_url or settings.database_url
+    if not db_url:
+        raise RuntimeError("No database connection details configured.")
+    return await asyncpg.connect(db_url, timeout=10.0, statement_cache_size=0)
+
 

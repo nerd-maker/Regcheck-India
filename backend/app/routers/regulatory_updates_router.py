@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.database import get_pgvector_conn
 
 router = APIRouter(prefix="/regulatory-updates", tags=["regulatory-updates"])
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ async def list_queued_updates(
 ) -> dict:
     """List regulatory updates filtered by status."""
     try:
-        conn = await asyncpg.connect(_get_db_url(), timeout=10.0, statement_cache_size=0)
+        conn = await get_pgvector_conn()
     except Exception as e:
         logger.error("db_connect_failed: %s", e)
         raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
@@ -79,7 +80,7 @@ async def list_queued_updates(
 async def get_update_counts() -> dict:
     """Return item counts grouped by status — used for the nav badge."""
     try:
-        conn = await asyncpg.connect(_get_db_url(), timeout=10.0, statement_cache_size=0)
+        conn = await get_pgvector_conn()
     except Exception as e:
         logger.error("db_connect_failed: %s", e)
         raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
@@ -118,7 +119,7 @@ async def trigger_manual_scrape() -> dict:
 async def get_update_detail(update_id: int) -> dict:
     """Return full detail of a queued update, including extracted text."""
     try:
-        conn = await asyncpg.connect(_get_db_url(), timeout=10.0, statement_cache_size=0)
+        conn = await get_pgvector_conn()
     except Exception as e:
         logger.error("db_connect_failed: %s", e)
         raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
@@ -149,7 +150,7 @@ async def review_update(update_id: int, decision: ReviewDecision) -> dict:
         )
 
     try:
-        conn = await asyncpg.connect(_get_db_url(), timeout=10.0, statement_cache_size=0)
+        conn = await get_pgvector_conn()
     except Exception as e:
         logger.error("db_connect_failed: %s", e)
         raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")

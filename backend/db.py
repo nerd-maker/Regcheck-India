@@ -8,6 +8,14 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 async def get_conn():
+    from app.core.config import get_settings
+    from app.core.database import get_pgvector_conn
+    settings = get_settings()
+
+    # Use the robust get_pgvector_conn if individual parameters are provided (e.g. password is set or host is overridden)
+    if settings.supabase_db_password or settings.supabase_db_host != "aws-0-ap-southeast-2.pooler.supabase.com":
+        return await get_pgvector_conn()
+
     if not DATABASE_URL:
         raise RuntimeError(
             "DATABASE_URL is not set. "

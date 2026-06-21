@@ -132,23 +132,17 @@ async def lifespan(app: FastAPI):
 
     # pgvector health check — non-blocking, 5 s timeout, never raises
     try:
-        from app.core.config import get_settings as _get_settings
-        import asyncpg as _asyncpg
-        _settings = _get_settings()
-        _db_url = _settings.safe_supabase_db_url or _settings.database_url
-        if _db_url:
-            _conn = await _asyncpg.connect(_db_url, timeout=5.0, statement_cache_size=0)
-            try:
-                _count = await _conn.fetchval(
-                    "SELECT COUNT(*) FROM regulatory_embeddings"
-                )
-                logger.info(
-                    "pgvector ready: %d regulatory chunks available", _count or 0
-                )
-            finally:
-                await _conn.close()
-        else:
-            logger.warning("pgvector: no DB URL configured — agents will work without RAG context")
+        from app.core.database import get_pgvector_conn
+        _conn = await get_pgvector_conn()
+        try:
+            _count = await _conn.fetchval(
+                "SELECT COUNT(*) FROM regulatory_embeddings"
+            )
+            logger.info(
+                "pgvector ready: %d regulatory chunks available", _count or 0
+            )
+        finally:
+            await _conn.close()
     except Exception as e:
         logger.warning(
             "pgvector not ready at startup: %s — agents will work without RAG context", e

@@ -197,13 +197,8 @@ class KnowledgeBase:
             
             await get_embedding_model()
             
-            settings = get_settings()
-            db_url = settings.safe_supabase_db_url or settings.database_url
-            if not db_url:
-                logger.error("No database connection string configured for pgvector")
-                return
-                
-            conn = await asyncpg.connect(db_url, timeout=10.0, statement_cache_size=0)
+            from app.core.database import get_pgvector_conn
+            conn = await get_pgvector_conn()
             try:
                 for idx, doc in enumerate(documents):
                     text = doc["text"]
@@ -297,11 +292,8 @@ class KnowledgeBase:
         async def _async_count():
             from app.core.config import get_settings
             import asyncpg
-            settings = get_settings()
-            db_url = settings.safe_supabase_db_url or settings.database_url
-            if not db_url:
-                return 0
-            conn = await asyncpg.connect(db_url, timeout=10.0, statement_cache_size=0)
+            from app.core.database import get_pgvector_conn
+            conn = await get_pgvector_conn()
             try:
                 count = await conn.fetchval("SELECT COUNT(*) FROM regulatory_embeddings")
                 return count or 0
@@ -326,11 +318,8 @@ class KnowledgeBase:
         async def _async_reset():
             from app.core.config import get_settings
             import asyncpg
-            settings = get_settings()
-            db_url = settings.safe_supabase_db_url or settings.database_url
-            if not db_url:
-                return
-            conn = await asyncpg.connect(db_url, timeout=10.0, statement_cache_size=0)
+            from app.core.database import get_pgvector_conn
+            conn = await get_pgvector_conn()
             try:
                 await conn.execute("TRUNCATE TABLE regulatory_embeddings")
             finally:
