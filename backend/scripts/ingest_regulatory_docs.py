@@ -107,7 +107,7 @@ async def ingest_all_documents():
     model = SentenceTransformer("all-MiniLM-L6-v2")
     logger.info("Model loaded")
 
-    conn = await asyncpg.connect(db_url, timeout=10.0)
+    conn = await asyncpg.connect(db_url, timeout=10.0, statement_cache_size=0)
 
     try:
         # Clear existing embeddings

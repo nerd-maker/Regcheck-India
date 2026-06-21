@@ -18,7 +18,7 @@ async def get_db():
             status_code=503,
             detail="Database not configured. Set DATABASE_URL environment variable."
         )
-    return await asyncpg.connect(DATABASE_URL, timeout=10.0)
+    return await asyncpg.connect(DATABASE_URL, timeout=10.0, statement_cache_size=0)
 
 
 # ── Models ────────────────────────────────────────────────────────

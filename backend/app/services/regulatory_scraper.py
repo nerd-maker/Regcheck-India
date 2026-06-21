@@ -104,7 +104,7 @@ async def scrape_all_sources() -> dict:
         "queued": [],
     }
 
-    conn = await asyncpg.connect(db_url, timeout=10.0)
+    conn = await asyncpg.connect(db_url, timeout=10.0, statement_cache_size=0)
     try:
         import httpx
         async with httpx.AsyncClient(
