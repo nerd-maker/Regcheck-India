@@ -158,8 +158,11 @@ async def lifespan(app: FastAPI):
     await init_agent_runs_table()
     await verify_storage_bucket_exists()
 
+    # Run seed_db() FIRST — any RC-SUB legacy rows it might insert get cleaned below
+    await seed_db()
+
     # Seeding demo submissions automatically on startup
-    # Runs when either DATABASE_URL or SUPABASE_DB_URL is present
+    # Runs AFTER seed_db() so our cleanup is always the final word
     _has_db = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL")
     if _has_db:
         from db import get_conn
@@ -167,7 +170,7 @@ async def lifespan(app: FastAPI):
             conn = await get_conn()
             try:
                 await seed_demo_applications(conn)
-                await seed_demo_submissions(conn)   # also deletes RC-SUB-* legacy rows
+                await seed_demo_submissions(conn)   # deletes RC-SUB-* after seed_db()
                 await seed_demo_registrations(conn)
                 await seed_demo_correspondence(conn)
             finally:
@@ -197,7 +200,6 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Failed to start regulatory scraper scheduler: %s", exc)
 
-    await seed_db()
     yield
     # Shutdown
     if hasattr(app.state, "scheduler"):
