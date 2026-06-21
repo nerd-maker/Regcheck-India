@@ -3,9 +3,32 @@ Configuration management for RegCheck-India backend.
 """
 import os
 from functools import lru_cache
+from urllib.parse import quote, urlparse, urlunparse
+
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import List
+
+
+def get_safe_db_url(raw_url: str) -> str:
+    """
+    URL-encode special characters in the password portion of a database URL.
+
+    Prevents asyncpg connection failures when passwords contain !, ?, @, # etc.
+    Safe to call repeatedly — idempotent if the URL is already encoded.
+    """
+    if not raw_url:
+        return raw_url
+    try:
+        parsed = urlparse(raw_url)
+        if parsed.password:
+            safe_password = quote(parsed.password, safe="")
+            # Replace only the first occurrence to avoid mangling usernames
+            safe_netloc = parsed.netloc.replace(parsed.password, safe_password, 1)
+            return urlunparse(parsed._replace(netloc=safe_netloc))
+    except Exception:
+        pass
+    return raw_url
 
 
 class Settings(BaseSettings):
@@ -69,6 +92,15 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_storage_bucket: str = "regcheck-documents"
     supabase_db_url: str = ""
+
+    @property
+    def safe_supabase_db_url(self) -> str:
+        """Return SUPABASE_DB_URL with the password portion URL-encoded.
+
+        Required when the password contains special characters like !, ?, @, #
+        that would break URL parsing in asyncpg / pgBouncer.
+        """
+        return get_safe_db_url(self.supabase_db_url)
 
     # PostgreSQL URL (for SQLAlchemy async engine used by vault router)
     database_url: str = os.getenv("DATABASE_URL", "")

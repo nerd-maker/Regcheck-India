@@ -135,7 +135,7 @@ async def lifespan(app: FastAPI):
         from app.core.config import get_settings as _get_settings
         import asyncpg as _asyncpg
         _settings = _get_settings()
-        _db_url = _settings.supabase_db_url or _settings.database_url
+        _db_url = _settings.safe_supabase_db_url or _settings.database_url
         if _db_url:
             _conn = await _asyncpg.connect(_db_url, timeout=5.0, statement_cache_size=0)
             try:

@@ -96,7 +96,7 @@ async def ingest_all_documents():
     from sentence_transformers import SentenceTransformer
 
     settings = get_settings()
-    db_url = settings.supabase_db_url or settings.database_url
+    db_url = settings.safe_supabase_db_url or settings.database_url
     if not db_url:
         logger.error("No database connection string configured in Settings.")
         return

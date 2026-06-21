@@ -32,7 +32,7 @@ class ReviewDecision(BaseModel):
 
 def _get_db_url() -> str:
     settings = get_settings()
-    url = settings.supabase_db_url or settings.database_url
+    url = settings.safe_supabase_db_url or settings.database_url
     if not url:
         raise HTTPException(status_code=500, detail="Database URL not configured.")
     return url

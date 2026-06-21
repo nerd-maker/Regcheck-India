@@ -53,7 +53,7 @@ async def retrieve_regulatory_context(
     """
     settings = get_settings()
     # Fallback to database_url if supabase_db_url is empty
-    db_url = settings.supabase_db_url or settings.database_url
+    db_url = settings.safe_supabase_db_url or settings.database_url
     if not db_url:
         logger.error("No database connection string configured for pgvector")
         return []

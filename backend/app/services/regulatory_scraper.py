@@ -85,7 +85,7 @@ async def scrape_all_sources() -> dict:
     Returns summary of what was found and queued.
     """
     settings = get_settings()
-    db_url = settings.supabase_db_url or settings.database_url
+    db_url = settings.safe_supabase_db_url or settings.database_url
     if not db_url:
         logger.error("regulatory_scraper: no database URL configured — aborting")
         return {

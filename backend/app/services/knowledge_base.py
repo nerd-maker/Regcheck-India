@@ -198,7 +198,7 @@ class KnowledgeBase:
             await get_embedding_model()
             
             settings = get_settings()
-            db_url = settings.supabase_db_url or settings.database_url
+            db_url = settings.safe_supabase_db_url or settings.database_url
             if not db_url:
                 logger.error("No database connection string configured for pgvector")
                 return
@@ -298,7 +298,7 @@ class KnowledgeBase:
             from app.core.config import get_settings
             import asyncpg
             settings = get_settings()
-            db_url = settings.supabase_db_url or settings.database_url
+            db_url = settings.safe_supabase_db_url or settings.database_url
             if not db_url:
                 return 0
             conn = await asyncpg.connect(db_url, timeout=10.0, statement_cache_size=0)
@@ -327,7 +327,7 @@ class KnowledgeBase:
             from app.core.config import get_settings
             import asyncpg
             settings = get_settings()
-            db_url = settings.supabase_db_url or settings.database_url
+            db_url = settings.safe_supabase_db_url or settings.database_url
             if not db_url:
                 return
             conn = await asyncpg.connect(db_url, timeout=10.0, statement_cache_size=0)
