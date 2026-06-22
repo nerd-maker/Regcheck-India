@@ -55,6 +55,7 @@ def _generate_correspondence_number(count: int) -> str:
 
 
 @router.get("")
+@router.get("/")
 async def list_correspondence(submission_id: Optional[str] = None) -> dict[str, Any]:
     conn = await get_conn()
     try:

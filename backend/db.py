@@ -8,11 +8,12 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 async def get_conn():
+    from urllib.parse import urlparse
     from app.core.config import get_settings
     from app.core.database import get_pgvector_conn
     settings = get_settings()
 
-    # Use the robust get_pgvector_conn if individual parameters are provided (e.g. password is set or host is overridden)
+    # Use the robust get_pgvector_conn if individual parameters are provided
     if settings.supabase_db_password or settings.supabase_db_host != "aws-0-ap-southeast-2.pooler.supabase.com":
         return await get_pgvector_conn()
 
@@ -21,7 +22,26 @@ async def get_conn():
             "DATABASE_URL is not set. "
             "Add it to your Render environment variables."
         )
-    return await asyncpg.connect(DATABASE_URL, timeout=10.0, statement_cache_size=0)
+    # Parse the URL into individual params — never pass raw URL to asyncpg
+    # (special chars in the password break URL-based connections)
+    parsed = urlparse(DATABASE_URL)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 5432
+    user = parsed.username or "postgres"
+    password = parsed.password or ""
+    database = (parsed.path or "/postgres").lstrip("/") or "postgres"
+    ssl_val = "require" if "supabase" in host else None
+    return await asyncpg.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
+        ssl=ssl_val,
+        statement_cache_size=0,
+        timeout=10.0,
+    )
+
 
 
 async def init_all_tables():

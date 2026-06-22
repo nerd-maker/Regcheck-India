@@ -68,8 +68,11 @@ const nextConfig = {
               destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/:documentId/scans` },
             { source: '/api/regcheck/vault/documents/:documentId',
               destination: `${REGCHECK_API_BASE}/api/v1/vault/documents/:documentId` },
+            { source: '/api/regcheck/vault/documents/',
+              destination: `${REGCHECK_API_BASE}/api/v1/vault/documents` },
             { source: '/api/regcheck/vault/documents',
               destination: `${REGCHECK_API_BASE}/api/v1/vault/documents` },
+
 
             // ── Workspace CRUD (P1) ────────────────────────────────────
             { source: '/api/regcheck/submissions/:path*',

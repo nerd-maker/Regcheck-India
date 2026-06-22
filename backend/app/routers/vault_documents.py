@@ -265,6 +265,7 @@ async def upload_vault_document(
         raise
 
 
+@router.get("")
 @router.get("/")
 async def list_vault_documents(
     workspace_id: str | None = Query(None),

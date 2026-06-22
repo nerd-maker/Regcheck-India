@@ -322,6 +322,10 @@ from app.routers.submissions_router import router as submissions_router
 app.include_router(submissions_router, prefix="/api/v1")
 from app.routers.correspondence_router import router as correspondence_router
 app.include_router(correspondence_router, prefix="/api/v1")
+from app.routers.registrations_router import router as registrations_router
+app.include_router(registrations_router, prefix="/api/v1")
+from app.routers.applications_router import router as applications_router
+app.include_router(applications_router, prefix="/api/v1")
 from app.routers.analytics_router import router as analytics_router
 app.include_router(analytics_router, prefix="/api/v1")
 from app.routers.regulatory_updates_router import router as regulatory_updates_router

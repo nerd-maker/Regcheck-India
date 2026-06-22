@@ -165,6 +165,7 @@ class SubmissionCreate(BaseModel):
 
 
 @router.get("/documents")
+@router.get("/documents/")
 async def list_documents(
     submission_id: Optional[str] = Query(None),
     state: Optional[str] = Query(None),

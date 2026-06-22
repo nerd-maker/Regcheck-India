@@ -66,6 +66,7 @@ def _generate_submission_number(count: int) -> str:
 
 
 @router.get("")
+@router.get("/")
 async def list_submissions() -> dict[str, Any]:
     conn = await get_conn()
     try:

@@ -13,12 +13,32 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 
 async def get_db():
+    """Return an asyncpg connection, parsing DATABASE_URL into individual params
+    so special characters in the password don't break the connection."""
+    from urllib.parse import urlparse
     if not DATABASE_URL:
         raise HTTPException(
             status_code=503,
-            detail="Database not configured. Set DATABASE_URL environment variable."
+            detail="Database not configured. Set DATABASE_URL environment variable.",
         )
-    return await asyncpg.connect(DATABASE_URL, timeout=10.0, statement_cache_size=0)
+    parsed = urlparse(DATABASE_URL)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 5432
+    user = parsed.username or "postgres"
+    password = parsed.password or ""
+    database = (parsed.path or "/postgres").lstrip("/") or "postgres"
+    ssl_val = "require" if "supabase" in host else None
+    return await asyncpg.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
+        ssl=ssl_val,
+        statement_cache_size=0,
+        timeout=10.0,
+    )
+
 
 
 # ── Models ────────────────────────────────────────────────────────
