@@ -29,16 +29,6 @@ class ReviewDecision(BaseModel):
     rejection_reason: Optional[str] = None
 
 
-# ── Helper ─────────────────────────────────────────────────────────────────────
-
-def _get_db_url() -> str:
-    settings = get_settings()
-    url = settings.safe_supabase_db_url or settings.database_url
-    if not url:
-        raise HTTPException(status_code=500, detail="Database URL not configured.")
-    return url
-
-
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("")

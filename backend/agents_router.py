@@ -511,6 +511,7 @@ async def summarise_document(request: Request, body: AgentRequest, x_anthropic_a
 @router.post("/completeness", response_model=AgentResponse, summary="Agent 03 - Completeness Assessment")
 @limiter.limit("10/minute")
 async def assess_completeness(request: Request, body: CompletenessRequest, x_anthropic_api_key: Optional[str] = Header(None)):
+    logger.info(f"completeness_agent_model: {MODEL_SONNET}")
     # ── Input sanitization ────────────────────────────────────────────────
     try:
         sanitized_text, was_modified = sanitize_input(

@@ -3,12 +3,15 @@ import sys
 import asyncio
 import json
 import uuid
+import logging
 from datetime import datetime
 
 # Add parent directory to sys.path to resolve backend imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from db import get_conn, init_all_tables
+
+logger = logging.getLogger(__name__)
 
 DEMO_SUBMISSIONS = [
     {
@@ -143,14 +146,14 @@ DEMO_CORRESPONDENCE = [
 async def seed_demo_submissions(conn) -> None:
     # Clean up legacy submissions
     deleted_status = await conn.execute("DELETE FROM submissions WHERE number LIKE 'RC-SUB-%'")
-    print(f"Cleaned up legacy submissions status: {deleted_status}")
+    logger.info(f"Cleaned up legacy submissions status: {deleted_status}")
 
     count = await conn.fetchval("SELECT COUNT(*) FROM submissions WHERE number LIKE 'SUB-%'")
     if count > 0:
-        print(f"Skipping seed: submissions table already contains {count} real SUB-format records.")
+        logger.info(f"Skipping seed: submissions table already contains {count} real SUB-format records.")
         return
 
-    print(f"Seeding {len(DEMO_SUBMISSIONS)} demo submissions...")
+    logger.info(f"Seeding {len(DEMO_SUBMISSIONS)} demo submissions...")
     for i, sub in enumerate(DEMO_SUBMISSIONS):
         sub_id = f"s-seed-{uuid.uuid4().hex[:6]}"
         number = f"SUB-{datetime.now().year}-{str(i + 1).zfill(3)}"
@@ -183,20 +186,20 @@ async def seed_demo_submissions(conn) -> None:
             sub["risk_level"], sub["open_gaps"], sub["compliance_score"],
             json.dumps(sub["frameworks"]), app_id, now_str
         )
-    print("Demo submissions seeded successfully.")
+    logger.info("Demo submissions seeded successfully.")
 
 
 async def seed_demo_applications(conn) -> None:
     # Clean up legacy applications
     deleted_status = await conn.execute("DELETE FROM applications WHERE number LIKE 'RC-APP-%'")
-    print(f"Cleaned up legacy applications status: {deleted_status}")
+    logger.info(f"Cleaned up legacy applications status: {deleted_status}")
 
     count = await conn.fetchval("SELECT COUNT(*) FROM applications WHERE number LIKE 'APP-%'")
     if count > 0:
-        print(f"Skipping seed: applications table already contains {count} real APP-format records.")
+        logger.info(f"Skipping seed: applications table already contains {count} real APP-format records.")
         return
 
-    print(f"Seeding {len(DEMO_APPLICATIONS)} demo applications...")
+    logger.info(f"Seeding {len(DEMO_APPLICATIONS)} demo applications...")
     for i, app in enumerate(DEMO_APPLICATIONS):
         app_id = f"a-seed-{uuid.uuid4().hex[:6]}"
         number = f"APP-{datetime.now().year}-{str(i + 1).zfill(3)}"
@@ -213,20 +216,20 @@ async def seed_demo_applications(conn) -> None:
             app["submissions"], app["registrations"], app["owner_name"],
             app["owner_initials"], app["owner_role"], opened_at
         )
-    print("Demo applications seeded successfully.")
+    logger.info("Demo applications seeded successfully.")
 
 
 async def seed_demo_registrations(conn) -> None:
     # Clean up legacy registrations (not starting with REG-)
     deleted_status = await conn.execute("DELETE FROM registrations WHERE number NOT LIKE 'REG-%'")
-    print(f"Cleaned up legacy registrations status: {deleted_status}")
+    logger.info(f"Cleaned up legacy registrations status: {deleted_status}")
 
     count = await conn.fetchval("SELECT COUNT(*) FROM registrations WHERE number LIKE 'REG-%'")
     if count > 0:
-        print(f"Skipping seed: registrations table already contains {count} real REG-format records.")
+        logger.info(f"Skipping seed: registrations table already contains {count} real REG-format records.")
         return
 
-    print(f"Seeding {len(DEMO_REGISTRATIONS)} demo registrations...")
+    logger.info(f"Seeding {len(DEMO_REGISTRATIONS)} demo registrations...")
     for i, reg in enumerate(DEMO_REGISTRATIONS):
         reg_id = f"r-seed-{uuid.uuid4().hex[:6]}"
         number = f"REG-{datetime.now().year}-{str(i + 1).zfill(3)}"
@@ -252,20 +255,20 @@ async def seed_demo_registrations(conn) -> None:
             reg_id, number, reg["product"], reg["certificate"],
             reg["market"], reg["state"], app_date, exp_date, app_id
         )
-    print("Demo registrations seeded successfully.")
+    logger.info("Demo registrations seeded successfully.")
 
 
 async def seed_demo_correspondence(conn) -> None:
     # Clean up legacy correspondence (starting with CDSCO-)
     deleted_status = await conn.execute("DELETE FROM ha_correspondence WHERE number LIKE 'CDSCO-%'")
-    print(f"Cleaned up legacy correspondence status: {deleted_status}")
+    logger.info(f"Cleaned up legacy correspondence status: {deleted_status}")
 
     count = await conn.fetchval("SELECT COUNT(*) FROM ha_correspondence WHERE number LIKE 'HA-%'")
     if count > 0:
-        print(f"Skipping seed: ha_correspondence table already contains {count} real HA-format records.")
+        logger.info(f"Skipping seed: ha_correspondence table already contains {count} real HA-format records.")
         return
 
-    print(f"Seeding {len(DEMO_CORRESPONDENCE)} demo correspondence...")
+    logger.info(f"Seeding {len(DEMO_CORRESPONDENCE)} demo correspondence...")
     for i, corr in enumerate(DEMO_CORRESPONDENCE):
         corr_id = f"h-seed-{uuid.uuid4().hex[:6]}"
         number = f"HA-{datetime.now().year}-{str(i + 1).zfill(3)}"
@@ -284,7 +287,7 @@ async def seed_demo_correspondence(conn) -> None:
             corr["received_at"], corr["due_at"], corr["state"],
             corr["priority"], corr["preview"]
         )
-    print("Demo correspondence seeded successfully.")
+    logger.info("Demo correspondence seeded successfully.")
 
 
 async def seed() -> None:
