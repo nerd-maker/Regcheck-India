@@ -112,61 +112,37 @@ async def get_async_session() -> AsyncIterator[AsyncSession]:
 
 
 async def get_pgvector_conn() -> asyncpg.Connection:
-    """
-    Establish a connection to the Supabase pgvector database using individual
-    parameters, avoiding all URL parsing issues. Supports fallback to URL
-    parameters if individual credentials are not fully populated.
-
-    Never passes a raw URL string to asyncpg — special characters in the
-    Supabase password (!, @, #, ?) break URL-based connections and trigger
-    the asyncpg ECIRCUITBREAKER on repeated auth failures.
-    """
-    from app.core.config import get_settings
-    from urllib.parse import urlparse
-    settings = get_settings()
-
-    # ── Path 1: explicit individual env vars set (preferred) ──────────────────
-    if settings.supabase_db_password or settings.supabase_db_host != "aws-0-ap-southeast-2.pooler.supabase.com":
-        ssl_val = (
-            "require"
-            if settings.environment == "production" or "supabase" in settings.supabase_db_host
-            else None
-        )
+    import urllib.parse
+    import os
+    raw_url = os.environ.get("PGVECTOR_URL") or os.environ.get("SUPABASE_DB_URL")
+    
+    if raw_url:
+        # Parse URL and pass components individually to avoid special char encoding issues
+        parsed = urllib.parse.urlparse(raw_url)
+        host = parsed.hostname or "localhost"
+        ssl_val = "require" if host and "supabase" in host else None
         return await asyncpg.connect(
-            host=settings.supabase_db_host,
-            port=settings.supabase_db_port,
-            user=settings.supabase_db_user,
-            password=settings.supabase_db_password,
-            database=settings.supabase_db_name,
+            host=host,
+            port=parsed.port or 5432,
+            user=parsed.username,
+            password=urllib.parse.unquote(parsed.password) if parsed.password else None,
+            database=parsed.path.lstrip("/") or "postgres",
             ssl=ssl_val,
-            statement_cache_size=0,
             timeout=10.0,
+            statement_cache_size=0
         )
-
-    # ── Path 2: parse DATABASE_URL / SUPABASE_DB_URL into individual params ──
-    # Never hand a raw URL to asyncpg — parse it ourselves so special chars
-    # in the password don't corrupt the connection string.
-    raw_url = settings.supabase_db_url or settings.database_url
-    if not raw_url:
-        raise RuntimeError("No database connection details configured.")
-
-    parsed = urlparse(raw_url)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 5432
-    user = parsed.username or "postgres"
-    # urlparse percent-decodes the password for us — no manual quote() needed
-    password = parsed.password or ""
-    database = (parsed.path or "/postgres").lstrip("/") or "postgres"
-    ssl_val = "require" if "supabase" in host else None
-
-    return await asyncpg.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-        ssl=ssl_val,
-        statement_cache_size=0,
-        timeout=10.0,
-    )
+    else:
+        # Fallback to individual env vars
+        host = os.environ.get("PGVECTOR_HOST") or "localhost"
+        ssl_val = "require" if host and "supabase" in host else None
+        return await asyncpg.connect(
+            host=host,
+            port=int(os.environ.get("PGVECTOR_PORT", 5432)),
+            user=os.environ.get("PGVECTOR_USER", "postgres"),
+            password=os.environ.get("PGVECTOR_PASSWORD"),
+            database=os.environ.get("PGVECTOR_DATABASE", "postgres"),
+            ssl=ssl_val,
+            timeout=10.0,
+            statement_cache_size=0
+        )
 
