@@ -34,16 +34,29 @@ class QueryClassifier:
     """
     Classifies regulatory queries into predefined categories
     """
-    
-    def __init__(self, categories_file: str = "app/data/query_categories.json"):
-        self.categories_file = Path(categories_file)
+
+    # Resolve the default path relative to *this file* so the class works
+    # regardless of the current working directory (e.g., when pytest is run
+    # from the project root rather than from backend/).
+    _DEFAULT_CATEGORIES_FILE = (
+        Path(__file__).resolve().parent.parent / "data" / "query_categories.json"
+    )
+
+    def __init__(self, categories_file: Optional[str] = None):
+        self.categories_file = (
+            Path(categories_file) if categories_file else self._DEFAULT_CATEGORIES_FILE
+        )
         self.categories = self._load_categories()
-    
+
     def _load_categories(self) -> List[Dict]:
-        """Load query categories from JSON file"""
+        """Load query categories from JSON file."""
         if not self.categories_file.exists():
-            raise FileNotFoundError(f"Categories file not found: {self.categories_file}")
-        
+            logger.warning(
+                "Categories file not found: %s — classifier will use empty category list",
+                self.categories_file,
+            )
+            return []
+
         with open(self.categories_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
             return data.get('categories', [])
