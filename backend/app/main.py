@@ -130,7 +130,22 @@ async def lifespan(app: FastAPI):
     # Create all workspace + agent_runs tables (idempotent)
     await init_all_tables()
 
-    # pgvector health check — non-blocking, 5 s timeout, never raises
+    # ── FIX-2: ADMIN_DEMO_KEY guard ───────────────────────────────────────────
+    # If the server Anthropic key is present but ADMIN_DEMO_KEY is missing,
+    # the fallback path in call_claude_agent() is inert (the `and admin_password`
+    # guard prevents it firing). Log a loud WARNING so ops can catch misconfiguration.
+    _server_key = os.getenv("ANTHROPIC_API_KEY", "")
+    _admin_key  = os.getenv("ADMIN_DEMO_KEY", "")
+    if _server_key and not _admin_key:
+        logger.warning(
+            "SECURITY: ANTHROPIC_API_KEY is set but ADMIN_DEMO_KEY is empty. "
+            "Server key will NEVER be used (safe), but set ADMIN_DEMO_KEY in "
+            "Render env-vars to enable the demo mode intentionally."
+        )
+    elif _server_key and _admin_key:
+        logger.info("ADMIN_DEMO_KEY is configured — demo mode active.")
+
+    # pgvector health check — non-blocking, 3 s timeout, never raises
     try:
         from app.core.database import get_pgvector_conn
         _conn = await get_pgvector_conn()
@@ -159,27 +174,43 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Embedding model pre-warm failed: {e} — will load on first query")
 
     await init_agent_runs_table()
-    await verify_storage_bucket_exists()
-
-    # Run seed_db() FIRST — any RC-SUB legacy rows it might insert get cleaned below
     await seed_db()
 
-    # Seeding demo submissions automatically on startup
-    # Runs AFTER seed_db() so our cleanup is always the final word
-    _has_db = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL")
-    if _has_db:
-        from db import get_conn
+    # ── FIX-5: Non-critical startup work runs in the background ───────────────
+    # Bucket verification and demo seeding are not required for the app to
+    # serve requests. Running them synchronously increases cold-start time and
+    # can prevent /health from responding if Supabase is slow.
+    # They now fire 5 s after startup in a fire-and-forget task.
+    async def _background_startup():
+        import asyncio as _asyncio
+        await _asyncio.sleep(5)  # let the app go healthy first
+
         try:
-            conn = await get_conn()
+            await verify_storage_bucket_exists()
+            logger.info("Storage bucket verified")
+        except Exception as exc:
+            logger.warning("Storage bucket check failed: %s", exc)
+
+        _has_db = os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL")
+        if _has_db:
+            from db import get_conn
             try:
-                await seed_demo_applications(conn)
-                await seed_demo_submissions(conn)   # deletes RC-SUB-* after seed_db()
-                await seed_demo_registrations(conn)
-                await seed_demo_correspondence(conn)
-            finally:
-                await conn.close()
-        except Exception as e:
-            logger.error(f"Failed to seed demo submissions on startup: {e}", exc_info=True)
+                conn = await get_conn()
+                try:
+                    await seed_demo_applications(conn)
+                    await seed_demo_submissions(conn)   # deletes RC-SUB-* after seed_db()
+                    await seed_demo_registrations(conn)
+                    await seed_demo_correspondence(conn)
+                    logger.info("Demo data seeded successfully")
+                finally:
+                    await conn.close()
+            except Exception as exc:
+                logger.error("Failed to seed demo data in background: %s", exc, exc_info=True)
+
+    import asyncio as _asyncio
+    _asyncio.ensure_future(_background_startup())
+    logger.info("Non-critical startup tasks dispatched to background")
+
 
     # Seed mockData equivalents on first run (ON CONFLICT DO NOTHING)
     # ── Start regulatory document scraper (daily at 02:00 IST) ───────────────

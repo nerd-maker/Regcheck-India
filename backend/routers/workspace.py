@@ -10,6 +10,8 @@ import os
 import uuid
 from datetime import datetime
 from db import get_conn
+from app.core.config import get_settings
+from app.services.file_cleanup import sanitize_filename
 
 router = APIRouter(prefix="/api/v1", tags=["Workspace"])
 
@@ -203,57 +205,19 @@ async def upload_document(
     document_type: str = Query("Protocol"),
     classification: str = Query("Clinical / Protocol"),
 ):
-    """Upload a document file and create a document record."""
-    conn = await get_conn()
-    try:
-        content = await file.read()
-        file_size_kb = round(len(content) / 1024, 1)
-        size_str = (f"{file_size_kb} KB" if file_size_kb < 1024
-                    else f"{round(file_size_kb / 1024, 1)} MB")
+    """Upload a document file and create a document record.
 
-        did = f"d-{uuid.uuid4().hex[:8]}"
-        count = await conn.fetchval("SELECT COUNT(*) FROM documents")
-        number = f"DOC-{str(int(count) + 1).zfill(4)}"
-        now_str = "just now"
-
-        # Save file locally
-        upload_dir = os.path.join(
-            os.path.dirname(__file__), '..', 'uploads'
-        )
-        os.makedirs(upload_dir, exist_ok=True)
-        file_path = os.path.join(upload_dir, f"{did}_{file.filename}")
-        with open(file_path, 'wb') as f:
-            f.write(content)
-
-        await conn.execute("""
-            INSERT INTO documents (
-                id, number, name, type, classification, state,
-                version, owner_id, owner_name, owner_initials,
-                owner_role, country, language, size, updated_at,
-                updated_by, submission_id, compliance_score,
-                flags, file_path
-            ) VALUES ($1,$2,$3,$4,$5,'draft','0.1','p1',
-                      'Anika Sharma','AS','Regulatory Lead',
-                      'India','en',$6,$7,'Anika Sharma',$8,
-                      NULL,'[]',$9)
-        """, did, number, file.filename, document_type,
-            classification, size_str, now_str,
-            submission_id, file_path)
-
-        # Increment document count on submission
-        if submission_id:
-            await conn.execute("""
-                UPDATE submissions
-                SET documents = documents + 1
-                WHERE id = $1
-            """, submission_id)
-
-        row = await conn.fetchrow(
-            "SELECT * FROM documents WHERE id=$1", did
-        )
-        return row_to_dict(row)
-    finally:
-        await conn.close()
+    DEPRECATED — this route wrote files to the local filesystem which is
+    ephemeral on Render (lost on every deploy/restart). All document uploads
+    must go through the Supabase-backed vault endpoint instead.
+    """
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "This upload endpoint is disabled. "
+            "Use POST /api/v1/vault/documents/upload instead."
+        ),
+    )
 
 
 # ── APPLICATIONS ──────────────────────────────────────────────────
@@ -562,15 +526,15 @@ async def remediations_summary(
     """Summary counts for dashboard KPI widget."""
     conn = await get_conn()
     try:
-        base = "FROM gap_remediations"
-        where = ""
-        if submission_id:
-            where = f" WHERE submission_id='{submission_id}'"
-        rows = await conn.fetch(f"""
+        rows = await conn.fetch(
+            """
             SELECT severity, status, COUNT(*) as count
-            {base}{where}
+            FROM gap_remediations
+            WHERE ($1::text IS NULL OR submission_id = $1)
             GROUP BY severity, status
-        """)
+            """,
+            submission_id,
+        )
         result: dict = {
             'critical': {'open': 0, 'in_progress': 0, 'resolved': 0},
             'major':    {'open': 0, 'in_progress': 0, 'resolved': 0},
@@ -683,4 +647,3 @@ async def delete_remediation(rem_id: str):
         return {"deleted": rem_id}
     finally:
         await conn.close()
-
