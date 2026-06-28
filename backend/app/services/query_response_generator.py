@@ -46,7 +46,7 @@ class QueryResponseGenerator:
     def __init__(self):
         self.classifier = QueryClassifier()
     
-    def generate_response(
+    async def generate_response(
         self,
         query: QueryInput,
         classification: Optional[QueryClassification] = None,
@@ -65,7 +65,7 @@ class QueryResponseGenerator:
         
         # 1. Classify query if not provided
         if classification is None:
-            classification = self.classifier.classify_query(
+            classification = await self.classifier.classify_query(
                 query_text=query.query_text,
                 query_reference=query.query_reference,
                 response_deadline=query.response_deadline
@@ -96,13 +96,13 @@ class QueryResponseGenerator:
         )
         
         # 6. Generate response via Claude
-        response_text = self._generate_with_claude(context, query.query_reference, classification, session_id)
+        response_text = await self._generate_with_claude(context, query.query_reference, classification, session_id)
         
         # 7. Extract metadata
         metadata = self._extract_metadata(response_text)
         
         # 8. Extract commitments
-        commitments = self._extract_commitments(response_text)
+        commitments = await self._extract_commitments(response_text)
         
         # 9. Gap 16: Store commitments in lifecycle tracker
         if commitments and session_id:

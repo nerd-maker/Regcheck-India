@@ -710,7 +710,7 @@ async def evaluate_document(
     
     # Evaluate document
     try:
-        evaluation = compliance_evaluator.evaluate_document(
+        evaluation = await compliance_evaluator.evaluate_document(
             parsed_document=parsed_document,
             metadata=doc_metadata
         )
@@ -765,7 +765,7 @@ async def generate_document(request: DocumentGenerationRequest):
     Supports: protocol, icf, csr, ctri, ib
     """
     try:
-        result = document_generator.generate_document(
+        result = await document_generator.generate_document(
             document_type=request.document_type,
             study_data=request.study_data,
             validate_inline=True
@@ -786,7 +786,7 @@ async def generate_section(request: SectionGenerationRequest):
     Useful for manual step-through or regenerating specific sections.
     """
     try:
-        section = document_generator.generate_single_section(
+        section = await document_generator.generate_single_section(
             document_type=request.document_type,
             section_number=request.section_number,
             study_data=request.study_data,
@@ -854,7 +854,7 @@ async def classify_query(request: QueryClassificationRequest):
     Returns primary category, secondary categories, complexity, urgency, and data gaps.
     """
     try:
-        classification = query_classifier.classify_query(
+        classification = await query_classifier.classify_query(
             query_text=request.query_text,
             query_reference=request.query_reference,
             response_deadline=request.response_deadline
@@ -875,7 +875,7 @@ async def generate_query_response(request: QueryResponseRequest):
     and commitment tracking.
     """
     try:
-        response = query_response_generator.generate_response(
+        response = await query_response_generator.generate_response(
             query=request.query,
             classification=request.classification
         )
@@ -951,7 +951,7 @@ async def ingest_regulatory_document(request: NewDocumentRequest):
             pass
         
         # Ingest and analyze document
-        classification, changes = change_analyzer.ingest_new_document(
+        classification, changes = await change_analyzer.ingest_new_document(
             document_request=request,
             kb_summary=kb_summary
         )
@@ -968,7 +968,7 @@ async def ingest_regulatory_document(request: NewDocumentRequest):
             
             # Assess impact for each critical/high change
             for change in critical_high_changes:
-                assessments = impact_assessor.assess_multiple_submissions(
+                assessments = await impact_assessor.assess_multiple_submissions(
                     change=change,
                     submissions=active_submissions,
                     knowledge_base=knowledge_base
@@ -1015,7 +1015,7 @@ async def assess_regulatory_impact(request: ImpactAssessmentRequest):
         )
         
         # Assess impact
-        assessment = impact_assessor.assess_impact(
+        assessment = await impact_assessor.assess_impact(
             change=change,
             submission=submission,
             submission_content=submission_content
@@ -1061,7 +1061,7 @@ async def generate_weekly_digest(request: DigestGenerationRequest):
             )
             
         # Generate digest
-        digest = digest_generator.generate_digest(
+        digest = await digest_generator.generate_digest(
             changes=changes,
             impact_assessments=impact_assessments,
             start_date=request.start_date,

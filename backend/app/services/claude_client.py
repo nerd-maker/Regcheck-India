@@ -139,6 +139,11 @@ async def call_claude(
     in_tok  = getattr(usage, "input_tokens",  0)
     out_tok = getattr(usage, "output_tokens", 0)
 
+    if not isinstance(in_tok, (int, float)):
+        in_tok = 0
+    if not isinstance(out_tok, (int, float)):
+        out_tok = 0
+
     return {
         "content": content,
         "model": model,
@@ -279,8 +284,12 @@ async def call_claude_agent(
             model,
             has_rag_context,
         )
-        in_tok  = response.usage.input_tokens
-        out_tok = response.usage.output_tokens
+        in_tok  = getattr(getattr(response, "usage", None), "input_tokens", 0)
+        out_tok = getattr(getattr(response, "usage", None), "output_tokens", 0)
+        if not isinstance(in_tok, (int, float)):
+            in_tok = 0
+        if not isinstance(out_tok, (int, float)):
+            out_tok = 0
         cost    = compute_cost_usd(model, in_tok, out_tok)
 
         logger.info(

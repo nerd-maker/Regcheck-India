@@ -209,7 +209,7 @@ class SubmissionImpactAssessor:
         return alert_header + impact.alert_text
     
     
-    def assess_multiple_submissions(
+    async def assess_multiple_submissions(
         self,
         change: RegulatoryChange,
         submissions: List[ActiveSubmission],
@@ -251,7 +251,7 @@ class SubmissionImpactAssessor:
             
             # Assess impact
             try:
-                assessment = self.assess_impact(change, submission, submission_content)
+                assessment = await self.assess_impact(change, submission, submission_content)
                 assessments.append(assessment)
             except Exception as e:
                 # Create error assessment

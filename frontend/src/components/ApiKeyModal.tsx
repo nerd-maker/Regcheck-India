@@ -24,11 +24,11 @@ export default function ApiKeyModal({ onKeySaved, isChanging = false, onClose }:
     setSarvamKey(savedSarvamKey);
   }, []);
 
-  const isValidKey = (key.startsWith('sk-ant-') && key.length > 20) || key === 'admin-regcheck';
+  const isValidKey = key.startsWith('sk-ant-') && key.length > 20;
 
   const handleSave = () => {
     if (!isValidKey) {
-      setError('Please enter a valid Anthropic key (starts with sk-ant-) or admin override code');
+      setError('Please enter a valid Anthropic key (starts with sk-ant-)');
       return;
     }
     storeKey(key);

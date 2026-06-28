@@ -38,10 +38,10 @@ const deobfuscate = (str: string): string => {
  *  in Settings will use their own credits.
  */
 export const getStoredKey = (): string => {
-  if (typeof window === 'undefined') return 'admin-regcheck';
+  if (typeof window === 'undefined') return '';
   const val = localStorage.getItem('regcheck_anthropic_key') ?? '';
   const k = deobfuscate(val);
-  return k || 'admin-regcheck';
+  return k || '';
 };
 
 /** Returns the raw stored key (or empty string). Use this for UI that shows
@@ -59,10 +59,10 @@ export const storeKey = (key: string): void => {
   }
 };
 
-/** Returns true when the stored key is the admin bypass password. */
+/** Returns true when the caller has provided a key locally. */
 export const isAdminUser = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return getStoredKey() === 'admin-regcheck';
+  return Boolean(getStoredKey());
 };
 
 export const getSarvamKey = (): string => {

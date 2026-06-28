@@ -50,7 +50,8 @@ def _mock_classification(primary_category="safety_reporting", complexity="HIGH",
 @patch('app.services.query_response_generator.commitment_manager')
 @patch('app.services.query_response_generator.prompt_version_manager')
 @patch('app.services.query_response_generator.OpenAI')
-def test_generate_response_structure(mock_openai_cls, mock_pvm, mock_cm,
+@pytest.mark.asyncio
+async def test_generate_response_structure(mock_openai_cls, mock_pvm, mock_cm,
                                      sample_cdsco_query, mock_anthropic_client, mock_claude_response_json):
     """Test response generation returns QueryResponse"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -69,7 +70,7 @@ def test_generate_response_structure(mock_openai_cls, mock_pvm, mock_cm,
     query = _mock_query_input(sample_cdsco_query["query_text"], sample_cdsco_query["query_reference"])
     classification = _mock_classification()
 
-    result = service.generate_response(query=query, classification=classification)
+    result = await service.generate_response(query=query, classification=classification)
 
     assert isinstance(result, QueryResponse)
     assert result.response_text is not None
@@ -80,7 +81,8 @@ def test_generate_response_structure(mock_openai_cls, mock_pvm, mock_cm,
 @patch('app.services.query_response_generator.commitment_manager')
 @patch('app.services.query_response_generator.prompt_version_manager')
 @patch('app.services.query_response_generator.OpenAI')
-def test_commitment_extraction(mock_openai_cls, mock_pvm, mock_cm,
+@pytest.mark.asyncio
+async def test_commitment_extraction(mock_openai_cls, mock_pvm, mock_cm,
                                 sample_cdsco_query, mock_anthropic_client, mock_claude_response_json):
     """Test commitment identification and extraction"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -100,7 +102,7 @@ def test_commitment_extraction(mock_openai_cls, mock_pvm, mock_cm,
     query = _mock_query_input(sample_cdsco_query["query_text"], sample_cdsco_query["query_reference"])
     classification = _mock_classification()
 
-    result = service.generate_response(query=query, classification=classification)
+    result = await service.generate_response(query=query, classification=classification)
     assert isinstance(result, QueryResponse)
     # commitments_made is extracted from text - may or may not find them depending on extraction logic
     assert result.response_text is not None
@@ -110,7 +112,8 @@ def test_commitment_extraction(mock_openai_cls, mock_pvm, mock_cm,
 @patch('app.services.query_response_generator.commitment_manager')
 @patch('app.services.query_response_generator.prompt_version_manager')
 @patch('app.services.query_response_generator.OpenAI')
-def test_data_gap_flagging(mock_openai_cls, mock_pvm, mock_cm,
+@pytest.mark.asyncio
+async def test_data_gap_flagging(mock_openai_cls, mock_pvm, mock_cm,
                             sample_cdsco_query, mock_anthropic_client, mock_claude_response_json):
     """Test data gap flagging in response"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -129,7 +132,7 @@ def test_data_gap_flagging(mock_openai_cls, mock_pvm, mock_cm,
     query = _mock_query_input(sample_cdsco_query["query_text"], sample_cdsco_query["query_reference"])
     classification = _mock_classification("statistical_analysis", "VERY_HIGH", "HIGH")
 
-    result = service.generate_response(query=query, classification=classification)
+    result = await service.generate_response(query=query, classification=classification)
     assert isinstance(result, QueryResponse)
     assert len(result.reviewer_flags) >= 1
 
@@ -138,7 +141,8 @@ def test_data_gap_flagging(mock_openai_cls, mock_pvm, mock_cm,
 @patch('app.services.query_response_generator.commitment_manager')
 @patch('app.services.query_response_generator.prompt_version_manager')
 @patch('app.services.query_response_generator.OpenAI')
-def test_reviewer_flags_generation(mock_openai_cls, mock_pvm, mock_cm,
+@pytest.mark.asyncio
+async def test_reviewer_flags_generation(mock_openai_cls, mock_pvm, mock_cm,
                                     sample_cdsco_query, mock_anthropic_client, mock_claude_response_json):
     """Test reviewer flag generation"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -157,7 +161,7 @@ def test_reviewer_flags_generation(mock_openai_cls, mock_pvm, mock_cm,
     query = _mock_query_input(sample_cdsco_query["query_text"], sample_cdsco_query["query_reference"])
     classification = _mock_classification()
 
-    result = service.generate_response(query=query, classification=classification)
+    result = await service.generate_response(query=query, classification=classification)
     assert len(result.reviewer_flags) == 3
     assert "REQUIRES_LEGAL_REVIEW" in result.reviewer_flags
 
@@ -166,7 +170,8 @@ def test_reviewer_flags_generation(mock_openai_cls, mock_pvm, mock_cm,
 @patch('app.services.query_response_generator.commitment_manager')
 @patch('app.services.query_response_generator.prompt_version_manager')
 @patch('app.services.query_response_generator.OpenAI')
-def test_regulatory_justification_quality(mock_openai_cls, mock_pvm, mock_cm,
+@pytest.mark.asyncio
+async def test_regulatory_justification_quality(mock_openai_cls, mock_pvm, mock_cm,
                                            sample_cdsco_query, mock_anthropic_client, mock_claude_response_json):
     """Test response contains substantive regulatory content"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -186,7 +191,7 @@ def test_regulatory_justification_quality(mock_openai_cls, mock_pvm, mock_cm,
     query = _mock_query_input(sample_cdsco_query["query_text"], sample_cdsco_query["query_reference"])
     classification = _mock_classification()
 
-    result = service.generate_response(query=query, classification=classification)
+    result = await service.generate_response(query=query, classification=classification)
     assert "NDCTR" in result.response_text
     assert result.confidence == "HIGH"
 
@@ -199,7 +204,8 @@ def test_regulatory_justification_quality(mock_openai_cls, mock_pvm, mock_cm,
 @patch('app.services.query_response_generator.commitment_manager')
 @patch('app.services.query_response_generator.prompt_version_manager')
 @patch('app.services.query_response_generator.OpenAI')
-def test_generate_response_no_commitments(mock_openai_cls, mock_pvm, mock_cm,
+@pytest.mark.asyncio
+async def test_generate_response_no_commitments(mock_openai_cls, mock_pvm, mock_cm,
                                            sample_cdsco_query, mock_anthropic_client, mock_claude_response_json):
     """Test response generation with no commitments"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -217,7 +223,7 @@ def test_generate_response_no_commitments(mock_openai_cls, mock_pvm, mock_cm,
     query = _mock_query_input(sample_cdsco_query["query_text"], sample_cdsco_query["query_reference"])
     classification = _mock_classification()
 
-    result = service.generate_response(query=query, classification=classification)
+    result = await service.generate_response(query=query, classification=classification)
     assert isinstance(result, QueryResponse)
 
 
@@ -225,7 +231,8 @@ def test_generate_response_no_commitments(mock_openai_cls, mock_pvm, mock_cm,
 @patch('app.services.query_response_generator.commitment_manager')
 @patch('app.services.query_response_generator.prompt_version_manager')
 @patch('app.services.query_response_generator.OpenAI')
-def test_response_generation_api_error(mock_openai_cls, mock_pvm, mock_cm,
+@pytest.mark.asyncio
+async def test_response_generation_api_error(mock_openai_cls, mock_pvm, mock_cm,
                                         sample_cdsco_query, mock_anthropic_client):
     """Test handling of API errors during response generation"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -236,5 +243,5 @@ def test_response_generation_api_error(mock_openai_cls, mock_pvm, mock_cm,
     classification = _mock_classification()
 
     with pytest.raises(Exception) as exc_info:
-        service.generate_response(query=query, classification=classification)
+        await service.generate_response(query=query, classification=classification)
     assert "Response Generation API Error" in str(exc_info.value)

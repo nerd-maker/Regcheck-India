@@ -83,7 +83,8 @@ def _section_json(section_number, heading, content, placeholders=None, review_pr
 # =============================================================================
 
 @pytest.mark.unit
-def test_generate_single_section_success(sample_study_data, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_generate_single_section_success(sample_study_data, mock_anthropic_client, mock_claude_response_json):
     """Test successful single section generation"""
     section_data = _section_json(
         "1.0", "Study Title and Protocol Number",
@@ -94,7 +95,7 @@ def test_generate_single_section_success(sample_study_data, mock_anthropic_clien
     mock_anthropic_client.chat.completions.create.return_value = mock_response
     
     service = _create_service_with_mocks(mock_anthropic_client)
-    result = service.generate_single_section(
+    result = await service.generate_single_section(
         document_type="protocol",
         section_number="1.0",
         study_data=_to_study_data(sample_study_data)
@@ -106,7 +107,8 @@ def test_generate_single_section_success(sample_study_data, mock_anthropic_clien
 
 
 @pytest.mark.unit
-def test_generate_section_with_placeholders(sample_study_data, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_generate_section_with_placeholders(sample_study_data, mock_anthropic_client, mock_claude_response_json):
     """Test section generation with placeholders"""
     section_data = _section_json(
         "2.0", "Study Objectives",
@@ -119,7 +121,7 @@ def test_generate_section_with_placeholders(sample_study_data, mock_anthropic_cl
     mock_anthropic_client.chat.completions.create.return_value = mock_response
     
     service = _create_service_with_mocks(mock_anthropic_client)
-    result = service.generate_single_section(
+    result = await service.generate_single_section(
         document_type="protocol",
         section_number="2.0",
         study_data=_to_study_data(sample_study_data)
@@ -131,7 +133,8 @@ def test_generate_section_with_placeholders(sample_study_data, mock_anthropic_cl
 
 
 @pytest.mark.unit
-def test_generate_full_protocol(sample_study_data, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_generate_full_protocol(sample_study_data, mock_anthropic_client, mock_claude_response_json):
     """Test full protocol generation returns structured result"""
     sections = [
         _section_json("1.0", "Title", "Content 1"),
@@ -144,7 +147,7 @@ def test_generate_full_protocol(sample_study_data, mock_anthropic_client, mock_c
     
     with patch('app.services.document_generator.SectionContextStore'):
         service = _create_service_with_mocks(mock_anthropic_client)
-        result = service.generate_document(
+        result = await service.generate_document(
             document_type="protocol",
             study_data=_to_study_data(sample_study_data)
         )
@@ -155,7 +158,8 @@ def test_generate_full_protocol(sample_study_data, mock_anthropic_client, mock_c
 
 
 @pytest.mark.unit
-def test_inline_validation_high_priority(sample_study_data, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_inline_validation_high_priority(sample_study_data, mock_anthropic_client, mock_claude_response_json):
     """Test inline validation assigns high priority correctly"""
     section_data = _section_json(
         "5.0", "Inclusion/Exclusion Criteria",
@@ -167,7 +171,7 @@ def test_inline_validation_high_priority(sample_study_data, mock_anthropic_clien
     mock_anthropic_client.chat.completions.create.return_value = mock_response
     
     service = _create_service_with_mocks(mock_anthropic_client)
-    result = service.generate_single_section(
+    result = await service.generate_single_section(
         document_type="protocol",
         section_number="5.0",
         study_data=_to_study_data(sample_study_data)
@@ -177,14 +181,15 @@ def test_inline_validation_high_priority(sample_study_data, mock_anthropic_clien
 
 
 @pytest.mark.unit
-def test_error_handling_api_failure(sample_study_data, mock_anthropic_client):
+@pytest.mark.asyncio
+async def test_error_handling_api_failure(sample_study_data, mock_anthropic_client):
     """Test error handling when LLM API fails"""
     mock_anthropic_client.chat.completions.create.side_effect = Exception("API Error")
     
     service = _create_service_with_mocks(mock_anthropic_client)
     
     with pytest.raises(Exception) as exc_info:
-        service.generate_single_section(
+        await service.generate_single_section(
             document_type="protocol",
             section_number="1.0",
             study_data=_to_study_data(sample_study_data)
@@ -194,7 +199,8 @@ def test_error_handling_api_failure(sample_study_data, mock_anthropic_client):
 
 
 @pytest.mark.unit
-def test_placeholder_tracking(sample_study_data, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_placeholder_tracking(sample_study_data, mock_anthropic_client, mock_claude_response_json):
     """Test placeholder tracking across sections"""
     section_data = _section_json(
         "6.0", "Study Procedures",
@@ -207,7 +213,7 @@ def test_placeholder_tracking(sample_study_data, mock_anthropic_client, mock_cla
     mock_anthropic_client.chat.completions.create.return_value = mock_response
     
     service = _create_service_with_mocks(mock_anthropic_client)
-    result = service.generate_single_section(
+    result = await service.generate_single_section(
         document_type="protocol",
         section_number="6.0",
         study_data=_to_study_data(sample_study_data)
@@ -218,7 +224,8 @@ def test_placeholder_tracking(sample_study_data, mock_anthropic_client, mock_cla
 
 
 @pytest.mark.unit
-def test_review_priority_assignment(sample_study_data, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_review_priority_assignment(sample_study_data, mock_anthropic_client, mock_claude_response_json):
     """Test review priority assignment logic"""
     priorities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
     
@@ -229,7 +236,7 @@ def test_review_priority_assignment(sample_study_data, mock_anthropic_client, mo
         mock_anthropic_client.chat.completions.create.return_value = mock_response
         
         service = _create_service_with_mocks(mock_anthropic_client)
-        result = service.generate_single_section(
+        result = await service.generate_single_section(
             document_type="protocol",
             section_number="1.0",
             study_data=_to_study_data(sample_study_data)
@@ -243,7 +250,8 @@ def test_review_priority_assignment(sample_study_data, mock_anthropic_client, mo
 # =============================================================================
 
 @pytest.mark.unit
-def test_generate_section_with_invalid_json(sample_study_data, mock_anthropic_client):
+@pytest.mark.asyncio
+async def test_generate_section_with_invalid_json(sample_study_data, mock_anthropic_client):
     """Test handling of invalid JSON response from LLM — service handles gracefully"""
     mock_response = Mock()
     message = Mock()
@@ -256,7 +264,7 @@ def test_generate_section_with_invalid_json(sample_study_data, mock_anthropic_cl
     service = _create_service_with_mocks(mock_anthropic_client)
     
     # Service handles invalid JSON gracefully with fallback section
-    result = service.generate_single_section(
+    result = await service.generate_single_section(
         document_type="protocol",
         section_number="1.0",
         study_data=_to_study_data(sample_study_data)
@@ -266,7 +274,8 @@ def test_generate_section_with_invalid_json(sample_study_data, mock_anthropic_cl
 
 
 @pytest.mark.unit
-def test_generate_section_empty_study_data(mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_generate_section_empty_study_data(mock_anthropic_client, mock_claude_response_json):
     """Test generation with minimal study data"""
     minimal_data = {
         "study_title": "Minimal Study",
@@ -287,7 +296,7 @@ def test_generate_section_empty_study_data(mock_anthropic_client, mock_claude_re
     mock_anthropic_client.chat.completions.create.return_value = mock_response
     
     service = _create_service_with_mocks(mock_anthropic_client)
-    result = service.generate_single_section(
+    result = await service.generate_single_section(
         document_type="protocol",
         section_number="1.0",
         study_data=_to_study_data(minimal_data)

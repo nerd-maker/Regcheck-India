@@ -46,7 +46,7 @@ class DocumentGenerator:
         self.schema_engine = SchemaEngine()
         self.compliance_evaluator = ComplianceEvaluator()
     
-    def generate_document(
+    async def generate_document(
         self,
         document_type: str,
         study_data: StudyDataInput,
@@ -74,7 +74,7 @@ class DocumentGenerator:
             print(f"Generating section {section_schema.section_number}: {section_schema.section_heading}")
             
             # 1. Generate section (with accumulated context)
-            section_result = self._generate_section(
+            section_result = await self._generate_section(
                 document_type=document_type,
                 section_schema=section_schema,
                 study_data=study_data,
@@ -132,7 +132,7 @@ class DocumentGenerator:
             ]
         }
     
-    def generate_single_section(
+    async def generate_single_section(
         self,
         document_type: str,
         section_number: str,
@@ -141,7 +141,7 @@ class DocumentGenerator:
     ) -> GeneratedSection:
         """Generate a single section (for manual step-through)"""
         section_schema = self.schema_engine.get_section_schema(document_type, section_number)
-        return self._generate_section(
+        return await self._generate_section(
             document_type=document_type,
             section_schema=section_schema,
             study_data=study_data,

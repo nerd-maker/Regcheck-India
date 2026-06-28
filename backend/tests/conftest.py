@@ -22,7 +22,7 @@ def mock_openai_client():
     client.chat = Mock()
     client.chat.completions = Mock()
 
-    def _proxy_messages_create(*args, **kwargs):
+    async def _proxy_messages_create(*args, **kwargs):
         return client.chat.completions.create(*args, **kwargs)
 
     client.messages.create.side_effect = _proxy_messages_create
@@ -226,7 +226,8 @@ def reset_mocks():
 @pytest.fixture(autouse=True)
 def patch_claude_client(mock_openai_client):
     """Route all Claude calls through the shared mock client in tests."""
-    with patch("app.services.claude_client.get_claude_client", return_value=mock_openai_client):
+    with patch("app.services.claude_client.get_claude_client", return_value=mock_openai_client), \
+         patch("app.services.claude_client.get_async_claude_client", return_value=mock_openai_client):
         yield
 
 
