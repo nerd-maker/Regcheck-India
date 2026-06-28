@@ -21,40 +21,53 @@ MODEL_HAIKU  = os.getenv("ANTHROPIC_MODEL_FAST", "claude-haiku-4-5-20251001")
 
 
 # ---------------------------------------------------------------------------
-# retrieve_regulatory_context — ChromaDB RAG retrieval
+# In-process TTL caches — no Redis needed for single-process deployments.
+# Uses cachetools (pure Python, included in most envs).  Falls back gracefully
+# if the library is not installed.
 # ---------------------------------------------------------------------------
-def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
-    """Query pgvector regulatory_documents collection for relevant chunks synchronously.
+try:
+    from cachetools import TTLCache
+    _embedding_cache: TTLCache = TTLCache(maxsize=500,  ttl=3600)   # 1 h
+    _rag_cache:       TTLCache = TTLCache(maxsize=200,  ttl=1800)   # 30 min
+    _CACHE_AVAILABLE = True
+    logger.info("In-process TTL caches enabled (embedding=1 h, rag=30 min)")
+except ImportError:
+    _embedding_cache = {}  # type: ignore[assignment]
+    _rag_cache       = {}  # type: ignore[assignment]
+    _CACHE_AVAILABLE = False
+    logger.warning("cachetools not installed — run: pip install cachetools")
 
-    Returns formatted context string or empty string if retrieval fails.
-    Used by completeness, schedule_y, and ich_gcp agents.
+import hashlib
+
+
+def _cache_key(*parts: str) -> str:
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# retrieve_regulatory_context — async pgvector RAG retrieval with caching
+# ---------------------------------------------------------------------------
+async def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
+    """Async pgvector RAG retrieval with in-process TTL cache.
+
+    Returns formatted context string or empty string on any failure.
     Agents must work even with zero RAG context — all failures return "".
+
+    Cache behaviour:
+    - Same query + n_results within 30 min → returns cached result instantly
+    - Cache miss → queries pgvector (embedding + vector search)
+    - Any exception → silent empty string, never raises
     """
+    key = _cache_key(query, str(n_results))
+
+    if key in _rag_cache:
+        logger.debug("RAG cache hit for query: %s...", query[:60])
+        return _rag_cache[key]  # type: ignore[return-value]
+
     try:
-        import asyncio
-        from concurrent.futures import ThreadPoolExecutor
         from app.services.pgvector_service import retrieve_regulatory_context as _pgvector_retrieve
 
-        async def _async_call():
-            return await _pgvector_retrieve(query, n_results=n_results)
-
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        if loop.is_running():
-            # Running inside an async event loop — use a separate thread with a hard 3 s deadline
-            try:
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(lambda: asyncio.run(_async_call()))
-                    results = future.result(timeout=3.0)  # never block the request > 3 s
-            except TimeoutError:
-                logger.warning("RAG retrieval timed out after 3 s — continuing without context")
-                return ""
-        else:
-            results = asyncio.run(_async_call())
+        results = await _pgvector_retrieve(query, n_results=n_results)
 
         if not results:
             return ""
@@ -70,11 +83,14 @@ def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
 
         context = "\n\n---\n\n".join(chunks)
         logger.info("RAG: retrieved %d chunks from pgvector for query: %s...", len(chunks), query[:60])
+
+        _rag_cache[key] = context
         return context
 
     except Exception as exc:
         logger.warning("RAG retrieval failed silently: %s", exc)
         return ""
+
 
 
 # ---------------------------------------------------------------------------

@@ -1,37 +1,54 @@
 # backend/db.py
 # Shared DB helpers — all routers import from here
 
+import logging
 import os
+import urllib.parse
+
 import asyncpg
+
+logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# ---------------------------------------------------------------------------
+# Connection pool — created once at lifespan startup, shared across requests
+# ---------------------------------------------------------------------------
+_pool: asyncpg.Pool | None = None
 
-async def get_conn():
+
+async def init_pool() -> None:
+    """Create the asyncpg connection pool. Call once from lifespan startup."""
+    global _pool
+    if _pool is not None:
+        return  # already initialised
+
     from urllib.parse import urlparse
     from app.core.config import get_settings
-    from app.core.database import get_pgvector_conn
+
     settings = get_settings()
 
-    # Use the robust get_pgvector_conn if individual parameters are provided
+    # Prefer individual env-var credentials when available
     if settings.supabase_db_password or settings.supabase_db_host != "aws-0-ap-southeast-2.pooler.supabase.com":
-        return await get_pgvector_conn()
+        from app.core.database import get_pgvector_conn
+        # pgvector path uses its own direct connection; fall back to URL-based pool
+        url = os.getenv("SUPABASE_DB_URL") or DATABASE_URL
+    else:
+        url = DATABASE_URL
 
-    if not DATABASE_URL:
-        raise RuntimeError(
-            "DATABASE_URL is not set. "
-            "Add it to your Render environment variables."
-        )
-    # Parse the URL into individual params — never pass raw URL to asyncpg
-    # (special chars in the password break URL-based connections)
-    parsed = urlparse(DATABASE_URL)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 5432
-    user = parsed.username or "postgres"
-    password = parsed.password or ""
+    if not url:
+        logger.warning("DATABASE_URL not set — workspace persistence disabled; pool not created.")
+        return
+
+    parsed = urlparse(url)
+    host     = parsed.hostname or "localhost"
+    port     = parsed.port or 5432
+    user     = parsed.username or "postgres"
+    password = urllib.parse.unquote(parsed.password or "")
     database = (parsed.path or "/postgres").lstrip("/") or "postgres"
-    ssl_val = "require" if "supabase" in host else None
-    return await asyncpg.connect(
+    ssl_val  = "require" if "supabase" in host else None
+
+    _pool = await asyncpg.create_pool(
         host=host,
         port=port,
         user=user,
@@ -39,7 +56,61 @@ async def get_conn():
         database=database,
         ssl=ssl_val,
         statement_cache_size=0,
-        timeout=10.0,
+        min_size=2,
+        max_size=10,
+        command_timeout=30,
+    )
+    logger.info("asyncpg connection pool created (min=2 max=10) host=%s", host)
+
+
+async def close_pool() -> None:
+    """Gracefully close the pool at shutdown."""
+    global _pool
+    if _pool:
+        await _pool.close()
+        _pool = None
+        logger.info("asyncpg connection pool closed")
+
+
+async def get_conn():
+    """Acquire a connection from the pool (preferred) or open a direct connection.
+
+    Usage — always use as an async context manager or close() manually:
+        conn = await get_conn()
+        try:
+            ...
+        finally:
+            await conn.close()  # returns to pool
+    """
+    if _pool is not None:
+        return await _pool.acquire()
+
+    # Pool not yet initialised (e.g. during init_all_tables before lifespan)
+    # Fall back to a direct connection.
+    from urllib.parse import urlparse
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.supabase_db_password or settings.supabase_db_host != "aws-0-ap-southeast-2.pooler.supabase.com":
+        from app.core.database import get_pgvector_conn
+        return await get_pgvector_conn()
+
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL is not set. "
+            "Add it to your Render environment variables."
+        )
+    parsed   = urlparse(DATABASE_URL)
+    host     = parsed.hostname or "localhost"
+    port     = parsed.port or 5432
+    user     = parsed.username or "postgres"
+    password = urllib.parse.unquote(parsed.password or "")
+    database = (parsed.path or "/postgres").lstrip("/") or "postgres"
+    ssl_val  = "require" if "supabase" in host else None
+    return await asyncpg.connect(
+        host=host, port=port, user=user, password=password,
+        database=database, ssl=ssl_val,
+        statement_cache_size=0, timeout=10.0,
     )
 
 
@@ -193,7 +264,6 @@ async def init_all_tables():
             ON gap_remediations(status)
         """)
 
-        # Indexes
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_docs_submission "
             "ON documents(submission_id)"
@@ -205,6 +275,18 @@ async def init_all_tables():
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_subs_state "
             "ON submissions(state)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_subs_created "
+            "ON submissions(created_at DESC)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_remediations_severity "
+            "ON gap_remediations(severity, status)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_docs_created "
+            "ON documents(created_at DESC)"
         )
 
         # Primary vault document record

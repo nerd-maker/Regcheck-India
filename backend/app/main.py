@@ -47,7 +47,7 @@ from app.core.datetime_utils import utc_now
 from agents_router import router as agents_router
 from routers.agent_runs import router as agent_runs_router, init_db as init_agent_runs_table
 from routers.workspace import router as workspace_router
-from db import init_all_tables
+from db import init_all_tables, init_pool, close_pool
 from seed import seed as seed_db
 from app.services.storage_service import verify_storage_bucket_exists
 from scripts.seed_submissions import (
@@ -127,6 +127,10 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle handler."""
+    # Initialise DB connection pool first so all subsequent startup
+    # queries (init_all_tables, seed, etc.) benefit from pooling.
+    await init_pool()
+
     # Create all workspace + agent_runs tables (idempotent)
     await init_all_tables()
 
@@ -236,6 +240,7 @@ async def lifespan(app: FastAPI):
 
     yield
     # Shutdown
+    await close_pool()
     if hasattr(app.state, "scheduler"):
         app.state.scheduler.shutdown(wait=False)
         logger.info("Regulatory scraper scheduler stopped")

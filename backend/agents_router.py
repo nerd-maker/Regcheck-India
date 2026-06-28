@@ -416,7 +416,7 @@ async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_a
     except NameError:
         has_rag_context = False
 
-    response = call_claude(
+    response = await call_claude(
         agent_name="PII_PHI_Anonymisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_01_SYSTEM_PROMPT,
@@ -497,7 +497,7 @@ async def summarise_document(request: Request, body: AgentRequest, x_anthropic_a
     except NameError:
         has_rag_context = False
 
-    return call_claude(
+    return await call_claude(
         agent_name="Document_Summarisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_02_SYSTEM_PROMPT,
@@ -534,7 +534,7 @@ async def assess_completeness(request: Request, body: CompletenessRequest, x_ant
     # RAG retrieval — get relevant regulatory context
     rag_query = f"completeness requirements {getattr(body, 'document_type', 'general')} CDSCO NDCTR Schedule Y ICH"
     try:
-        regulatory_context = retrieve_regulatory_context(rag_query, n_results=5)
+        regulatory_context = await retrieve_regulatory_context(rag_query, n_results=5)
     except Exception as e:
         logger.warning(f"RAG skipped for completeness endpoint: {e}")
         regulatory_context = ""
@@ -561,7 +561,7 @@ The following excerpts are retrieved from official regulatory documents. Use the
     except NameError:
         has_rag_context = False
 
-    return call_claude(
+    return await call_claude(
         agent_name=agent_name,
         model=MODEL_SONNET,
         system_prompt=system_prompt,
@@ -599,7 +599,7 @@ async def classify_case(request: Request, body: AgentRequest, x_anthropic_api_ke
     except NameError:
         has_rag_context = False
 
-    response = call_claude(
+    response = await call_claude(
         agent_name="Case_Classification",
         model=MODEL_HAIKU,
         system_prompt=AGENT_04_SYSTEM_PROMPT,
@@ -887,7 +887,7 @@ async def generate_inspection_report(request: Request, body: AgentRequest, x_ant
     except NameError:
         has_rag_context = False
 
-    return call_claude(
+    return await call_claude(
         agent_name="Inspection_Report_Generation",
         model=MODEL_SONNET,
         system_prompt=AGENT_05_SYSTEM_PROMPT,
@@ -966,7 +966,7 @@ Clearly state at the end that this answer is based on general regulatory knowled
     except NameError:
         has_rag_context = False
 
-    response = call_claude(
+    response = await call_claude(
         agent_name="Regulatory_QA_RAG",
         model=MODEL_HAIKU,
         system_prompt=AGENT_06_SYSTEM_PROMPT,
@@ -1004,7 +1004,7 @@ async def check_schedule_y(request: Request, body: AgentRequest, x_anthropic_api
     # RAG retrieval — specifically query Schedule Y and NDCTR 2019
     rag_query = "Schedule Y requirements clinical trial NDCTR 2019 CDSCO compliance checklist appendix"
     try:
-        regulatory_context = retrieve_regulatory_context(rag_query, n_results=6)
+        regulatory_context = await retrieve_regulatory_context(rag_query, n_results=6)
     except Exception as e:
         logger.warning(f"RAG skipped for schedule-y endpoint: {e}")
         regulatory_context = ""
@@ -1030,7 +1030,7 @@ The following excerpts are retrieved directly from Schedule Y and NDCTR 2019. Us
     except NameError:
         has_rag_context = False
 
-    return call_claude(
+    return await call_claude(
         agent_name="Schedule_Y_Compliance",
         model=MODEL_SONNET,
         system_prompt=AGENT_07_SYSTEM_PROMPT,
@@ -1058,7 +1058,7 @@ async def check_ich_gcp(request: Request, body: AgentRequest, x_anthropic_api_ke
     # RAG retrieval — specifically query ICH E6(R3)
     rag_query = "ICH E6 R3 GCP good clinical practice quality management risk based monitoring"
     try:
-        regulatory_context = retrieve_regulatory_context(rag_query, n_results=6)
+        regulatory_context = await retrieve_regulatory_context(rag_query, n_results=6)
     except Exception as e:
         logger.warning(f"RAG skipped for ich-gcp endpoint: {e}")
         regulatory_context = ""
@@ -1084,7 +1084,7 @@ The following excerpts are retrieved directly from ICH E6(R3) final guidelines. 
     except NameError:
         has_rag_context = False
 
-    return call_claude(
+    return await call_claude(
         agent_name="ICH_GCP_Compliance",
         model=MODEL_SONNET,
         system_prompt=AGENT_08_SYSTEM_PROMPT,
@@ -1150,7 +1150,7 @@ async def compare_documents(
         # RAG retrieval — get context for regulatory impact of document changes
         rag_query = "regulatory change impact assessment CDSCO submission amendment requirements"
         try:
-            regulatory_context = retrieve_regulatory_context(rag_query, n_results=4)
+            regulatory_context = await retrieve_regulatory_context(rag_query, n_results=4)
         except Exception as e:
             logger.warning(f"RAG skipped for cross-doc endpoint: {e}")
             regulatory_context = ""
@@ -1516,8 +1516,8 @@ async def cross_document_check(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    admin_password = "admin-regcheck"
-    if api_key == admin_password:
+    admin_password = os.getenv("ADMIN_DEMO_KEY", "")
+    if admin_password and api_key == admin_password:
         server_key = os.getenv("ANTHROPIC_API_KEY")
         if not server_key:
             raise HTTPException(status_code=500, detail="Server Anthropic API key missing.")

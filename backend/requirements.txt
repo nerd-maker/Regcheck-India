@@ -65,3 +65,4 @@ sqlalchemy[asyncio]==2.0.36
 beautifulsoup4==4.12.3
 apscheduler==3.10.4
 lxml==5.2.2
+cachetools>=5.3.0
