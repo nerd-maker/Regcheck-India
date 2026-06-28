@@ -62,7 +62,7 @@ class DocumentVersionComparator:
         VERSION 1: {v1[:3000]}
         VERSION 2: {v2[:3000]}
         """
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             system_prompt="Return JSON only.",
             model=MODEL_SONNET,

@@ -42,7 +42,7 @@ class SubmissionImpactAssessor:
         pass
     
     
-    def assess_impact(
+    async def assess_impact(
         self,
         change: RegulatoryChange,
         submission: ActiveSubmission,
@@ -80,7 +80,7 @@ class SubmissionImpactAssessor:
         )
         
         # Call Claude API
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             system_prompt=SYSTEM_PROMPT,
             model=MODEL_SONNET,

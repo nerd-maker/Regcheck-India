@@ -166,7 +166,7 @@ class InspectionObservationConverter:
         {site_details}
         Return structured JSON only.
         """
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             system_prompt="Return valid JSON only.",
             model=MODEL_SONNET,

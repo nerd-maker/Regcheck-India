@@ -43,6 +43,13 @@ from app.services.agent_utils import (
 
 logger = logging.getLogger(__name__)
 
+
+def _internal_agent_key() -> str:
+    key = os.getenv("ADMIN_DEMO_KEY", "")
+    if not key:
+        raise RuntimeError("ADMIN_DEMO_KEY must be set for internal agent jobs.")
+    return key
+
 # ---------------------------------------------------------------------------
 # Shared helper
 # ---------------------------------------------------------------------------
@@ -67,12 +74,12 @@ async def run_pii_anonymiser(extracted_text: str, doc_type: str = "clinical_docu
     """
     structured = structure_prompt_input(extracted_text, doc_type, "M1_PII_ANONYMISER")
     try:
-        agent_response = call_claude(
+        agent_response = await call_claude(
             agent_name="PII_PHI_Anonymisation",
             model=MODEL_HAIKU,
             system_prompt=AGENT_01_SYSTEM_PROMPT,
             user_content=f"Document metadata: {json.dumps({'source': 'vault_auto_scan'})}\n\nDocument:\n{structured}",
-            api_key="admin-regcheck",
+            api_key=_internal_agent_key(),
             max_tokens=4096,
             has_rag_context=False,
         )
@@ -124,12 +131,12 @@ async def run_completeness(extracted_text: str, doc_type: str = "GENERAL") -> di
     )
 
     try:
-        agent_response = call_claude(
+        agent_response = await call_claude(
             agent_name=agent_name,
             model=MODEL_SONNET,
             system_prompt=system_prompt,
             user_content=prompt,
-            api_key="admin-regcheck",
+            api_key=_internal_agent_key(),
             max_tokens=4096,
             has_rag_context=bool(regulatory_context),
         )
@@ -151,12 +158,12 @@ async def run_sae_classifier(extracted_text: str, doc_type: str = "sae_narrative
     """
     structured = structure_prompt_input(extracted_text, "sae_narrative", "M4_CASE_CLASSIFIER")
     try:
-        agent_response = call_claude(
+        agent_response = await call_claude(
             agent_name="Case_Classification",
             model=MODEL_HAIKU,
             system_prompt=AGENT_04_SYSTEM_PROMPT,
             user_content=f"Case metadata: {json.dumps({'source': 'vault_auto_scan'})}\n\nCase narrative:\n{structured}",
-            api_key="admin-regcheck",
+            api_key=_internal_agent_key(),
             max_tokens=4096,
             has_rag_context=False,
         )
@@ -197,12 +204,12 @@ async def run_schedule_y(extracted_text: str, doc_type: str = "clinical_protocol
     )
 
     try:
-        agent_response = call_claude(
+        agent_response = await call_claude(
             agent_name="Schedule_Y_Compliance",
             model=MODEL_SONNET,
             system_prompt=AGENT_07_SYSTEM_PROMPT,
             user_content=prompt,
-            api_key="admin-regcheck",
+            api_key=_internal_agent_key(),
             max_tokens=4096,
             has_rag_context=bool(regulatory_context),
         )
@@ -243,12 +250,12 @@ async def run_ich_gcp(extracted_text: str, doc_type: str = "gcp_document") -> di
     )
 
     try:
-        agent_response = call_claude(
+        agent_response = await call_claude(
             agent_name="ICH_GCP_Compliance",
             model=MODEL_SONNET,
             system_prompt=AGENT_08_SYSTEM_PROMPT,
             user_content=prompt,
-            api_key="admin-regcheck",
+            api_key=_internal_agent_key(),
             max_tokens=4096,
             has_rag_context=bool(regulatory_context),
         )

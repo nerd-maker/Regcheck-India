@@ -10,6 +10,7 @@ Can also be triggered manually via POST /api/v1/regulatory-updates/trigger-scrap
 """
 import asyncio
 import logging
+import os
 import re
 from datetime import date
 from typing import Optional
@@ -19,6 +20,13 @@ import asyncpg
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _internal_agent_key() -> str:
+    key = os.getenv("ADMIN_DEMO_KEY", "")
+    if not key:
+        raise RuntimeError("ADMIN_DEMO_KEY must be set for scraper classification.")
+    return key
 
 # Polite user-agent identifying our tool
 HEADERS = {
@@ -308,7 +316,7 @@ async def _generate_summary(text: str, authority: str) -> str:
                 "of document it is, what it regulates, and why it matters to Indian "
                 f"pharma/CRO companies.\n\nDocument:\n{text}"
             ),
-            api_key="admin-regcheck",
+            api_key=_internal_agent_key(),
             max_tokens=256,
         )
 

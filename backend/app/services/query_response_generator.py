@@ -124,14 +124,14 @@ class QueryResponseGenerator:
             supporting_documents_referenced=metadata.get('supporting_documents_referenced', [])
         )
 
-    def classify_and_respond(self, query: QueryInput) -> dict:
-        classification = call_claude(
+    async def classify_and_respond(self, query: QueryInput) -> dict:
+        classification = await call_claude(
             prompt=f"Classify this CDSCO query into one of 16 categories: {query.query_text}",
             model=MODEL_HAIKU,
             max_tokens=500,
             temperature=0.0,
         )
-        response_draft = call_claude(
+        response_draft = await call_claude(
             prompt=f"Query Category: {classification['content']}\nQuery Text: {query.query_text}",
             system_prompt="You are a regulatory affairs expert drafting CDSCO query responses.",
             model=MODEL_SONNET,
@@ -145,7 +145,7 @@ class QueryResponseGenerator:
         }
         ctext = classification["content"].lower()
         if "pharmacovigilance" in ctext or "cat-07" in ctext:
-            validation = call_claude(
+            validation = await call_claude(
                 prompt=f"Validate this pharmacovigilance response for ICH E2A compliance: {response_draft['content']}",
                 model=MODEL_SONNET,
                 max_tokens=1000,
@@ -230,7 +230,7 @@ class QueryResponseGenerator:
         
         return context
     
-    def _generate_with_claude(
+    async def _generate_with_claude(
         self,
         context: str,
         query_reference: str,
@@ -250,7 +250,7 @@ class QueryResponseGenerator:
         temperature = LLMConfig.get_temperature("M3_QUERY")
         max_tokens = LLMConfig.get_max_tokens("M3_QUERY_RESPONSE")
         
-        result = call_claude(
+        result = await call_claude(
             prompt=context,
             system_prompt=SYSTEM_PROMPT_QUERYREPLY,
             model=MODEL_SONNET,
@@ -310,14 +310,14 @@ class QueryResponseGenerator:
             "supporting_documents_referenced": []
         }
     
-    def _extract_commitments(self, response_text: str) -> List[str]:
+    async def _extract_commitments(self, response_text: str) -> List[str]:
         """Extract commitments from response text"""
         
         # Use Claude to extract commitments
         prompt = COMMITMENT_EXTRACTION_PROMPT.format(response_text=response_text)
         
         try:
-            result_resp = call_claude(
+            result_resp = await call_claude(
                 prompt=prompt,
                 model=MODEL_HAIKU,
                 max_tokens=1024,

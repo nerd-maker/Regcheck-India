@@ -47,7 +47,7 @@ class WeeklyDigestGenerator:
         pass
     
     
-    def generate_digest(
+    async def generate_digest(
         self,
         changes: List[RegulatoryChange],
         impact_assessments: List[SubmissionImpactAssessment],
@@ -87,7 +87,7 @@ class WeeklyDigestGenerator:
         )
         
         # Call Claude API
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             system_prompt=SYSTEM_PROMPT,
             model=MODEL_SONNET,

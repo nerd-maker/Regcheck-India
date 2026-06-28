@@ -31,7 +31,7 @@ class ComplianceEvaluator:
     def __init__(self):
         """Initialize compliance evaluator with Claude client."""
     
-    def evaluate_document(
+    async def evaluate_document(
         self,
         parsed_document: Dict,
         metadata: DocumentMetadata,
@@ -76,7 +76,7 @@ class ComplianceEvaluator:
         temperature = LLMConfig.get_temperature("M1_COMPLIANCE")
         max_tokens = LLMConfig.get_max_tokens("M1_SECTION_EVAL")
         
-        result = call_claude(
+        result = await call_claude(
             prompt=user_prompt,
             system_prompt=system_prompt,
             model=MODEL_SONNET,

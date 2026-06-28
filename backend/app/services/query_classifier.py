@@ -61,7 +61,7 @@ class QueryClassifier:
             data = json.load(f)
             return data.get('categories', [])
     
-    def classify_query(
+    async def classify_query(
         self,
         query_text: str,
         query_reference: str = None,
@@ -99,7 +99,7 @@ class QueryClassifier:
         temperature = LLMConfig.get_temperature("M3_QUERY")
         max_tokens = LLMConfig.get_max_tokens("M3_QUERY_RESPONSE")
         
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             model=MODEL_HAIKU,
             max_tokens=500,

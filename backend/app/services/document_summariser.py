@@ -33,7 +33,7 @@ class _LLMSummariserBase:
         system_prompt: str = "Respond with valid JSON only.",
         max_tokens: int = 1800,
     ) -> Dict[str, Any]:
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             system_prompt=system_prompt,
             model=MODEL_HAIKU,
@@ -45,7 +45,7 @@ class _LLMSummariserBase:
 
         if parsed is None:
             # Retry with a formatting prompt
-            retry = call_claude(
+            retry = await call_claude(
                 prompt=f"Convert this summarisation output into structured JSON only:\n{result['content']}",
                 system_prompt="Convert the input into valid JSON only.",
                 model=MODEL_HAIKU,

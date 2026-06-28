@@ -148,7 +148,7 @@ class DocumentGenerator:
             previous_sections=previous_sections or []
         )
     
-    def _generate_section(
+    async def _generate_section(
         self,
         document_type: str,
         section_schema: SectionSchema,
@@ -206,7 +206,7 @@ class DocumentGenerator:
         temperature = LLMConfig.get_temperature("M2_GENERATION")
         max_tokens = LLMConfig.get_max_tokens("M2_SECTION_GEN")
         
-        result = call_claude(
+        result = await call_claude(
             prompt=full_prompt,
             system_prompt=SYSTEM_PROMPT_DOCGEN,
             model=MODEL_SONNET,

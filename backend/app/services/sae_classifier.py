@@ -86,7 +86,7 @@ class SAESeverityClassifier:
         return final_payload
 
     async def _call_llm(self, prompt: str, role: str) -> Dict[str, Any]:
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             system_prompt="Return valid JSON only for SAE severity classification.",
             model=MODEL_HAIKU,

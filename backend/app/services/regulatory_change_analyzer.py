@@ -41,7 +41,7 @@ class RegulatoryChangeAnalyzer:
         """Initialize the analyzer with Claude API client"""
     
     
-    def ingest_new_document(
+    async def ingest_new_document(
         self,
         document_request: NewDocumentRequest,
         kb_summary: str = ""
@@ -68,7 +68,7 @@ class RegulatoryChangeAnalyzer:
             kb_summary=kb_summary or "No existing requirements found for comparison."
         )
 
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             system_prompt=SYSTEM_PROMPT,
             model=MODEL_SONNET,
@@ -161,7 +161,7 @@ class RegulatoryChangeAnalyzer:
         return RegulatoryChange(**change_dict)
     
     
-    def classify_domains(self, document_text: str) -> ChangeClassification:
+    async def classify_domains(self, document_text: str) -> ChangeClassification:
         """
         Classify regulatory domains affected by a document.
         
@@ -179,7 +179,7 @@ Document Text:
 
 Return a JSON object with domain classifications."""
         
-        result = call_claude(
+        result = await call_claude(
             prompt=prompt,
             system_prompt=SYSTEM_PROMPT,
             model=MODEL_SONNET,

@@ -397,7 +397,7 @@ class ContextPreservingPIIDetector:
         regex_entities = self._regex_detect(text)
         try:
             from app.services.claude_client import call_claude, MODEL_HAIKU
-            result = call_claude(
+            result = await call_claude(
                 prompt="Identify PHI in this clinical text. Return JSON array.\n" + text[:1000],
                 system_prompt="Return valid JSON array only.",
                 model=MODEL_HAIKU, max_tokens=500, temperature=0.0)
