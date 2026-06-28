@@ -28,6 +28,7 @@ def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
 
     Returns formatted context string or empty string if retrieval fails.
     Used by completeness, schedule_y, and ich_gcp agents.
+    Agents must work even with zero RAG context — all failures return "".
     """
     try:
         import asyncio
@@ -44,8 +45,14 @@ def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
             asyncio.set_event_loop(loop)
 
         if loop.is_running():
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                results = executor.submit(lambda: asyncio.run(_async_call())).result()
+            # Running inside an async event loop — use a separate thread with a hard 3 s deadline
+            try:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(lambda: asyncio.run(_async_call()))
+                    results = future.result(timeout=3.0)  # never block the request > 3 s
+            except TimeoutError:
+                logger.warning("RAG retrieval timed out after 3 s — continuing without context")
+                return ""
         else:
             results = asyncio.run(_async_call())
 

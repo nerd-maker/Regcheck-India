@@ -149,6 +149,15 @@ async def lifespan(app: FastAPI):
         )
         # Never raise — app starts regardless
 
+    # Pre-warm the SentenceTransformer embedding model so the first agent request
+    # doesn't block waiting for a 79 MB model download / ONNX compilation.
+    try:
+        from app.services.pgvector_service import get_embedding_model
+        await get_embedding_model()
+        logger.info("Embedding model pre-warmed successfully")
+    except Exception as e:
+        logger.warning(f"Embedding model pre-warm failed: {e} — will load on first query")
+
     await init_agent_runs_table()
     await verify_storage_bucket_exists()
 

@@ -533,7 +533,11 @@ async def assess_completeness(request: Request, body: CompletenessRequest, x_ant
 
     # RAG retrieval — get relevant regulatory context
     rag_query = f"completeness requirements {getattr(body, 'document_type', 'general')} CDSCO NDCTR Schedule Y ICH"
-    regulatory_context = retrieve_regulatory_context(rag_query, n_results=5)
+    try:
+        regulatory_context = retrieve_regulatory_context(rag_query, n_results=5)
+    except Exception as e:
+        logger.warning(f"RAG skipped for completeness endpoint: {e}")
+        regulatory_context = ""
 
     # Inject into prompt
     if regulatory_context:
@@ -999,7 +1003,11 @@ async def check_schedule_y(request: Request, body: AgentRequest, x_anthropic_api
 
     # RAG retrieval — specifically query Schedule Y and NDCTR 2019
     rag_query = "Schedule Y requirements clinical trial NDCTR 2019 CDSCO compliance checklist appendix"
-    regulatory_context = retrieve_regulatory_context(rag_query, n_results=6)
+    try:
+        regulatory_context = retrieve_regulatory_context(rag_query, n_results=6)
+    except Exception as e:
+        logger.warning(f"RAG skipped for schedule-y endpoint: {e}")
+        regulatory_context = ""
 
     if regulatory_context:
         rag_section = f"""
@@ -1049,7 +1057,11 @@ async def check_ich_gcp(request: Request, body: AgentRequest, x_anthropic_api_ke
 
     # RAG retrieval — specifically query ICH E6(R3)
     rag_query = "ICH E6 R3 GCP good clinical practice quality management risk based monitoring"
-    regulatory_context = retrieve_regulatory_context(rag_query, n_results=6)
+    try:
+        regulatory_context = retrieve_regulatory_context(rag_query, n_results=6)
+    except Exception as e:
+        logger.warning(f"RAG skipped for ich-gcp endpoint: {e}")
+        regulatory_context = ""
 
     if regulatory_context:
         rag_section = f"""
@@ -1137,7 +1149,11 @@ async def compare_documents(
 
         # RAG retrieval — get context for regulatory impact of document changes
         rag_query = "regulatory change impact assessment CDSCO submission amendment requirements"
-        regulatory_context = retrieve_regulatory_context(rag_query, n_results=4)
+        try:
+            regulatory_context = retrieve_regulatory_context(rag_query, n_results=4)
+        except Exception as e:
+            logger.warning(f"RAG skipped for cross-doc endpoint: {e}")
+            regulatory_context = ""
 
         if regulatory_context:
             rag_section = f"""

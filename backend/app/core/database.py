@@ -128,7 +128,7 @@ async def get_pgvector_conn() -> asyncpg.Connection:
             password=urllib.parse.unquote(parsed.password) if parsed.password else None,
             database=parsed.path.lstrip("/") or "postgres",
             ssl=ssl_val,
-            timeout=10.0,
+            timeout=3.0,
             statement_cache_size=0
         )
     else:
@@ -142,7 +142,7 @@ async def get_pgvector_conn() -> asyncpg.Connection:
             password=os.environ.get("PGVECTOR_PASSWORD"),
             database=os.environ.get("PGVECTOR_DATABASE", "postgres"),
             ssl=ssl_val,
-            timeout=10.0,
+            timeout=3.0,
             statement_cache_size=0
         )
 
