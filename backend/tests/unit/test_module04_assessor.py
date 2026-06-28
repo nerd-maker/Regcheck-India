@@ -4,7 +4,7 @@ Tests impact assessment and action item generation
 """
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 import json
 from app.services.submission_impact_assessor import SubmissionImpactAssessor
 from app.models.regulatory_change_schemas import SubmissionImpactAssessment
@@ -66,7 +66,8 @@ def _assessment_json(submission_id="SUB-001", change_id="CHG-001",
 
 @pytest.mark.unit
 @patch('app.services.submission_impact_assessor.OpenAI')
-def test_assess_impacted_submission(mock_openai_cls, sample_active_submission,
+@pytest.mark.asyncio
+async def test_assess_impacted_submission(mock_openai_cls, sample_active_submission,
                                      mock_anthropic_client, mock_claude_response_json):
     """Test assessment of IMPACTED submission"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -98,7 +99,7 @@ def test_assess_impacted_submission(mock_openai_cls, sample_active_submission,
     assessor = SubmissionImpactAssessor()
     change = _mock_change()
     submission = _mock_submission(sample_active_submission["submission_id"])
-    result = assessor.assess_impact(change=change, submission=submission)
+    result = await assessor.assess_impact(change=change, submission=submission)
 
     assert result.impact_status == "IMPACTED"
     assert result.amendment_required is True
@@ -107,7 +108,8 @@ def test_assess_impacted_submission(mock_openai_cls, sample_active_submission,
 
 @pytest.mark.unit
 @patch('app.services.submission_impact_assessor.OpenAI')
-def test_assess_not_impacted_submission(mock_openai_cls, sample_active_submission,
+@pytest.mark.asyncio
+async def test_assess_not_impacted_submission(mock_openai_cls, sample_active_submission,
                                          mock_anthropic_client, mock_claude_response_json):
     """Test assessment of NOT_IMPACTED submission"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -126,7 +128,7 @@ def test_assess_not_impacted_submission(mock_openai_cls, sample_active_submissio
     assessor = SubmissionImpactAssessor()
     change = _mock_change("CHG-002")
     submission = _mock_submission(sample_active_submission["submission_id"])
-    result = assessor.assess_impact(change=change, submission=submission)
+    result = await assessor.assess_impact(change=change, submission=submission)
 
     assert result.impact_status == "NOT_IMPACTED"
     assert result.amendment_required is False
@@ -134,7 +136,8 @@ def test_assess_not_impacted_submission(mock_openai_cls, sample_active_submissio
 
 @pytest.mark.unit
 @patch('app.services.submission_impact_assessor.OpenAI')
-def test_action_item_generation(mock_openai_cls, sample_active_submission,
+@pytest.mark.asyncio
+async def test_action_item_generation(mock_openai_cls, sample_active_submission,
                                  mock_anthropic_client, mock_claude_response_json):
     """Test action item generation"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -156,7 +159,7 @@ def test_action_item_generation(mock_openai_cls, sample_active_submission,
     assessor = SubmissionImpactAssessor()
     change = _mock_change("CHG-003")
     submission = _mock_submission(sample_active_submission["submission_id"])
-    result = assessor.assess_impact(change=change, submission=submission)
+    result = await assessor.assess_impact(change=change, submission=submission)
 
     assert len(result.recommended_actions) == 3
     assert result.recommended_actions[0].priority == "CRITICAL"
@@ -164,7 +167,8 @@ def test_action_item_generation(mock_openai_cls, sample_active_submission,
 
 @pytest.mark.unit
 @patch('app.services.submission_impact_assessor.OpenAI')
-def test_amendment_requirement_detection(mock_openai_cls, sample_active_submission,
+@pytest.mark.asyncio
+async def test_amendment_requirement_detection(mock_openai_cls, sample_active_submission,
                                           mock_anthropic_client, mock_claude_response_json):
     """Test amendment requirement detection"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -184,7 +188,7 @@ def test_amendment_requirement_detection(mock_openai_cls, sample_active_submissi
     assessor = SubmissionImpactAssessor()
     change = _mock_change("CHG-004")
     submission = _mock_submission(sample_active_submission["submission_id"])
-    result = assessor.assess_impact(change=change, submission=submission)
+    result = await assessor.assess_impact(change=change, submission=submission)
 
     assert result.amendment_required is True
     assert result.amendment_type == "Protocol"
@@ -192,7 +196,8 @@ def test_amendment_requirement_detection(mock_openai_cls, sample_active_submissi
 
 @pytest.mark.unit
 @patch('app.services.submission_impact_assessor.OpenAI')
-def test_alert_generation(mock_openai_cls, sample_active_submission,
+@pytest.mark.asyncio
+async def test_alert_generation(mock_openai_cls, sample_active_submission,
                            mock_anthropic_client, mock_claude_response_json):
     """Test alert text generation"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -214,7 +219,7 @@ def test_alert_generation(mock_openai_cls, sample_active_submission,
     assessor = SubmissionImpactAssessor()
     change = _mock_change("CHG-005")
     submission = _mock_submission(sample_active_submission["submission_id"])
-    result = assessor.assess_impact(change=change, submission=submission)
+    result = await assessor.assess_impact(change=change, submission=submission)
 
     assert len(result.alert_text) > 50
     assert "REGULATORY ALERT" in result.alert_text

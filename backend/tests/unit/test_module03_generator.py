@@ -4,7 +4,7 @@ Tests response generation and commitment tracking
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 import json
 from app.services.query_response_generator import QueryResponseGenerator as ResponseGeneratorService
 from app.models.query_schemas import QueryResponse

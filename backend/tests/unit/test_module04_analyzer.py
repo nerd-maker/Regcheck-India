@@ -4,7 +4,7 @@ Tests document ingestion and change extraction
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 import json
 from app.services.regulatory_change_analyzer import RegulatoryChangeAnalyzer
 from app.models.regulatory_change_schemas import (
@@ -58,7 +58,8 @@ def _change_json(change_id="CHG-20260201-001", domain="Safety Reporting",
 
 @pytest.mark.unit
 @patch('app.services.regulatory_change_analyzer.OpenAI')
-def test_ingest_cdsco_circular(mock_openai_cls, sample_cdsco_circular,
+@pytest.mark.asyncio
+async def test_ingest_cdsco_circular(mock_openai_cls, sample_cdsco_circular,
                                 mock_anthropic_client, mock_claude_response_json):
     """Test CDSCO circular ingestion"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -70,7 +71,7 @@ def test_ingest_cdsco_circular(mock_openai_cls, sample_cdsco_circular,
 
     analyzer = RegulatoryChangeAnalyzer()
     doc_request = _make_doc_request(sample_cdsco_circular)
-    classification, changes = analyzer.ingest_new_document(doc_request)
+    classification, changes = await analyzer.ingest_new_document(doc_request)
 
     assert len(changes) == 1
     assert changes[0].urgency == "CRITICAL"
@@ -78,7 +79,8 @@ def test_ingest_cdsco_circular(mock_openai_cls, sample_cdsco_circular,
 
 @pytest.mark.unit
 @patch('app.services.regulatory_change_analyzer.OpenAI')
-def test_domain_classification(mock_openai_cls, sample_cdsco_circular,
+@pytest.mark.asyncio
+async def test_domain_classification(mock_openai_cls, sample_cdsco_circular,
                                 mock_anthropic_client, mock_claude_response_json):
     """Test regulatory domain classification"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -98,7 +100,7 @@ def test_domain_classification(mock_openai_cls, sample_cdsco_circular,
 
     analyzer = RegulatoryChangeAnalyzer()
     doc_request = _make_doc_request(sample_cdsco_circular)
-    classification, changes = analyzer.ingest_new_document(doc_request)
+    classification, changes = await analyzer.ingest_new_document(doc_request)
 
     assert classification.primary_domain == "Clinical Trial Conduct"
     assert len(classification.secondary_domains) >= 2
@@ -106,7 +108,8 @@ def test_domain_classification(mock_openai_cls, sample_cdsco_circular,
 
 @pytest.mark.unit
 @patch('app.services.regulatory_change_analyzer.OpenAI')
-def test_urgency_assessment_critical(mock_openai_cls, sample_cdsco_circular,
+@pytest.mark.asyncio
+async def test_urgency_assessment_critical(mock_openai_cls, sample_cdsco_circular,
                                       mock_anthropic_client, mock_claude_response_json):
     """Test CRITICAL urgency assessment"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -118,7 +121,7 @@ def test_urgency_assessment_critical(mock_openai_cls, sample_cdsco_circular,
 
     analyzer = RegulatoryChangeAnalyzer()
     doc_request = _make_doc_request(sample_cdsco_circular)
-    classification, changes = analyzer.ingest_new_document(doc_request)
+    classification, changes = await analyzer.ingest_new_document(doc_request)
 
     assert changes[0].urgency == "CRITICAL"
     assert changes[0].effective_date == "IMMEDIATE"
@@ -126,7 +129,8 @@ def test_urgency_assessment_critical(mock_openai_cls, sample_cdsco_circular,
 
 @pytest.mark.unit
 @patch('app.services.regulatory_change_analyzer.OpenAI')
-def test_plain_language_summary(mock_openai_cls, sample_cdsco_circular,
+@pytest.mark.asyncio
+async def test_plain_language_summary(mock_openai_cls, sample_cdsco_circular,
                                  mock_anthropic_client, mock_claude_response_json):
     """Test plain language summary generation"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -142,7 +146,7 @@ def test_plain_language_summary(mock_openai_cls, sample_cdsco_circular,
 
     analyzer = RegulatoryChangeAnalyzer()
     doc_request = _make_doc_request(sample_cdsco_circular)
-    classification, changes = analyzer.ingest_new_document(doc_request)
+    classification, changes = await analyzer.ingest_new_document(doc_request)
 
     summary = changes[0].plain_language_summary
     assert len(summary) > 50
@@ -155,7 +159,8 @@ def test_plain_language_summary(mock_openai_cls, sample_cdsco_circular,
 
 @pytest.mark.unit
 @patch('app.services.regulatory_change_analyzer.OpenAI')
-def test_ingest_document_no_changes(mock_openai_cls, sample_cdsco_circular,
+@pytest.mark.asyncio
+async def test_ingest_document_no_changes(mock_openai_cls, sample_cdsco_circular,
                                      mock_anthropic_client, mock_claude_response_json):
     """Test ingestion of document with no material changes"""
     mock_openai_cls.return_value = mock_anthropic_client
@@ -172,6 +177,6 @@ def test_ingest_document_no_changes(mock_openai_cls, sample_cdsco_circular,
         document_type="Notification",
         full_text="This is an informational notice with no regulatory changes."
     )
-    classification, changes = analyzer.ingest_new_document(doc_request)
+    classification, changes = await analyzer.ingest_new_document(doc_request)
 
     assert len(changes) == 0

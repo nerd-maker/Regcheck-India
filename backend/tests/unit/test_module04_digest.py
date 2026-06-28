@@ -4,7 +4,7 @@ Tests digest generation and export formats
 """
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 import json
 from app.services.weekly_digest_generator import WeeklyDigestGenerator
 from app.models.regulatory_change_schemas import WeeklyDigest, SubmissionImpactAssessment
@@ -50,7 +50,8 @@ def _digest_json(executive_summary="Summary", critical_actions=None,
 
 @pytest.mark.unit
 @patch('app.services.weekly_digest_generator.OpenAI')
-def test_generate_weekly_digest(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_generate_weekly_digest(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
     """Test weekly digest generation"""
     mock_openai_cls.return_value = mock_anthropic_client
 
@@ -79,7 +80,7 @@ def test_generate_weekly_digest(mock_openai_cls, mock_anthropic_client, mock_cla
     changes = [_mock_change("CHG-001"), _mock_change("CHG-002", "HIGH"), _mock_change("CHG-003", "MEDIUM")]
     
     generator = WeeklyDigestGenerator()
-    result = generator.generate_digest(
+    result = await generator.generate_digest(
         changes=changes,
         impact_assessments=[],
         start_date="2026-02-10",
@@ -93,7 +94,8 @@ def test_generate_weekly_digest(mock_openai_cls, mock_anthropic_client, mock_cla
 
 @pytest.mark.unit
 @patch('app.services.weekly_digest_generator.OpenAI')
-def test_executive_summary_quality(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_executive_summary_quality(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
     """Test executive summary quality"""
     mock_openai_cls.return_value = mock_anthropic_client
 
@@ -110,7 +112,7 @@ def test_executive_summary_quality(mock_openai_cls, mock_anthropic_client, mock_
     changes = [_mock_change("CHG-001"), _mock_change("CHG-002", "HIGH")]
     
     generator = WeeklyDigestGenerator()
-    result = generator.generate_digest(
+    result = await generator.generate_digest(
         changes=changes,
         impact_assessments=[],
         start_date="2026-02-10",
@@ -123,7 +125,8 @@ def test_executive_summary_quality(mock_openai_cls, mock_anthropic_client, mock_
 
 @pytest.mark.unit
 @patch('app.services.weekly_digest_generator.OpenAI')
-def test_critical_actions_formatting(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_critical_actions_formatting(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
     """Test critical actions formatting"""
     mock_openai_cls.return_value = mock_anthropic_client
 
@@ -142,7 +145,7 @@ def test_critical_actions_formatting(mock_openai_cls, mock_anthropic_client, moc
     changes = [_mock_change("CHG-001"), _mock_change("CHG-002", "HIGH")]
     
     generator = WeeklyDigestGenerator()
-    result = generator.generate_digest(
+    result = await generator.generate_digest(
         changes=changes,
         impact_assessments=[],
         start_date="2026-02-10",
@@ -155,7 +158,8 @@ def test_critical_actions_formatting(mock_openai_cls, mock_anthropic_client, moc
 
 @pytest.mark.unit
 @patch('app.services.weekly_digest_generator.OpenAI')
-def test_export_text_format(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_export_text_format(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
     """Test text export format"""
     mock_openai_cls.return_value = mock_anthropic_client
 
@@ -167,7 +171,7 @@ def test_export_text_format(mock_openai_cls, mock_anthropic_client, mock_claude_
         mock_claude_response_json(json.dumps(data))
 
     generator = WeeklyDigestGenerator()
-    digest = generator.generate_digest(
+    digest = await generator.generate_digest(
         changes=[],
         impact_assessments=[],
         start_date="2026-02-10",
@@ -181,7 +185,8 @@ def test_export_text_format(mock_openai_cls, mock_anthropic_client, mock_claude_
 
 @pytest.mark.unit
 @patch('app.services.weekly_digest_generator.OpenAI')
-def test_export_markdown_format(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_export_markdown_format(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
     """Test markdown export format"""
     mock_openai_cls.return_value = mock_anthropic_client
 
@@ -190,7 +195,7 @@ def test_export_markdown_format(mock_openai_cls, mock_anthropic_client, mock_cla
         mock_claude_response_json(json.dumps(data))
 
     generator = WeeklyDigestGenerator()
-    digest = generator.generate_digest(
+    digest = await generator.generate_digest(
         changes=[],
         impact_assessments=[],
         start_date="2026-02-10",
@@ -204,7 +209,8 @@ def test_export_markdown_format(mock_openai_cls, mock_anthropic_client, mock_cla
 
 @pytest.mark.unit
 @patch('app.services.weekly_digest_generator.OpenAI')
-def test_no_material_changes_digest(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
+@pytest.mark.asyncio
+async def test_no_material_changes_digest(mock_openai_cls, mock_anthropic_client, mock_claude_response_json):
     """Test digest when no material changes occurred"""
     mock_openai_cls.return_value = mock_anthropic_client
 
@@ -216,7 +222,7 @@ def test_no_material_changes_digest(mock_openai_cls, mock_anthropic_client, mock
         mock_claude_response_json(json.dumps(data))
 
     generator = WeeklyDigestGenerator()
-    result = generator.generate_digest(
+    result = await generator.generate_digest(
         changes=[],
         impact_assessments=[],
         start_date="2026-02-10",

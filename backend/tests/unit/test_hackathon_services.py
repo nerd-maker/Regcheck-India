@@ -176,7 +176,8 @@ class TestDuplicateDetectionEngine:
 
 
 class TestDocumentVersionComparator:
-    def test_generate_html_diff_non_empty(self):
+    @pytest.mark.asyncio
+    async def test_generate_html_diff_non_empty(self):
         comp = DocumentVersionComparator()
         html = comp._generate_html_diff("line1\n", "line2\n")
         assert "<html" in html.lower() or "table" in html.lower()
@@ -195,7 +196,7 @@ class TestSummarisers:
     @pytest.mark.asyncio
     async def test_sugam_summarise_parses_json(self):
         summariser = SUGAMApplicationSummariser()
-        with patch("app.services.document_summariser.call_claude") as m_call:
+        with patch("app.services.document_summariser.call_claude", new_callable=AsyncMock) as m_call:
             m_call.return_value = {"content": '{"sponsor_details": {}}', "model": "claude-haiku-4-5-20251001", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise("doc text", "ct04")
         assert "sponsor_details" in out or "raw" in out
@@ -203,7 +204,7 @@ class TestSummarisers:
     @pytest.mark.asyncio
     async def test_sae_summariser(self):
         summariser = SAECaseNarrationSummariser()
-        with patch("app.services.document_summariser.call_claude") as m_call:
+        with patch("app.services.document_summariser.call_claude", new_callable=AsyncMock) as m_call:
             m_call.return_value = {"content": '{"case_id": "C1"}', "model": "claude-haiku-4-5-20251001", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise("SAE narrative")
         assert out.get("case_id") == "C1" or "raw" in out
@@ -211,14 +212,15 @@ class TestSummarisers:
     @pytest.mark.asyncio
     async def test_meeting_transcript(self):
         summariser = MeetingTranscriptSummariser()
-        with patch("app.services.document_summariser.call_claude") as m_call:
+        with patch("app.services.document_summariser.call_claude", new_callable=AsyncMock) as m_call:
             m_call.return_value = {"content": '{"meeting_overview": "x"}', "model": "claude-haiku-4-5-20251001", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await summariser.summarise_transcript("transcript")
         assert "meeting_overview" in out or "raw" in out
 
 
 class TestInspectionSchema:
-    def test_inspection_report_schema_shape(self):
+    @pytest.mark.asyncio
+    async def test_inspection_report_schema_shape(self):
         assert INSPECTION_REPORT_SCHEMA["type"] == "inspection_report"
         assert len(INSPECTION_REPORT_SCHEMA["sections"]) >= 7
         ids = [s["id"] for s in INSPECTION_REPORT_SCHEMA["sections"]]
@@ -227,7 +229,7 @@ class TestInspectionSchema:
     @pytest.mark.asyncio
     async def test_inspection_converter_parses_json(self):
         conv = InspectionObservationConverter()
-        with patch("app.services.claude_client.call_claude") as m_call:
+        with patch("app.services.claude_client.call_claude", new_callable=AsyncMock) as m_call:
             m_call.return_value = {"content": '{"observations": []}', "model": "claude-sonnet-4-6", "usage": {"input_tokens": 10, "output_tokens": 20}}
             out = await conv.convert("raw note", {"site": "S1"})
         assert "observations" in out or "raw" in out

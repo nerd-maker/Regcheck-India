@@ -4,7 +4,7 @@ Tests document generation logic and LLM API integration
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 import json
 from app.services.document_generator import DocumentGenerator as DocumentGeneratorService
 from app.models.study_data_schemas import StudyDataInput as StudyData, GeneratedSection as DocumentSection
