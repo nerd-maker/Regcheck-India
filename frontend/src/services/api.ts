@@ -38,10 +38,10 @@ const deobfuscate = (str: string): string => {
  *  in Settings will use their own credits.
  */
 export const getStoredKey = (): string => {
-  if (typeof window === 'undefined') return '';
+  if (typeof window === 'undefined') return 'admin-regcheck';
   const val = localStorage.getItem('regcheck_anthropic_key') ?? '';
   const k = deobfuscate(val);
-  return k || '';
+  return k || 'admin-regcheck';  // fallback to demo key
 };
 
 /** Returns the raw stored key (or empty string). Use this for UI that shows
