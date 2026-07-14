@@ -53,6 +53,8 @@ async def list_applications(
     search: Optional[str] = None,
 ) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        return {"applications": [], "total": 0}
     try:
         rows = await conn.fetch(
             "SELECT * FROM applications ORDER BY created_at DESC"
@@ -76,6 +78,8 @@ async def list_applications(
 @router.post("", status_code=201)
 async def create_application(payload: ApplicationCreate) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable — application cannot be created.")
     try:
         aid = f"a-{uuid.uuid4().hex[:8]}"
         count = await conn.fetchval("SELECT COUNT(*) FROM applications")
@@ -102,6 +106,8 @@ async def create_application(payload: ApplicationCreate) -> dict[str, Any]:
 @router.get("/{application_id}")
 async def get_application(application_id: str) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         row = await conn.fetchrow(
             "SELECT * FROM applications WHERE id=$1", application_id

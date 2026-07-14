@@ -62,6 +62,8 @@ async def list_registrations(
     application_id: Optional[str] = None,
 ) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        return {"registrations": [], "total": 0}
     try:
         rows = await conn.fetch(
             "SELECT * FROM registrations ORDER BY created_at DESC"
@@ -79,6 +81,8 @@ async def list_registrations(
 @router.post("", status_code=201)
 async def create_registration(payload: RegistrationCreate) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable — registration cannot be created.")
     try:
         rid = f"r-{uuid.uuid4().hex[:8]}"
         count = await conn.fetchval("SELECT COUNT(*) FROM registrations")
@@ -113,6 +117,8 @@ async def create_registration(payload: RegistrationCreate) -> dict[str, Any]:
 @router.get("/{registration_id}")
 async def get_registration(registration_id: str) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         row = await conn.fetchrow(
             "SELECT * FROM registrations WHERE id=$1", registration_id

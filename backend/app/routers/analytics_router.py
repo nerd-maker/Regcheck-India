@@ -8,6 +8,17 @@ from typing import Any
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 logger = logging.getLogger(__name__)
 
+# Empty-state defaults returned when DB is unavailable
+_EMPTY_KPIS = {
+    "active_submissions": 0,
+    "open_critical_gaps": 0,
+    "ha_queries_pending": 0,
+    "avg_compliance_score": None,
+    "total_vault_documents": 0,
+    "documents_by_state": {},
+    "computed_at": None,
+}
+
 
 def row_to_dict(row: Any) -> dict[str, Any]:
     """Convert an asyncpg Record to a plain dict, parsing JSONB strings."""
@@ -32,8 +43,11 @@ async def get_dashboard_kpis() -> dict:
     """
     Returns all KPI values for the Home dashboard strip.
     Computes from real tables — no mockup values.
+    Returns zeros gracefully when database is unavailable.
     """
     conn = await get_conn()
+    if conn is None:
+        return {**_EMPTY_KPIS, "computed_at": datetime.now(timezone.utc).isoformat()}
     try:
         # Active submissions (not archived, not approved)
         active_submissions = await conn.fetchval(
@@ -92,6 +106,8 @@ async def get_compliance_by_agent() -> dict:
     Only includes completed scans. Groups by scan_type.
     """
     conn = await get_conn()
+    if conn is None:
+        return {"frameworks": [], "computed_at": datetime.now(timezone.utc).isoformat()}
     try:
         rows = await conn.fetch("""
             SELECT
@@ -146,6 +162,8 @@ async def get_submission_throughput() -> dict:
     Used by the 'Submission throughput' card in Reports.
     """
     conn = await get_conn()
+    if conn is None:
+        return {"monthly_data": [], "computed_at": datetime.now(timezone.utc).isoformat()}
     try:
         rows = await conn.fetch("""
             SELECT
@@ -193,6 +211,12 @@ async def get_recent_activity(limit: int = 20) -> dict:
         limit = 100
 
     conn = await get_conn()
+    if conn is None:
+        return {
+            "activities": [],
+            "total": 0,
+            "computed_at": datetime.now(timezone.utc).isoformat(),
+        }
     try:
         # Source 1: vault document audit entries
         doc_audit = await conn.fetch("""

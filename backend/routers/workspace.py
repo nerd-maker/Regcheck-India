@@ -174,6 +174,8 @@ async def list_documents(
     search: Optional[str] = Query(None),
 ):
     conn = await get_conn()
+    if conn is None:
+        return []
     try:
         if submission_id:
             rows = await conn.fetch(
@@ -234,6 +236,8 @@ class ApplicationCreate(BaseModel):
 @router.post("/applications")
 async def create_application(body: ApplicationCreate):
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         aid = f"a-{uuid.uuid4().hex[:8]}"
         year = datetime.now().year
@@ -261,6 +265,8 @@ async def list_applications(
     search: Optional[str] = Query(None),
 ):
     conn = await get_conn()
+    if conn is None:
+        return []
     try:
         rows = await conn.fetch(
             "SELECT * FROM applications ORDER BY created_at DESC"
@@ -294,6 +300,8 @@ class RegistrationCreate(BaseModel):
 @router.post("/registrations")
 async def create_registration(body: RegistrationCreate):
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         rid = f"r-{uuid.uuid4().hex[:8]}"
         year = datetime.now().year
@@ -338,6 +346,8 @@ async def list_registrations(
     application_id: Optional[str] = Query(None),
 ):
     conn = await get_conn()
+    if conn is None:
+        return []
     try:
         rows = await conn.fetch(
             "SELECT * FROM registrations ORDER BY created_at DESC"
@@ -384,6 +394,8 @@ async def list_registrations(
 @router.patch("/correspondence/{corr_id}")
 async def update_correspondence(corr_id: str, body: dict):
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         allowed = ['state', 'priority']
         updates = {k: v for k, v in body.items() if k in allowed}
@@ -525,6 +537,14 @@ async def remediations_summary(
 ):
     """Summary counts for dashboard KPI widget."""
     conn = await get_conn()
+    if conn is None:
+        return {
+            'critical': {'open': 0, 'in_progress': 0, 'resolved': 0},
+            'major':    {'open': 0, 'in_progress': 0, 'resolved': 0},
+            'minor':    {'open': 0, 'in_progress': 0, 'resolved': 0},
+            'total_open': 0,
+            'submission_id': submission_id,
+        }
     try:
         rows = await conn.fetch(
             """
@@ -559,6 +579,8 @@ async def remediations_summary(
 async def create_remediation(body: RemediationCreate):
     """Promote an AI-detected gap to a tracked remediation task."""
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         rid = f"r-{uuid.uuid4().hex[:8]}"
         await conn.execute("""
@@ -592,6 +614,8 @@ async def list_remediations(
     severity: Optional[str] = Query(None),
 ):
     conn = await get_conn()
+    if conn is None:
+        return []
     try:
         rows = await conn.fetch("""
             SELECT * FROM gap_remediations
@@ -620,6 +644,8 @@ async def list_remediations(
 @router.patch("/remediations/{rem_id}")
 async def update_remediation(rem_id: str, body: RemediationUpdate):
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         updates = body.dict(exclude_none=True)
         if not updates:
@@ -640,6 +666,8 @@ async def update_remediation(rem_id: str, body: RemediationUpdate):
 @router.delete("/remediations/{rem_id}")
 async def delete_remediation(rem_id: str):
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         await conn.execute(
             "DELETE FROM gap_remediations WHERE id=$1", rem_id

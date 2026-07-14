@@ -195,14 +195,17 @@ async def lifespan(app: FastAPI):
             from db import get_conn
             try:
                 conn = await get_conn()
-                try:
-                    await seed_demo_applications(conn)
-                    await seed_demo_submissions(conn)   # deletes RC-SUB-* after seed_db()
-                    await seed_demo_registrations(conn)
-                    await seed_demo_correspondence(conn)
-                    logger.info("Demo data seeded successfully")
-                finally:
-                    await conn.close()
+                if conn is not None:
+                    try:
+                        await seed_demo_applications(conn)
+                        await seed_demo_submissions(conn)   # deletes RC-SUB-* after seed_db()
+                        await seed_demo_registrations(conn)
+                        await seed_demo_correspondence(conn)
+                        logger.info("Demo data seeded successfully")
+                    finally:
+                        await conn.close()
+                else:
+                    logger.warning("Database unavailable — skipping background demo data seeding")
             except Exception as exc:
                 logger.error("Failed to seed demo data in background: %s", exc, exc_info=True)
 

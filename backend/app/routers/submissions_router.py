@@ -69,6 +69,8 @@ def _generate_submission_number(count: int) -> str:
 @router.get("/")
 async def list_submissions() -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        return {"submissions": [], "total": 0}
     try:
         rows = await conn.fetch(
             "SELECT * FROM submissions WHERE state != 'archived' ORDER BY created_at DESC"
@@ -84,6 +86,8 @@ async def list_submissions() -> dict[str, Any]:
 @router.post("", status_code=201)
 async def create_submission(payload: SubmissionCreate) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable — submission cannot be created.")
     try:
         count_row = await conn.fetchval("SELECT COUNT(*) FROM submissions")
         number = _generate_submission_number(count_row)
@@ -123,6 +127,8 @@ async def create_submission(payload: SubmissionCreate) -> dict[str, Any]:
 @router.get("/{submission_id}")
 async def get_submission(submission_id: str) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         row = await conn.fetchrow(
             "SELECT * FROM submissions WHERE id = $1", submission_id
@@ -141,6 +147,8 @@ async def update_submission(submission_id: str, payload: SubmissionUpdate) -> di
         raise HTTPException(status_code=400, detail="No fields to update.")
 
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         row = await conn.fetchrow("SELECT id FROM submissions WHERE id = $1", submission_id)
         if not row:
@@ -173,6 +181,8 @@ async def update_submission(submission_id: str, payload: SubmissionUpdate) -> di
 @router.delete("/{submission_id}", status_code=204, response_class=Response)
 async def delete_submission(submission_id: str) -> Response:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         row = await conn.fetchrow("SELECT id FROM submissions WHERE id = $1", submission_id)
         if not row:

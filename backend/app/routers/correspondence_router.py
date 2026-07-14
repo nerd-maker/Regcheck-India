@@ -58,6 +58,8 @@ def _generate_correspondence_number(count: int) -> str:
 @router.get("/")
 async def list_correspondence(submission_id: Optional[str] = None) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        return {"correspondence": [], "total": 0, "open_count": 0}
     try:
         if submission_id:
             rows = await conn.fetch(
@@ -81,6 +83,8 @@ async def list_correspondence(submission_id: Optional[str] = None) -> dict[str, 
 @router.post("", status_code=201)
 async def create_correspondence(payload: CorrespondenceCreate) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable — correspondence cannot be created.")
     try:
         count = await conn.fetchval("SELECT COUNT(*) FROM ha_correspondence")
         number = _generate_correspondence_number(count)
@@ -105,6 +109,8 @@ async def create_correspondence(payload: CorrespondenceCreate) -> dict[str, Any]
 @router.get("/{correspondence_id}")
 async def get_correspondence(correspondence_id: str) -> dict[str, Any]:
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         row = await conn.fetchrow(
             "SELECT * FROM ha_correspondence WHERE id = $1", correspondence_id
@@ -128,6 +134,8 @@ async def update_correspondence_state(
             detail=f"Invalid state '{payload.state}'. Must be one of: {valid_states}"
         )
     conn = await get_conn()
+    if conn is None:
+        raise HTTPException(status_code=503, detail="Database unavailable.")
     try:
         row = await conn.fetchrow(
             "SELECT id FROM ha_correspondence WHERE id = $1", correspondence_id
