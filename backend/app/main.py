@@ -132,7 +132,10 @@ async def lifespan(app: FastAPI):
     await init_pool()
 
     # Create all workspace + agent_runs tables (idempotent)
-    await init_all_tables()
+    try:
+        await init_all_tables()
+    except Exception as e:
+        logger.warning("Database init skipped: %s — app will run without database features", e)
 
     # ── FIX-2: ADMIN_DEMO_KEY guard ───────────────────────────────────────────
     # If the server Anthropic key is present but ADMIN_DEMO_KEY is missing,
@@ -177,8 +180,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Embedding model pre-warm failed: {e} — will load on first query")
 
-    await init_agent_runs_table()
-    await seed_db()
+    try:
+        await init_agent_runs_table()
+    except Exception as e:
+        logger.warning("agent_runs table init skipped: %s", e)
+
+    try:
+        await seed_db()
+    except Exception as e:
+        logger.warning("seed_db skipped: %s", e)
 
     # ── FIX-5: Non-critical startup work runs in the background ───────────────
     # Bucket verification and demo seeding are not required for the app to

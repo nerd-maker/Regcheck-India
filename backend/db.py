@@ -48,19 +48,22 @@ async def init_pool() -> None:
     database = (parsed.path or "/postgres").lstrip("/") or "postgres"
     ssl_val  = "require" if "supabase" in host else None
 
-    _pool = await asyncpg.create_pool(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-        database=database,
-        ssl=ssl_val,
-        statement_cache_size=0,
-        min_size=2,
-        max_size=10,
-        command_timeout=30,
-    )
-    logger.info("asyncpg connection pool created (min=2 max=10) host=%s", host)
+    try:
+        _pool = await asyncpg.create_pool(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            database=database,
+            ssl=ssl_val,
+            statement_cache_size=0,
+            min_size=2,
+            max_size=10,
+            command_timeout=30,
+        )
+        logger.info("asyncpg connection pool created (min=2 max=10) host=%s", host)
+    except Exception as e:
+        logger.warning("Failed to create connection pool: %s — workspace persistence disabled", e)
 
 
 async def close_pool() -> None:
@@ -75,53 +78,57 @@ async def close_pool() -> None:
 async def get_conn():
     """Acquire a connection from the pool (preferred) or open a direct connection.
 
-    Usage — always use as an async context manager or close() manually:
+    Returns None if the database is unreachable, so callers must guard:
         conn = await get_conn()
+        if conn is None:
+            return  # or return empty/default result
         try:
             ...
         finally:
-            await conn.close()  # returns to pool
+            await conn.close()  # returns connection to pool
     """
-    if _pool is not None:
-        return await _pool.acquire()
+    try:
+        if _pool is not None:
+            return await _pool.acquire()
 
-    # Pool not yet initialised (e.g. during init_all_tables before lifespan)
-    # Fall back to a direct connection.
-    from urllib.parse import urlparse
-    from app.core.config import get_settings
-    settings = get_settings()
+        # Pool not yet initialised (e.g. during init_all_tables before lifespan)
+        # Fall back to a direct connection.
+        from urllib.parse import urlparse
+        from app.core.config import get_settings
+        settings = get_settings()
 
-    if settings.supabase_db_password or settings.supabase_db_host != "aws-0-ap-southeast-2.pooler.supabase.com":
-        from app.core.database import get_pgvector_conn
-        return await get_pgvector_conn()
+        if settings.supabase_db_password or settings.supabase_db_host != "aws-0-ap-southeast-2.pooler.supabase.com":
+            from app.core.database import get_pgvector_conn
+            return await get_pgvector_conn()
 
-    if not DATABASE_URL:
-        raise RuntimeError(
-            "DATABASE_URL is not set. "
-            "Add it to your Render environment variables."
+        if not DATABASE_URL:
+            logger.warning("DATABASE_URL is not set — workspace persistence disabled.")
+            return None
+
+        parsed   = urlparse(DATABASE_URL)
+        host     = parsed.hostname or "localhost"
+        port     = parsed.port or 5432
+        user     = parsed.username or "postgres"
+        password = urllib.parse.unquote(parsed.password or "")
+        database = (parsed.path or "/postgres").lstrip("/") or "postgres"
+        ssl_val  = "require" if "supabase" in host else None
+        return await asyncpg.connect(
+            host=host, port=port, user=user, password=password,
+            database=database, ssl=ssl_val,
+            statement_cache_size=0, timeout=10.0,
         )
-    parsed   = urlparse(DATABASE_URL)
-    host     = parsed.hostname or "localhost"
-    port     = parsed.port or 5432
-    user     = parsed.username or "postgres"
-    password = urllib.parse.unquote(parsed.password or "")
-    database = (parsed.path or "/postgres").lstrip("/") or "postgres"
-    ssl_val  = "require" if "supabase" in host else None
-    return await asyncpg.connect(
-        host=host, port=port, user=user, password=password,
-        database=database, ssl=ssl_val,
-        statement_cache_size=0, timeout=10.0,
-    )
+    except Exception as e:
+        logger.warning("Database connection failed: %s — workspace features disabled", e)
+        return None
 
 
 
 async def init_all_tables():
     """Create all tables on startup. Safe to call multiple times (idempotent)."""
-    if not DATABASE_URL:
-        print("DATABASE_URL not set — workspace persistence disabled.")
-        return
-
     conn = await get_conn()
+    if conn is None:
+        logger.warning("Skipping table initialization — no database connection")
+        return
     try:
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS submissions (
