@@ -290,15 +290,17 @@ class KnowledgeBase:
 
     def get_collection_stats(self) -> Dict:
         async def _async_count():
-            from app.core.config import get_settings
-            import asyncpg
-            from app.core.database import get_pgvector_conn
-            conn = await get_pgvector_conn()
             try:
-                count = await conn.fetchval("SELECT COUNT(*) FROM regulatory_embeddings")
-                return count or 0
-            finally:
-                await conn.close()
+                from app.core.database import get_pgvector_conn
+                conn = await get_pgvector_conn()
+                try:
+                    count = await conn.fetchval("SELECT COUNT(*) FROM regulatory_embeddings")
+                    return count or 0
+                finally:
+                    await conn.close()
+            except Exception as e:
+                logger.warning("Failed to get database collection stats: %s", e)
+                return 0
                 
         try:
             loop = asyncio.get_event_loop()

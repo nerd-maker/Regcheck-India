@@ -176,6 +176,9 @@ async def seed():
         return
 
     conn = await get_conn()
+    if conn is None:
+        print("Database connection failed — skipping seed.")
+        return
     seeded = 0
     try:
         # Submissions (Legacy mockup seeding commented out for Sprint 3)

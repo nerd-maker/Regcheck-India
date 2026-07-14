@@ -41,7 +41,11 @@ async def list_queued_updates(
         conn = await get_pgvector_conn()
     except Exception as e:
         logger.error("db_connect_failed: %s", e)
-        raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
+        return {
+            "updates": [],
+            "total": 0,
+            "status_filter": status,
+        }
     try:
         rows = await conn.fetch(
             """
@@ -73,7 +77,14 @@ async def get_update_counts() -> dict:
         conn = await get_pgvector_conn()
     except Exception as e:
         logger.error("db_connect_failed: %s", e)
-        raise HTTPException(status_code=503, detail=f"Database connection failed: {e}")
+        return {
+            "pending_review": 0,
+            "approved": 0,
+            "rejected": 0,
+            "ingesting": 0,
+            "ingested": 0,
+            "failed": 0,
+        }
     try:
         rows = await conn.fetch(
             """
