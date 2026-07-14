@@ -152,33 +152,18 @@ async def lifespan(app: FastAPI):
     elif _server_key and _admin_key:
         logger.info("ADMIN_DEMO_KEY is configured — demo mode active.")
 
-    # pgvector health check — non-blocking, 3 s timeout, never raises
+    # Pre-load local TF-IDF RAG index — fast, in-memory, no network calls
     try:
-        from app.core.database import get_pgvector_conn
-        _conn = await get_pgvector_conn()
-        try:
-            _count = await _conn.fetchval(
-                "SELECT COUNT(*) FROM regulatory_embeddings"
-            )
-            logger.info(
-                "pgvector ready: %d regulatory chunks available", _count or 0
-            )
-        finally:
-            await _conn.close()
-    except Exception as e:
-        logger.warning(
-            "pgvector not ready at startup: %s — agents will work without RAG context", e
+        from app.services.local_rag_service import _build_tfidf_index, get_corpus_stats
+        _build_tfidf_index()  # pre-build index at startup (cached for lifetime)
+        stats = get_corpus_stats()
+        logger.info(
+            "Local RAG ready: %d chunks from %d documents",
+            stats["total_chunks"],
+            len(stats["documents"]),
         )
-        # Never raise — app starts regardless
-
-    # Pre-warm the SentenceTransformer embedding model so the first agent request
-    # doesn't block waiting for a 79 MB model download / ONNX compilation.
-    try:
-        from app.services.pgvector_service import get_embedding_model
-        await get_embedding_model()
-        logger.info("Embedding model pre-warmed successfully")
     except Exception as e:
-        logger.warning(f"Embedding model pre-warm failed: {e} — will load on first query")
+        logger.warning("Local RAG pre-load failed: %s — agents will work without RAG context", e)
 
     try:
         await init_agent_runs_table()

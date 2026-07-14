@@ -269,15 +269,15 @@ class KnowledgeBase:
         for r in results:
             documents.append(r["content"])
             metadatas.append({
-                "title": r["title"],
-                "short_name": r["short_name"],
-                "category": r["category"],
-                "authority": r["authority"],
-                "source": r["doc_name"],
-                "citation": r["citation"],
-                "document_type": r["framework"],
-                "page_number": r["page_number"],
-                "section": r["section"]
+                "title": r.get("title") or r.get("doc_name", "Regulatory Document"),
+                "short_name": r.get("short_name", ""),
+                "category": r.get("category", "general"),
+                "authority": r.get("authority", "CDSCO"),
+                "source": r.get("doc_name", ""),
+                "citation": r.get("citation", ""),
+                "document_type": r.get("framework", ""),
+                "page_number": r.get("page_number", 0),
+                "section": r.get("section", ""),
             })
             # Convert similarity back to cosine distance
             distances.append(1.0 - r.get("similarity", 0.9))

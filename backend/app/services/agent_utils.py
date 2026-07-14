@@ -45,17 +45,20 @@ def _cache_key(*parts: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# retrieve_regulatory_context — async pgvector RAG retrieval with caching
+# retrieve_regulatory_context — local TF-IDF RAG (replaces pgvector)
 # ---------------------------------------------------------------------------
 async def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
-    """Async pgvector RAG retrieval with in-process TTL cache.
+    """Retrieve relevant regulatory context for a compliance query.
+
+    Uses local TF-IDF search against pre-processed regulatory_chunks.json.
+    Zero network calls, zero model downloads, zero database dependency.
 
     Returns formatted context string or empty string on any failure.
     Agents must work even with zero RAG context — all failures return "".
 
     Cache behaviour:
     - Same query + n_results within 30 min → returns cached result instantly
-    - Cache miss → queries pgvector (embedding + vector search)
+    - Cache miss → queries local TF-IDF index (in-memory, < 10ms)
     - Any exception → silent empty string, never raises
     """
     key = _cache_key(query, str(n_results))
@@ -65,24 +68,28 @@ async def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
         return _rag_cache[key]  # type: ignore[return-value]
 
     try:
-        from app.services.pgvector_service import retrieve_regulatory_context as _pgvector_retrieve
+        from app.services.local_rag_service import retrieve_regulatory_context_local
 
-        results = await _pgvector_retrieve(query, n_results=n_results)
+        results = retrieve_regulatory_context_local(query=query, n_results=n_results)
 
         if not results:
+            logger.debug("No regulatory context found for query: %s", query[:50])
+            _rag_cache[key] = ""
             return ""
 
-        chunks = []
+        formatted_chunks = []
         for r in results:
             source_label = r.get("short_name") or r.get("doc_name") or "Regulatory Document"
-            if r.get("source_url"):
-                source_label += f" | {r['source_url']}"
-            if r.get("publication_date"):
-                source_label += f" | {r['publication_date']}"
-            chunks.append(f"[Source: {source_label}]\n{r['content']}")
+            if r.get("page_number"):
+                source_label += f" p.{r['page_number']}"
+            formatted_chunks.append(f"[Source: {source_label}]\n{r['content']}")
 
-        context = "\n\n---\n\n".join(chunks)
-        logger.info("RAG: retrieved %d chunks from pgvector for query: %s...", len(chunks), query[:60])
+        context = "\n\n---\n\n".join(formatted_chunks)
+        logger.debug(
+            "RAG retrieved %d chunks (local TF-IDF) for query: %s...",
+            len(results),
+            query[:60],
+        )
 
         _rag_cache[key] = context
         return context
@@ -90,7 +97,6 @@ async def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
     except Exception as exc:
         logger.warning("RAG retrieval failed silently: %s", exc)
         return ""
-
 
 
 # ---------------------------------------------------------------------------
