@@ -272,16 +272,20 @@ async def list_vault_documents(
     lifecycle_state: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    stmt = select(VaultDocument).order_by(VaultDocument.updated_at.desc())
-    if workspace_id:
-        stmt = stmt.where(VaultDocument.workspace_id == workspace_id)
-    if lifecycle_state:
-        state = "in_review" if lifecycle_state == "review" else lifecycle_state
-        stmt = stmt.where(VaultDocument.lifecycle_state == state)
+    try:
+        stmt = select(VaultDocument).order_by(VaultDocument.updated_at.desc())
+        if workspace_id:
+            stmt = stmt.where(VaultDocument.workspace_id == workspace_id)
+        if lifecycle_state:
+            state = "in_review" if lifecycle_state == "review" else lifecycle_state
+            stmt = stmt.where(VaultDocument.lifecycle_state == state)
 
-    result = await db.execute(stmt)
-    documents = [_document_list_item(document) for document in result.scalars().all()]
-    return {"documents": documents, "total": len(documents)}
+        result = await db.execute(stmt)
+        documents = [_document_list_item(document) for document in result.scalars().all()]
+        return {"documents": documents, "total": len(documents)}
+    except Exception as e:
+        logger.warning("vault_documents list failed: %s", e)
+        return {"documents": [], "total": 0}
 
 
 @router.get("/audit-trail")
@@ -291,45 +295,49 @@ async def get_vault_audit_trail(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Retrieve all document audit trail events, joined with document titles/numbers."""
-    stmt = (
-        select(VaultDocumentAudit)
-        .options(selectinload(VaultDocumentAudit.document))
-        .join(VaultDocument, VaultDocumentAudit.document_id == VaultDocument.id)
-    )
-    if workspace_id:
-        stmt = stmt.where(VaultDocument.workspace_id == workspace_id)
+    try:
+        stmt = (
+            select(VaultDocumentAudit)
+            .options(selectinload(VaultDocumentAudit.document))
+            .join(VaultDocument, VaultDocumentAudit.document_id == VaultDocument.id)
+        )
+        if workspace_id:
+            stmt = stmt.where(VaultDocument.workspace_id == workspace_id)
 
-    stmt = stmt.order_by(VaultDocumentAudit.created_at.desc()).limit(limit)
+        stmt = stmt.order_by(VaultDocumentAudit.created_at.desc()).limit(limit)
 
-    result = await db.execute(stmt)
-    entries = result.scalars().all()
+        result = await db.execute(stmt)
+        entries = result.scalars().all()
 
-    audit_data = []
-    for entry in entries:
-        title = entry.document.title if entry.document else "Unknown"
-        doc_number = entry.document.doc_number if entry.document else ""
+        audit_data = []
+        for entry in entries:
+            title = entry.document.title if entry.document else "Unknown"
+            doc_number = entry.document.doc_number if entry.document else ""
 
-        # Derive user initials defensively
-        initials = entry.user_initials
-        if not initials and entry.user_name:
-            words = entry.user_name.split()
-            initials = "".join([w[0].upper() for w in words if w])[:2]
+            # Derive user initials defensively
+            initials = entry.user_initials
+            if not initials and entry.user_name:
+                words = entry.user_name.split()
+                initials = "".join([w[0].upper() for w in words if w])[:2]
 
-        audit_data.append({
-            "id": entry.id,
-            "document_id": entry.document_id,
-            "action": entry.action,
-            "from_state": entry.from_state,
-            "to_state": entry.to_state,
-            "user_name": entry.user_name,
-            "user_initials": initials or "SYS",
-            "note": entry.note,
-            "created_at": _iso(entry.created_at),
-            "document_title": title,
-            "doc_number": doc_number,
-        })
+            audit_data.append({
+                "id": entry.id,
+                "document_id": entry.document_id,
+                "action": entry.action,
+                "from_state": entry.from_state,
+                "to_state": entry.to_state,
+                "user_name": entry.user_name,
+                "user_initials": initials or "SYS",
+                "note": entry.note,
+                "created_at": _iso(entry.created_at),
+                "document_title": title,
+                "doc_number": doc_number,
+            })
 
-    return {"audit_trail": audit_data, "total": len(audit_data)}
+        return {"audit_trail": audit_data, "total": len(audit_data)}
+    except Exception as e:
+        logger.warning("vault_documents audit_trail failed: %s", e)
+        return {"audit_trail": [], "total": 0}
 
 
 @router.get("/{document_id}")
@@ -337,8 +345,14 @@ async def get_vault_document(
     document_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    document = await _get_document_or_404(db, document_id)
-    return _document_detail(document)
+    try:
+        document = await _get_document_or_404(db, document_id)
+        return _document_detail(document)
+    except HTTPException:
+        raise  # re-raise 404 as-is
+    except Exception as e:
+        logger.warning("vault_documents get_document failed: %s", e)
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable.")
 
 
 @router.patch("/{document_id}/state")
@@ -434,30 +448,36 @@ async def get_compliance_scans(
 
     Used by the Compliance Actions tab in the document detail inspector.
     """
-    # Validate document exists
-    await _get_document_or_404(db, document_id)
+    try:
+        # Validate document exists
+        await _get_document_or_404(db, document_id)
 
-    result = await db.execute(
-        select(VaultComplianceScan)
-        .where(VaultComplianceScan.document_id == document_id)
-        .order_by(VaultComplianceScan.created_at.desc())
-    )
-    scans = result.scalars().all()
+        result = await db.execute(
+            select(VaultComplianceScan)
+            .where(VaultComplianceScan.document_id == document_id)
+            .order_by(VaultComplianceScan.created_at.desc())
+        )
+        scans = result.scalars().all()
 
-    return {
-        "document_id": document_id,
-        "scans": [
-            {
-                "id": s.id,
-                "document_id": s.document_id,
-                "scan_type": s.scan_type,
-                "status": s.status,
-                "score": s.score,
-                "findings": s.findings,
-                "agent_run_id": s.agent_run_id,
-                "created_at": _iso(s.created_at),
-            }
-            for s in scans
-        ],
-        "total": len(scans),
-    }
+        return {
+            "document_id": document_id,
+            "scans": [
+                {
+                    "id": s.id,
+                    "document_id": s.document_id,
+                    "scan_type": s.scan_type,
+                    "status": s.status,
+                    "score": s.score,
+                    "findings": s.findings,
+                    "agent_run_id": s.agent_run_id,
+                    "created_at": _iso(s.created_at),
+                }
+                for s in scans
+            ],
+            "total": len(scans),
+        }
+    except HTTPException:
+        raise  # re-raise 404 as-is
+    except Exception as e:
+        logger.warning("vault_documents get_scans failed: %s", e)
+        return {"document_id": document_id, "scans": [], "total": 0}

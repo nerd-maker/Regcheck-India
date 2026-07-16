@@ -233,56 +233,58 @@ class ApplicationCreate(BaseModel):
     owner_initials: str
 
 
-@router.post("/applications")
-async def create_application(body: ApplicationCreate):
-    conn = await get_conn()
-    if conn is None:
-        raise HTTPException(status_code=503, detail="Database unavailable.")
-    try:
-        aid = f"a-{uuid.uuid4().hex[:8]}"
-        year = datetime.now().year
-        count = await conn.fetchval("SELECT COUNT(*) FROM applications")
-        number = f"APP-{year}-{str(int(count) + 1).zfill(3)}"
-        opened_at = datetime.now().strftime("%d %b %Y")
-        
-        await conn.execute("""
-            INSERT INTO applications (
-                id, number, product, sponsor, type, status,
-                submissions, registrations, owner_id, owner_name,
-                owner_initials, owner_role, opened_at
-            ) VALUES ($1, $2, $3, $4, $5, 'Active', 0, 0, $1, $6, $7, 'Regulatory Lead', $8)
-        """, aid, number, body.product, body.sponsor, body.type, body.owner_name, body.owner_initials, opened_at)
-        
-        row = await conn.fetchrow("SELECT * FROM applications WHERE id=$1", aid)
-        return row_to_dict(row)
-    finally:
-        await conn.close()
+# SPRINT5: moved to dedicated router (app/routers/applications_router.py)
+# @router.post("/applications")
+# async def create_application(body: ApplicationCreate):
+#     conn = await get_conn()
+#     if conn is None:
+#         raise HTTPException(status_code=503, detail="Database unavailable.")
+#     try:
+#         aid = f"a-{uuid.uuid4().hex[:8]}"
+#         year = datetime.now().year
+#         count = await conn.fetchval("SELECT COUNT(*) FROM applications")
+#         number = f"APP-{year}-{str(int(count) + 1).zfill(3)}"
+#         opened_at = datetime.now().strftime("%d %b %Y")
+#         
+#         await conn.execute("""
+#             INSERT INTO applications (
+#                 id, number, product, sponsor, type, status,
+#                 submissions, registrations, owner_id, owner_name,
+#                 owner_initials, owner_role, opened_at
+#             ) VALUES ($1, $2, $3, $4, $5, 'Active', 0, 0, $1, $6, $7, 'Regulatory Lead', $8)
+#         """, aid, number, body.product, body.sponsor, body.type, body.owner_name, body.owner_initials, opened_at)
+#         
+#         row = await conn.fetchrow("SELECT * FROM applications WHERE id=$1", aid)
+#         return row_to_dict(row)
+#     finally:
+#         await conn.close()
 
 
-@router.get("/applications")
-async def list_applications(
-    status: Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
-):
-    conn = await get_conn()
-    if conn is None:
-        return []
-    try:
-        rows = await conn.fetch(
-            "SELECT * FROM applications ORDER BY created_at DESC"
-        )
-        results = rows_to_list(rows)
-        if status:
-            results = [r for r in results if r.get('status') == status]
-        if search:
-            q = search.lower()
-            results = [r for r in results if
-                       q in r.get('product', '').lower() or
-                       q in r.get('number', '').lower() or
-                       q in r.get('sponsor', '').lower()]
-        return results
-    finally:
-        await conn.close()
+# SPRINT5: moved to dedicated router (app/routers/applications_router.py)
+# @router.get("/applications")
+# async def list_applications(
+#     status: Optional[str] = Query(None),
+#     search: Optional[str] = Query(None),
+# ):
+#     conn = await get_conn()
+#     if conn is None:
+#         return []
+#     try:
+#         rows = await conn.fetch(
+#             "SELECT * FROM applications ORDER BY created_at DESC"
+#         )
+#         results = rows_to_list(rows)
+#         if status:
+#             results = [r for r in results if r.get('status') == status]
+#         if search:
+#             q = search.lower()
+#             results = [r for r in results if
+#                        q in r.get('product', '').lower() or
+#                        q in r.get('number', '').lower() or
+#                        q in r.get('sponsor', '').lower()]
+#         return results
+#     finally:
+#         await conn.close()
 
 
 # ── REGISTRATIONS ─────────────────────────────────────────────────
@@ -297,70 +299,72 @@ class RegistrationCreate(BaseModel):
     expiry_date: str
 
 
-@router.post("/registrations")
-async def create_registration(body: RegistrationCreate):
-    conn = await get_conn()
-    if conn is None:
-        raise HTTPException(status_code=503, detail="Database unavailable.")
-    try:
-        rid = f"r-{uuid.uuid4().hex[:8]}"
-        year = datetime.now().year
-        count = await conn.fetchval("SELECT COUNT(*) FROM registrations")
-        number = f"REG-{year}-{str(int(count) + 1).zfill(3)}"
-        
-        def format_date(d_str: str) -> str:
-            try:
-                dt = datetime.strptime(d_str, "%Y-%m-%d")
-                return dt.strftime("%d %b %Y")
-            except Exception:
-                return d_str
+# SPRINT5: moved to dedicated router (app/routers/registrations_router.py)
+# @router.post("/registrations")
+# async def create_registration(body: RegistrationCreate):
+#     conn = await get_conn()
+#     if conn is None:
+#         raise HTTPException(status_code=503, detail="Database unavailable.")
+#     try:
+#         rid = f"r-{uuid.uuid4().hex[:8]}"
+#         year = datetime.now().year
+#         count = await conn.fetchval("SELECT COUNT(*) FROM registrations")
+#         number = f"REG-{year}-{str(int(count) + 1).zfill(3)}"
+#         
+#         def format_date(d_str: str) -> str:
+#             try:
+#                 dt = datetime.strptime(d_str, "%Y-%m-%d")
+#                 return dt.strftime("%d %b %Y")
+#             except Exception:
+#                 return d_str
+# 
+#         app_date = format_date(body.approved_date)
+#         exp_date = format_date(body.expiry_date)
+#         
+#         app_id = body.application_id.strip() if body.application_id else None
+#         if app_id == "":
+#             app_id = None
+#         
+#         await conn.execute("""
+#             INSERT INTO registrations (
+#                 id, number, product, certificate, market, state,
+#                 approved_date, expiry_date, application_id
+#             ) VALUES ($1, $2, $3, $4, $5, 'Effective', $6, $7, $8)
+#         """, rid, number, body.product, body.certificate, body.market, app_date, exp_date, app_id)
+#         
+#         if app_id:
+#             await conn.execute("""
+#                 UPDATE applications SET registrations = registrations + 1 WHERE id = $1
+#             """, app_id)
+#             
+#         row = await conn.fetchrow("SELECT * FROM registrations WHERE id=$1", rid)
+#         return row_to_dict(row)
+#     finally:
+#         await conn.close()
 
-        app_date = format_date(body.approved_date)
-        exp_date = format_date(body.expiry_date)
-        
-        app_id = body.application_id.strip() if body.application_id else None
-        if app_id == "":
-            app_id = None
-        
-        await conn.execute("""
-            INSERT INTO registrations (
-                id, number, product, certificate, market, state,
-                approved_date, expiry_date, application_id
-            ) VALUES ($1, $2, $3, $4, $5, 'Effective', $6, $7, $8)
-        """, rid, number, body.product, body.certificate, body.market, app_date, exp_date, app_id)
-        
-        if app_id:
-            await conn.execute("""
-                UPDATE applications SET registrations = registrations + 1 WHERE id = $1
-            """, app_id)
-            
-        row = await conn.fetchrow("SELECT * FROM registrations WHERE id=$1", rid)
-        return row_to_dict(row)
-    finally:
-        await conn.close()
 
-
-@router.get("/registrations")
-async def list_registrations(
-    state: Optional[str] = Query(None),
-    application_id: Optional[str] = Query(None),
-):
-    conn = await get_conn()
-    if conn is None:
-        return []
-    try:
-        rows = await conn.fetch(
-            "SELECT * FROM registrations ORDER BY created_at DESC"
-        )
-        results = rows_to_list(rows)
-        if state:
-            results = [r for r in results if r.get('state') == state]
-        if application_id:
-            results = [r for r in results
-                       if r.get('application_id') == application_id]
-        return results
-    finally:
-        await conn.close()
+# SPRINT5: moved to dedicated router (app/routers/registrations_router.py)
+# @router.get("/registrations")
+# async def list_registrations(
+#     state: Optional[str] = Query(None),
+#     application_id: Optional[str] = Query(None),
+# ):
+#     conn = await get_conn()
+#     if conn is None:
+#         return []
+#     try:
+#         rows = await conn.fetch(
+#             "SELECT * FROM registrations ORDER BY created_at DESC"
+#         )
+#         results = rows_to_list(rows)
+#         if state:
+#             results = [r for r in results if r.get('state') == state]
+#         if application_id:
+#             results = [r for r in results
+#                        if r.get('application_id') == application_id]
+#         return results
+#     finally:
+#         await conn.close()
 
 
 # ── HA CORRESPONDENCE ─────────────────────────────────────────────

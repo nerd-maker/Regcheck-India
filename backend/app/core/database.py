@@ -16,6 +16,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -69,6 +70,9 @@ def _get_engine():
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency that yields a per-request AsyncSession.
 
+    Returns 503 if the database engine cannot be initialised (e.g. DATABASE_URL
+    not set) or if the session factory fails — never propagates as a raw 500.
+
     Usage in a router:
         from app.core.database import get_db
         from fastapi import Depends
@@ -77,14 +81,31 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         async def my_endpoint(db: AsyncSession = Depends(get_db)):
             ...
     """
-    _, factory = _get_engine()
-    async with factory() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+    try:
+        _, factory = _get_engine()
+    except Exception as e:
+        logger.warning("SQLAlchemy engine init failed: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Database temporarily unavailable. Workspace features are offline.",
+        )
+
+    try:
+        async with factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+    except HTTPException:
+        raise  # pass through 404/422 etc unchanged
+    except Exception as e:
+        logger.warning("SQLAlchemy session failed: %s", e)
+        raise HTTPException(
+            status_code=503,
+            detail="Database temporarily unavailable. Workspace features are offline.",
+        )
 
 
 @asynccontextmanager
