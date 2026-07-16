@@ -46,6 +46,7 @@ from app.services.claude_client import (
 )
 from app.services.agent_utils import (
     retrieve_regulatory_context,
+    retrieve_regulatory_context_with_score,
     AGENT_01_SYSTEM_PROMPT,
     AGENT_03_SYSTEM_PROMPT,
     AGENT_03_SAE_SYSTEM_PROMPT,
@@ -328,10 +329,13 @@ Return EXACTLY this JSON structure:
 }
 """
 
-AGENT_06_SYSTEM_PROMPT = """You are the RegCheck-India regulatory Q&A agent.
-Answer only from the retrieved context provided. Cite specific regulatory basis, state when context is insufficient,
-and return JSON only with: answer, regulatory_citations, confidence, confidence_reason,
-follow_up_suggested, disclaimer.
+AGENT_06_SYSTEM_PROMPT = """You are the RegCheck-India regulatory Q&A specialist with deep expertise in Indian pharmaceutical regulations.
+
+You have access to official regulatory documents including NDCTR 2019, Schedule Y, ICH E6(R3), ICH E2A, ICMR Ethics Guidelines, DPDP Act 2023, and CDSCO guidance documents.
+
+When retrieved context is provided in the [CONTEXT] block, prioritise it and cite the specific source document and section. When context is insufficient or absent, use your training knowledge of Indian pharmaceutical regulations and clearly state the basis of your answer.
+
+Always provide specific timelines, rule numbers, and regulatory citations. Never say "I don't know" — provide the best answer possible with an appropriate confidence level.
 
 CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
 1. Return ONLY valid JSON — no markdown, no code fences (no ```json), no explanation text before or after
@@ -339,15 +343,16 @@ CRITICAL OUTPUT RULES — YOU MUST FOLLOW THESE EXACTLY:
 3. Arrays must always be arrays — never return an object where an array is expected
 4. Objects must always be objects — never return an array where an object is expected
 5. String fields must always be strings — never return null, use empty string "" instead
-6. Number fields must always be numbers — never return a string like "8" where 8 is expected
+6. Number fields must always be numbers — confidence_score must be 0.0 to 1.0
 7. Boolean fields must be true or false — never return "yes", "no", "true" as a string
 8. If uncertain about a value use a sensible default — never omit a required field
 
 Return EXACTLY this JSON structure:
 {
-  "answer": "string — comprehensive answer to the regulatory question",
+  "answer": "string — comprehensive answer with specific timelines, rule numbers, and citations",
   "confidence_score": 0.0,
-  "regulatory_basis": ["string", "string"],
+  "confidence_reason": "string — e.g. Based on retrieved NDCTR 2019 Rule X or Based on training knowledge of Schedule Y",
+  "regulatory_basis": ["string — e.g. NDCTR 2019 Rule 23", "Schedule Y Appendix II"],
   "applicable_guidelines": [
     {
       "guideline": "string — e.g. Schedule Y, ICH E6(R3)",
@@ -365,7 +370,7 @@ Return EXACTLY this JSON structure:
       "section": "string"
     }
   ],
-  "disclaimer": "string",
+  "disclaimer": "string — AI output — verify with qualified RA before CDSCO submission",
   "audit_log": {
     "timestamp": "ISO datetime string",
     "query_type": "string",
@@ -377,6 +382,32 @@ Return EXACTLY this JSON structure:
 
 
 # AGENT_07_SYSTEM_PROMPT, AGENT_08_SYSTEM_PROMPT: imported from app.services.agent_utils
+
+
+AGENT_09_SYSTEM_PROMPT = """You are the RegCheck-India cross-document consistency agent specialising in Indian pharmaceutical regulatory submissions.
+
+Your role is to identify inconsistencies between two versions of a regulatory document or between related documents (e.g., Protocol vs ICF, IB vs Protocol, CSR vs Protocol).
+
+Focus on:
+- Dose/dosage inconsistencies (common Schedule Y finding)
+- Patient population discrepancies
+- Study design conflicts between documents  
+- Safety reporting timeline inconsistencies (NDCTR 2019 Rule 87)
+- Informed consent conflicts with protocol
+- Version number and date inconsistencies
+- Regulatory framework conflicts (ICH E6(R3) vs local CDSCO requirements)
+
+Return JSON only:
+{
+  "inconsistencies_found": true/false,
+  "total_inconsistencies": 0,
+  "critical_inconsistencies": [],
+  "major_inconsistencies": [],
+  "minor_inconsistencies": [],
+  "recommendation": "string",
+  "regulatory_risk": "HIGH/MEDIUM/LOW"
+}"""
+
 
 
 @router.get("/anonymise/health", summary="Agent 01 - Anonymise Health Check")
@@ -411,16 +442,35 @@ async def anonymise_document(request: Request, body: AgentRequest, x_anthropic_a
         logger.warning(f"Rule-based PII scan failed silently: {e}")
 
     structured_text = structure_prompt_input(sanitized_text, "clinical_document", "M1_PII_ANONYMISER")
+
+    # RAG retrieval — DPDP Act and PII/PHI data protection context
+    rag_query = "personal data protection DPDP Act 2023 clinical trial patient identifiers PII PHI"
     try:
-        has_rag_context = bool(regulatory_context)
-    except NameError:
-        has_rag_context = False
+        regulatory_context = await retrieve_regulatory_context(rag_query, n_results=3)
+    except Exception as e:
+        logger.warning(f"RAG skipped for anonymise endpoint: {e}")
+        regulatory_context = ""
+
+    if regulatory_context:
+        rag_section = f"""
+
+[RETRIEVED REGULATORY CONTEXT — DPDP Act 2023 & Privacy Guidelines]
+The following excerpts are from official data protection and privacy regulations. Use these when identifying what counts as PII/PHI in Indian clinical contexts:
+
+{regulatory_context}
+
+[END OF RETRIEVED CONTEXT]
+"""
+    else:
+        rag_section = ""
+
+    has_rag_context = bool(regulatory_context)
 
     response = await call_claude(
         agent_name="PII_PHI_Anonymisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_01_SYSTEM_PROMPT,
-        user_content=f"Document metadata: {json.dumps(body.metadata)}\n\nDocument:\n{structured_text}",
+        user_content=f"Document metadata: {json.dumps(body.metadata)}{rag_section}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
         has_rag_context=has_rag_context,
@@ -492,16 +542,35 @@ async def summarise_document(request: Request, body: AgentRequest, x_anthropic_a
         raise HTTPException(status_code=400, detail=str(e))
 
     structured_text = structure_prompt_input(sanitized_text, "regulatory_document", "M2_DOCUMENT_SUMMARISER")
+
+    # RAG retrieval — compliance checklist and requirements context
+    rag_query = f"regulatory requirements compliance checklist Schedule Y NDCTR: {sanitized_text[:200]}"
     try:
-        has_rag_context = bool(regulatory_context)
-    except NameError:
-        has_rag_context = False
+        regulatory_context = await retrieve_regulatory_context(rag_query, n_results=3)
+    except Exception as e:
+        logger.warning(f"RAG skipped for summarise endpoint: {e}")
+        regulatory_context = ""
+
+    if regulatory_context:
+        rag_section = f"""
+
+[RETRIEVED REGULATORY CONTEXT — Applicable Requirements]
+The following excerpts from official regulatory documents are relevant to this document type. Use these to identify compliance gaps and relevant regulatory references in your summary:
+
+{regulatory_context}
+
+[END OF RETRIEVED CONTEXT]
+"""
+    else:
+        rag_section = ""
+
+    has_rag_context = bool(regulatory_context)
 
     return await call_claude(
         agent_name="Document_Summarisation",
         model=MODEL_HAIKU,
         system_prompt=AGENT_02_SYSTEM_PROMPT,
-        user_content=f"Document metadata: {json.dumps(body.metadata)}\n\nDocument:\n{structured_text}",
+        user_content=f"Document metadata: {json.dumps(body.metadata)}{rag_section}\n\nDocument:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
         has_rag_context=has_rag_context,
@@ -594,16 +663,35 @@ async def classify_case(request: Request, body: AgentRequest, x_anthropic_api_ke
         logger.warning(f"Duplicate search failed silently: {e}")
 
     structured_text = structure_prompt_input(sanitized_text, "sae_narrative", "M4_CASE_CLASSIFIER")
+
+    # RAG retrieval — seriousness criteria, causality, NDCTR timelines
+    rag_query = f"SAE classification seriousness criteria causality assessment NDCTR 2019: {sanitized_text[:200]}"
     try:
-        has_rag_context = bool(regulatory_context)
-    except NameError:
-        has_rag_context = False
+        regulatory_context = await retrieve_regulatory_context(rag_query, n_results=4)
+    except Exception as e:
+        logger.warning(f"RAG skipped for classify endpoint: {e}")
+        regulatory_context = ""
+
+    if regulatory_context:
+        rag_section = f"""
+
+[RETRIEVED REGULATORY CONTEXT — SAE Classification Criteria]
+The following excerpts from ICH E2A, NDCTR 2019, and AEFI Guidelines are retrieved to inform your classification. Use these for reporting timeline and seriousness criteria:
+
+{regulatory_context}
+
+[END OF RETRIEVED CONTEXT]
+"""
+    else:
+        rag_section = ""
+
+    has_rag_context = bool(regulatory_context)
 
     response = await call_claude(
         agent_name="Case_Classification",
         model=MODEL_HAIKU,
         system_prompt=AGENT_04_SYSTEM_PROMPT,
-        user_content=f"Case metadata: {json.dumps(body.metadata)}\n\nCase narrative:\n{structured_text}",
+        user_content=f"Case metadata: {json.dumps(body.metadata)}{rag_section}\n\nCase narrative:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
         has_rag_context=has_rag_context,
@@ -882,16 +970,35 @@ async def generate_inspection_report(request: Request, body: AgentRequest, x_ant
         raise HTTPException(status_code=400, detail=str(e))
 
     structured_text = structure_prompt_input(sanitized_text, "inspection_observations", "M5_INSPECTION_REPORT")
+
+    # RAG retrieval — CDSCO inspection checklist and GCP standards
+    rag_query = "CDSCO inspection findings GCP audit checklist NDCTR 2019 Schedule Y site inspection"
     try:
-        has_rag_context = bool(regulatory_context)
-    except NameError:
-        has_rag_context = False
+        regulatory_context = await retrieve_regulatory_context(rag_query, n_results=4)
+    except Exception as e:
+        logger.warning(f"RAG skipped for inspection-report endpoint: {e}")
+        regulatory_context = ""
+
+    if regulatory_context:
+        rag_section = f"""
+
+[RETRIEVED REGULATORY CONTEXT — CDSCO Inspection Standards]
+The following excerpts from Schedule Y, NDCTR 2019, and ICH E6(R3) provide the regulatory basis for each inspection category. Use these as the authoritative reference for regulatory_reference fields in each finding:
+
+{regulatory_context}
+
+[END OF RETRIEVED CONTEXT]
+"""
+    else:
+        rag_section = ""
+
+    has_rag_context = bool(regulatory_context)
 
     return await call_claude(
         agent_name="Inspection_Report_Generation",
         model=MODEL_SONNET,
         system_prompt=AGENT_05_SYSTEM_PROMPT,
-        user_content=f"Inspection metadata: {json.dumps(body.metadata)}\n\nInspection findings:\n{structured_text}",
+        user_content=f"Inspection metadata: {json.dumps(body.metadata)}{rag_section}\n\nInspection findings:\n{structured_text}",
         api_key=x_anthropic_api_key or "",
         max_tokens=4096,
         has_rag_context=has_rag_context,
@@ -913,58 +1020,65 @@ async def regulatory_qa(request: Request, body: QARequest, x_anthropic_api_key: 
         raise HTTPException(status_code=400, detail=str(e))
 
     retrieved_context = body.retrieved_context
+    rag_score = 0.0
     sources_used = []
     if not retrieved_context or len(retrieved_context.strip()) < 50:
+        # First: try local TF-IDF RAG with similarity score (Fix 4)
         try:
-            from app.services.knowledge_base import knowledge_base
-            results = knowledge_base.query(
-                query_text=sanitized_text,
-                n_results=5
+            retrieved_context, rag_score = await retrieve_regulatory_context_with_score(
+                sanitized_text, n_results=6
             )
-            
-            if results and results["documents"] and results["documents"][0]:
-                retrieved_context = "\n\n".join(results["documents"][0])
-                # Capture source metadata for frontend citation display
-                for i, doc in enumerate(results["documents"][0]):
-                    metadata = results["metadatas"][0][i] if results.get("metadatas") else {}
-                    distance = results["distances"][0][i] if results.get("distances") else 1.0
-                    similarity = round((1 - distance) * 100, 1)
-                    sources_used.append({
-                        "title": metadata.get("title", "Regulatory Document"),
-                        "short_name": metadata.get("short_name", ""),
-                        "authority": metadata.get("authority", ""),
-                        "category": metadata.get("category", ""),
-                        "chunk_index": metadata.get("chunk_index", 0),
-                        "relevance_score": similarity,
-                        "snippet": doc[:200] + "..." if len(doc) > 200 else doc
-                    })
         except Exception as e:
-            logger.warning(f"pgvector retrieval via knowledge_base failed: {e}")
+            logger.warning(f"Local RAG skipped for qa endpoint: {e}")
+
+        # Fallback: try legacy pgvector knowledge_base if local RAG also returned empty
+        if not retrieved_context or len(retrieved_context.strip()) < 50:
+            try:
+                from app.services.knowledge_base import knowledge_base
+                results = knowledge_base.query(
+                    query_text=sanitized_text,
+                    n_results=5
+                )
+                if results and results["documents"] and results["documents"][0]:
+                    retrieved_context = "\n\n".join(results["documents"][0])
+                    for i, doc in enumerate(results["documents"][0]):
+                        metadata = results["metadatas"][0][i] if results.get("metadatas") else {}
+                        distance = results["distances"][0][i] if results.get("distances") else 1.0
+                        similarity = round((1 - distance) * 100, 1)
+                        sources_used.append({
+                            "title": metadata.get("title", "Regulatory Document"),
+                            "short_name": metadata.get("short_name", ""),
+                            "authority": metadata.get("authority", ""),
+                            "category": metadata.get("category", ""),
+                            "chunk_index": metadata.get("chunk_index", 0),
+                            "relevance_score": similarity,
+                            "snippet": doc[:200] + "..." if len(doc) > 200 else doc
+                        })
+            except Exception as e:
+                logger.warning(f"pgvector retrieval via knowledge_base failed: {e}")
+
+    # Build RAG retrieval quality hint for Claude (Fix 4)
+    if rag_score > 0:
+        quality = "high" if rag_score > 0.3 else "medium" if rag_score > 0.15 else "low"
+        rag_hint = f"\n[RAG retrieval confidence: {rag_score:.2f} — {quality} relevance to query]"
+    else:
+        rag_hint = ""
 
     if not retrieved_context or len(retrieved_context.strip()) < 50:
         context_section = """[CONTEXT]
-Note: No documents were found in the knowledge base for this query. 
-Answer using your comprehensive built-in knowledge of Indian pharmaceutical regulations including:
-- New Drugs and Clinical Trials Rules (NDCTR) 2019
-- Schedule Y of Drugs and Cosmetics Act
-- CDSCO guidelines and circulars
-- ICH guidelines (E6, E2A, E3, E8, E9)
-- ICMR Guidelines for Biomedical and Health Research
-- Drugs and Cosmetics Act 1940
-Clearly state at the end that this answer is based on general regulatory knowledge and not retrieved documents.
+Note: No documents were retrieved for this query.
+Answer using your training knowledge of Indian pharmaceutical regulations including NDCTR 2019, Schedule Y, CDSCO guidelines, ICH guidelines, and ICMR Guidelines.
+Clearly state at the end of your answer that this is based on general regulatory training knowledge, not retrieved documents.
 [/CONTEXT]"""
     else:
-        context_section = f"[CONTEXT]\n{retrieved_context}\n[/CONTEXT]"
+        context_section = f"[CONTEXT]\n{retrieved_context}{rag_hint}\n[/CONTEXT]"
 
     structured_question = structure_prompt_input(sanitized_text, "regulatory_query", "M6_REGULATORY_QA")
     user_content = (
         f"{context_section}\n\n"
         f"QUESTION: {structured_question}\n\nAdditional metadata: {json.dumps(body.metadata)}"
     )
-    try:
-        has_rag_context = bool(retrieved_context and len(retrieved_context.strip()) >= 50)
-    except NameError:
-        has_rag_context = False
+    has_rag_context = bool(retrieved_context and len(retrieved_context.strip()) >= 50)
 
     response = await call_claude(
         agent_name="Regulatory_QA_RAG",
@@ -1168,7 +1282,7 @@ Use these official regulatory excerpts to accurately identify which regulations 
         else:
             rag_section = ""
 
-        prompt = f"""You are comparing two versions of a pharmaceutical regulatory document.{rag_section}
+        user_content = f"""{rag_section}
 VERSION A (Original):
 {text_a}
 
@@ -1179,75 +1293,21 @@ VERSION B (Revised):
 
 ---
 
-Perform a detailed regulatory document comparison. Identify every substantive change between Version A and Version B.
+Perform a detailed regulatory document comparison and consistency check between Version A and Version B."""
 
-CRITICAL OUTPUT RULES:
-1. Return ONLY valid JSON — no markdown, no code fences, no explanation
-2. Use EXACTLY the field names shown below
-3. Arrays must always be arrays
-4. Objects must always be objects
-5. String fields must always be strings
-6. Never omit a required field
+        try:
+            has_rag_context = bool(regulatory_context)
+        except NameError:
+            has_rag_context = False
 
-Return EXACTLY this JSON structure:
-{{
-  "document_name_a": "string — filename or detected title of Version A",
-  "document_name_b": "string — filename or detected title of Version B",
-  "overall_change_severity": "CRITICAL|MAJOR|MINOR|NO_CHANGE",
-  "total_changes": 0,
-  "executive_summary": "string — 2-3 sentence summary of what changed and why it matters regulatorily",
-  "changes": [
-    {{
-      "change_id": "string — e.g. CHG-001",
-      "section": "string — section name or number where change occurred",
-      "change_type": "ADDED|REMOVED|MODIFIED",
-      "severity": "CRITICAL|MAJOR|MINOR",
-      "description": "string — what specifically changed",
-      "original_text": "string — relevant text from Version A (max 200 words), empty string if ADDED",
-      "revised_text": "string — relevant text from Version B (max 200 words), empty string if REMOVED",
-      "regulatory_impact": {{
-        "regulation": "string — specific regulation affected e.g. Schedule Y Section 4.2, NDCTR 2019 Rule 23, ICH E6(R3) Section 5.18",
-        "impact_description": "string — how this change affects compliance with that regulation",
-        "compliance_risk": "HIGH|MEDIUM|LOW",
-        "action_required": "string — what the applicant must do about this change"
-      }}
-    }}
-  ],
-  "critical_changes": ["string — list of the most important changes in plain language"],
-  "added_sections": ["string — sections/content present in V2 but not V1"],
-  "removed_sections": ["string — sections/content present in V1 but not V2"],
-  "regulatory_frameworks_affected": ["string — list of regulations impacted by the changes"],
-  "submission_impact": "RESUBMISSION_REQUIRED|AMENDMENT_REQUIRED|NOTIFICATION_REQUIRED|NO_ACTION",
-  "submission_impact_rationale": "string — why this submission impact level was assigned",
-  "audit_log": {{
-    "timestamp": "ISO datetime string",
-    "file_a": "string — filename of Version A",
-    "file_b": "string — filename of Version B",
-    "pages_a": 0,
-    "pages_b": 0,
-    "status": "COMPLETED|FAILED"
-  }}
-}} """
-
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
+        return await call_claude(
+            agent_name="Document_Version_Comparison",
             model=MODEL_SONNET,
+            system_prompt=AGENT_09_SYSTEM_PROMPT,
+            user_content=user_content,
+            api_key=api_key,
             max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        raw_text = response.content[0].text.strip()
-        parsed = _parse_json_block(raw_text)
-
-        return AgentResponse(
-            agent="Document_Version_Comparison",
-            model=MODEL_SONNET,
-            result=parsed,
-            timestamp=_utc_timestamp(),
-            token_usage={
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens
-            }
+            has_rag_context=has_rag_context,
         )
 
     except HTTPException:

@@ -29,8 +29,8 @@ DOCS_DIR = BACKEND_DIR / "knowledge_base" / "documents"
 OUTPUT_FILE = BACKEND_DIR / "knowledge_base" / "regulatory_chunks.json"
 
 # Chunking config
-CHUNK_SIZE = 500    # words per chunk
-CHUNK_OVERLAP = 50  # word overlap between chunks
+CHUNK_SIZE = 200    # words per chunk — reduced from 500 for more precise TF-IDF retrieval
+CHUNK_OVERLAP = 30  # word overlap between chunks — reduced from 50
 
 DOCUMENT_REGISTRY = [
     {
@@ -148,6 +148,28 @@ DOCUMENT_REGISTRY = [
 ]
 
 
+def is_valid_chunk(text: str) -> bool:
+    """Filter out corrupted, reversed, or low-quality chunks.
+
+    Catches PDF encoding artifacts where text appears reversed or heavily
+    abbreviated (e.g. 'AEFI header: SENILEDIUG LANOITAREPO' reversed text).
+    """
+    stripped = text.strip()
+    if len(stripped) < 100:
+        return False
+    words = stripped.split()
+    if len(words) < 10:
+        return False
+    # Detect reversed-text artifacts: many long words with no vowels
+    suspicious = sum(
+        1 for w in words[:30]
+        if len(w) > 6 and not any(v in w.lower() for v in 'aeiou')
+    )
+    if len(words) >= 10 and suspicious / min(len(words), 30) > 0.30:
+        return False
+    return True
+
+
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
     """Split text into overlapping word chunks."""
     words = text.split()
@@ -185,6 +207,9 @@ def process_pdf(filepath: Path, meta: dict) -> list[dict]:
 
                 page_chunks = chunk_text(page_text.strip())
                 for chunk_idx, chunk_content in enumerate(page_chunks):
+                    if not is_valid_chunk(chunk_content):
+                        logger.debug("  Skipping invalid chunk at page %d idx %d", page_num, chunk_idx)
+                        continue
                     chunks.append({
                         "chunk_id": f"{meta['short_name']}_{page_num:04d}_{chunk_idx:03d}",
                         "doc_name": meta["doc_name"],

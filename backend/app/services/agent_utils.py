@@ -99,6 +99,61 @@ async def retrieve_regulatory_context(query: str, n_results: int = 5) -> str:
         return ""
 
 
+async def retrieve_regulatory_context_with_score(
+    query: str, n_results: int = 5
+) -> tuple[str, float]:
+    """Retrieve context AND average similarity score for confidence calibration.
+
+    Returns:
+        (formatted_context, avg_similarity_score)
+        - formatted_context: same format as retrieve_regulatory_context()
+        - avg_similarity_score: mean cosine similarity 0.0–1.0
+          (0.0 = no results or retrieval failed)
+
+    This lets the calling agent inject a retrieval-quality hint into the
+    Claude prompt, enabling more calibrated confidence_score outputs.
+    """
+    score_key = _cache_key("SCORED", query, str(n_results))
+
+    if score_key in _rag_cache:
+        cached = _rag_cache[score_key]
+        return cached["context"], cached["score"]  # type: ignore[index]
+
+    try:
+        from app.services.local_rag_service import retrieve_regulatory_context_local
+
+        results = retrieve_regulatory_context_local(query=query, n_results=n_results)
+
+        if not results:
+            _rag_cache[score_key] = {"context": "", "score": 0.0}
+            return "", 0.0
+
+        avg_score = sum(r.get("similarity", 0.0) for r in results) / len(results)
+
+        formatted_chunks = []
+        for r in results:
+            source_label = r.get("short_name") or r.get("doc_name") or "Regulatory Document"
+            if r.get("page_number"):
+                source_label += f" p.{r['page_number']}"
+            formatted_chunks.append(f"[Source: {source_label}]\n{r['content']}")
+
+        context = "\n\n---\n\n".join(formatted_chunks)
+        logger.debug(
+            "RAG+score retrieved %d chunks, avg_similarity=%.3f for query: %s...",
+            len(results),
+            avg_score,
+            query[:60],
+        )
+
+        _rag_cache[score_key] = {"context": context, "score": avg_score}
+        return context, avg_score
+
+    except Exception as exc:
+        logger.warning("RAG+score retrieval failed silently: %s", exc)
+        return "", 0.0
+
+
+
 # ---------------------------------------------------------------------------
 # System prompts for the 5 auto-scan agents
 # (Duplicated here from agents_router.py — single source of truth going forward)
